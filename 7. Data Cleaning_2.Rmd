@@ -1,0 +1,1473 @@
+---
+title: "7. Data Cleaning 2"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(writexl)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# **1. Regular Expression Basics**
+
+## Introduction
+
+Regular expressions are a powerful way of building patterns to match text. In the first two lessons of this Data Cleaning Advanced course, we're going to dive into the universe of this dynamic tool that every data scientist should be familiar with.
+
+As powerful as regular expressions are, they can be difficult to learn at first --- the syntax can look visually intimidating. As a result, a lot of students end up disliking regular expressions and try to avoid using them, instead opting to write more cumbersome code.
+
+<center>![](https://s3.amazonaws.com/dq-content/399/difficult_regex_v2.svg)\
+</center>
+
+That said, learning (and loving!) regular expressions is something that is a worthwhile investment.
+
+-   Once you understand how they work, complex operations with string data can be written a lot quicker, which will save you time.
+-   Regular expressions are often faster to execute than their manual equivalents.
+-   Regular expressions are supported in almost every modern programming language, as well as other places like command line utilities and databases. Understanding regular expressions gives you a powerful tool that you can use wherever you work with data.
+
+We could probably fill a whole Dataquest course with the intricacies of regular expressions, but instead we're going to give you a two-mission tour of the main components.
+
+One thing to keep in mind before we start: Don't expect to remember all of the regular expression syntaxes. The most important thing is to understand the core principles, what is possible, and where to look up the details. That way, you can quickly jog your memory whenever you need regular expressions.
+
+Don't be put off if some things in these lessons don't stick in your memory. As long as you can write and understand regular expressions with the help of documentation and/or other reference guides, you have all the skills you need to excel.
+
+We'll learn regular expressions while performing analysis on a dataset of submissions to popular technology site [Hacker News](https://news.ycombinator.com).
+
+Hacker News is a site started by the startup incubator Y Combinator, where user-submitted stories are voted and commented upon, similar to reddit. Hacker News is extremely popular in technology and startup circles; stories that make it to the top of Hacker News' listings can get hundreds of thousands of visitors.
+
+The dataset we will work with is based off this CSV of Hacker News stories from September 2015 to September 2016. The columns in the dataset are explained below:
+
+-   `id`: The unique identifier from Hacker News for the story
+-   `title`: The title of the story
+-   `url`: The URL that the stories links to, if the story has a URL
+-   `num_points`: The number of points the story acquired, calculated as the total number of upvotes minus the total number of downvotes
+-   `num_comments`: The number of comments that were made on the story
+-   `author`: The username of the person who submitted the story
+-   `created_at`: The date and time at which the story was submitted
+
+For teaching purposes, we have reduced the dataset from the almost 300,000 rows in its original form to approximately 20,000 rows by removing all submissions that did not receive any comments, and then randomly sampling from the remaining submissions. You can download the modified dataset using the dataset preview tool.
+
+The operations we performed there are also data cleaning! Any student who has taken the Data Cleaning course is already able to do some of these operations. For example, they know how to remove rows that did not receive any comments. If you don't feel able to do it, a quick look at the course should probably help.
+
+Let's import our Hacker News dataset into R.
+
+1.  Import the `hacker_news.csv` file into R. Save it in a dataframe named `hn`.
+
+-   To import the file, use `read_csv()`. We have loaded the `readr` package for you.
+-   Remember: When you import files into R using `read_csv()`, you'll see messages in the console regarding column specifications. These are not error messages.
+-   After you have completed the code exercise, use the variable inspector to familiarize yourself with the dataset.
+
+```{r}
+hn <- read_csv("hacker_news.csv")
+glimpse(hn)
+```
+
+## The Regular Expression Functions in R
+
+A regular expression is a combination of alphanumeric characters and some special characters to describe a structure common to one or more strings (examples include phone numbers, dates, and longitude/latitude notations). It is at the core of string operations and is used in many programming languages for string matching/replacing.
+
+The good news is that you have already used regular expressions. This is because any string can be a regular expression if it is used with the right function.
+
+`str_split()` function from `stringr` package is an example. Shortly, here is its syntax:
+
+```{r}
+# library(stringr)
+# str_split(string_to_split, separator_string)
+```
+
+The second argument, `separator_string`, of this function is, indeed, a regular expression.
+
+When working with regular expressions, we use the term **pattern** to describe a regular expression that we've written. If the pattern is found within the string we're searching, we say that it has **matched.**
+
+Many R built-in as well as `stringr` package functions support regular expressions. They are used to:
+
+1.  Identify and filter match to a pattern.
+2.  Identify the start position of matched patterns.
+3.  Replace and split based on matched patterns.
+
+In this lesson, we use `stringr` package functions. But the uses are similar for built-in functions, and for many other languages (although the syntax may change a bit).
+
+Letters and numbers represent themselves in regular expressions. If we wanted to find the string `"and"` within another string, the regex pattern for that is simply `and`:
+
+<center>![](https://s3.amazonaws.com/dq-content/399/basic_match_1.svg)\
+</center>
+
+In the third example above, the pattern `and` does not match `Andrew`, because even though `a` and `A` are the same letter, the two characters are unique. Regular expressions are case sensitive.
+
+In R, if we want to find the pattern `and` in the string `hand`, we can use the `str_detect()` function from `stringr` package. This function is one of the most useful functions which allows checking whether there is a match to a pattern. It takes two required arguments:
+
+-   Either a string, or a vector (of string) we want to search that pattern for.
+-   The regex pattern.
+
+```{r}
+m <- str_detect("hand", "and")
+print(m)
+```
+
+The `str_detect()` function will return `TRUE` if the input is a string. Hence, if the pattern is found anywhere within the string, the function returns `TRUE` or else it returns `FALSE`:
+
+```{r}
+m <- str_detect("antidote", "and")
+print(m)
+```
+
+For now, we can use the fact that `str_detect()` function also receives a vector to easily check whether our regex matches each string in a vector. In this case, the output of the function is a logical vector at the same size of the input vector.
+
+In case, you don't remember what logical vector is you can look at our course on working with vectors.
+
+Let's create a vector to use while learning these concepts:
+
+```{r}
+string_vector  <- c("Julie's favorite color is green.",
+                  "Keli's favorite color is Blue.",
+                  "Craig's favorite colors are blue and red.")
+
+pattern  <- "Blue"
+m <- str_detect(string_vector, pattern)
+print(m)
+```
+
+We're going to use this technique to ouptut `Match` and `No Match` if `Amazon` is mentioned or not in the title of stories in our Hacker News dataset.
+
+We have provided code to import our dataset and extract a vector, titles, containing all the `titles` from there.
+
+1.  Create a string --- `pattern` --- containing a regular expression pattern to match `Amazon.`
+2.  Use the `str_detect()` function to check whether `pattern` matches title in `titles` variable. Save the result in `matches` variable.
+3.  Use `if_else()` function to create a vector, denoted as `hn_matches`, containing `Match` and `No Match` according to the values in `matches` variable.
+
+```{r}
+titles <- hn$title
+pattern <- "Amazon"
+matches <- str_detect(titles, pattern)
+
+hn <- hn %>% 
+  mutate(
+    hn_mathces = if_else( matches, "Match", "No Match")
+  )
+```
+
+## Set of Characters in Regular Expression
+
+As we previously learned, letters and numbers represent themselves in regular expressions. However, regular expressions also use special characters to search for possible repetition, to represent a set of characters, or to position pattern in a string. The power of regular expressions comes when we use these special characters.
+
+The first of these we'll learn is called a set. A set allows us to specify two or more characters that can match in a single character's position.
+
+We define a set by placing the characters we want to match for in square brackets `[ ]`:
+
+<center>![](https://s3.amazonaws.com/dq-content/399/set_syntax_breakdown.svg)\
+</center>
+
+**The regular expression above will match the strings `mend`, `send`, and `bend.`**
+
+Let's look at how we can add sets to match more of our example strings from earlier:
+
+![](https://s3.amazonaws.com/dq-content/399/basic_match_2.svg)\
+
+Let's take another look at the vector we used earlier:
+
+```{r}
+string_vector  <- c("Julie's favorite color is green.",
+                  "Keli's favorite color is Blue.",
+                  "Craig's favorite colors are blue and red.")
+```
+
+If you look closely, you'll notice the second string contains the substring `Blue` with a capital letter, where the third string contains the substring `blue` in all lowercase. We can use the set `[Bb]` for the first character so that we can match both variations:
+
+```{r}
+pattern <- "[Bb]lue"
+
+m <- str_detect(string_vector, pattern)
+
+print(m)
+```
+
+Now, if we want to use that to count how many times `Blue` or `blue` occur in the vector, we can use the built-in `sum()` function.
+
+```{r}
+blue_mentions  <-  sum(m)
+
+print(blue_mentions)
+```
+
+We're going to use this technique to find out how many times `Amazon` is mentioned in the title of stories in our Hacker News dataset. We'll use a set to check for both `Amazon` with a capital "A" and `amazon` with a lowercase "a."
+
+The `titles` vector is available from the previous screen.
+
+1.  Create a string --- `pattern` --- containing a regular expression pattern to match `Amazon` or `amazon.`
+2.  Use the `str_detect()` function to check whether `pattern` matches title in `titles` variable. Save the result in `matches` variable.
+3.  Use `sum()` function to compute the number of times `pattern` matches the title and save the result in the variable `amazon_mentions.`
+
+```{r}
+pattern <- "[Aa]mazon"
+
+matches <- str_detect(titles, pattern)
+
+amazon_mentions <- sum(matches)
+
+amazon_mentions
+
+```
+
+## Alternative Patterns
+
+The second special character we'll learn is the alternative character. It allows us to specify two or more patterns that can match a string.
+
+We define an alternative by using the character `|`between patterns.
+
+On the previous screen, we were trying to figure out how to match `Blue` and `blue`, so let's look at how we can replicate the example from the previous screen using the alternative character.
+
+```{r}
+string_vector  <-  c("Julie's favorite color is green.",
+              "Keli's favorite color is Blue.",
+              "Craig's favorite colors are blue and red.")
+
+pattern <- "Blue|blue"
+
+m <- str_detect(string_vector, pattern)
+
+print(m)
+```
+
+The only thing that changes is we replace the `"[Bb]lue"` pattern with `"Blue|blue"` pattern. Essentially, the set is a simplification of the alternative.
+
+For example, if you want to find all the titles of our dataset containing the years `2010`, `2011`, and `2012`, you can either use the pattern `2010|2011|2012` or patterns `201[012]`.
+
+Let's use this pattern to add a new column, called `year_group`, to our dataset `hn` containing the string `"2010-2012"` if the title matched to the pattern and `"Other"` if not. We'll use `mutate()` function from `dplyr` package for that.
+
+```{r}
+pattern <- "2010|2011|2012"
+
+matches <- str_detect(titles, pattern)
+
+hn_matches <- if_else(matches, "2010-2012", "Other")
+
+hn_gr <- hn %>%
+    mutate(year_group = hn_matches)
+```
+
+Your turn! Let's use the same technique to add a new column to our dataset if the title contains either `2000` or `2005` or `2010.`
+
+1.  Create a string --- `pattern` --- containing a regular expression pattern to match one of these years: `2000`, `2005` or `2010` using alternative pattern.
+2.  Check whether `pattern` matches the title. Save the result in `matches` variable.
+3.  Create a vector, denoted as `hn_matches`, containing `Match` and `No Match` according to the values in `matches` variable.
+4.  Create a new column called `year_group` in `hn` that reflects the contents of `hn_matches` variable. Save this as `hn_group.`
+
+```{r}
+pattern <- "2000|2005|2010"
+matches <- str_detect(titles, pattern)
+hn_matches <- if_else(matches, "Match", "No Match")
+hn_group <- hn %>%
+    mutate(year_group = hn_matches)
+```
+
+Using Regular Expressions to Select Data
+
+On the previous screens, we used regular expressions to match and count how many titles contain `Amazon` or `amazon.` What if we wanted to view those titles?
+
+[In that case, we can use the logical vector returned by `str_detect()` function to select just those rows from our titles. Let's look at that in action, starting by creating the logical vector.]{color='blue'}
+
+```{r}
+titles  <-  hn$title
+
+amazon_titles_logical  <- str_detect(titles, "[Aa]mazon" )
+```
+
+Then, we can use that logical vector to select just the matching rows:
+
+```{r}
+amazon_titles  <-  titles[amazon_titles_logical]
+print(head(amazon_titles))
+```
+
+We can also do it in a streamlined, single line of code:
+
+```{r}
+amazon_titles  <-  titles[str_detect(titles, "[Aa]mazon" )]
+print(head(amazon_titles))
+```
+
+We can use the same logical vector (`amazon_titles_logical`) to select just the matching rows in `hn` using `filter()`function from `dplyr` package:
+
+```{r}
+hn_amazon <- hn %>%
+    filter(amazon_titles_logical)
+print(head(hn_amazon))
+```
+
+Let's use this technique to select all titles that mention `Google` using a set to account for whether the word is capitalized or not.
+
+```{r}
+google_titles_logical <- str_detect(titles, "[Gg]oogle")
+
+google_titles <- titles[google_titles_logical]
+
+hn_google <- hn %>% 
+  filter(google_titles_logical)
+```
+
+## [Quantifiers]{color="red"}
+
+Braces (`{}`) are used as special character to specify that a character repeats in our regular expression. For instance, if we wanted to write a pattern that matches the numbers in text from 1000 to 2999 we could write the regular expression below:
+
+<center>![](https://s3.amazonaws.com/dq-content/399/quantifier_example.svg)\
+</center>
+
+The name for this type of regular expression syntax is called a quantifier. Quantifiers specify how many of the previous character our pattern requires, which can help us when we want to match substrings of specific lengths. As an example, we might want to match both `e-mail` and `email`. To do this, we would want to specify to match - either zero or one times.
+
+The specific type of quantifier we saw above is called a numeric quantifier. Here are the different types of numeric quantifiers we can use:
+
+<center>![](https://s3.amazonaws.com/dq-content/399/quantifiers_numeric.svg)\
+</center>
+
+You may notice that the last two examples above omit the first and last character as wildcards.
+
+In addition to numeric quantifiers, there are single characters in regex that specify some common quantifiers that you're likely to use. A summary of them is below.
+
+<center>![](https://s3.amazonaws.com/dq-content/399/quantifiers_other.svg)\
+</center>
+
+On this screen, we're going to find how many titles in our dataset mention `email` or `e-mail`. To do this, we'll need to use `?`, the optional quantifier, to specify that the dash character - is optional in our regular expression.
+
+1.  Use a regular expression and `str_detect()` function to create a logical vector that matches items from `titles` containing `email` or `e-mail`. Assign the result to `email_logical.`
+2.  Use `email_logical` to count the number of titles that matched the regular expression. Assign the result to `email_count`.
+3.  Use `email_logical` to select only the items from `titles` that matched the regular expression. Assign the result to `email_titles`.
+
+```{r}
+
+email_logical  <-  str_detect(titles, "e-?mail")
+email_count  <-  sum(email_logical)
+email_titles  <-  titles[email_logical]
+head(email_titles)
+```
+
+## Character Classes
+
+So far, we've learned how to perform simple matches with sets and how to use quantifiers to specify when a character should repeat a certain number of times. Let's continue by looking at a more complex example.
+
+Some stories submitted to Hacker News include a topic tag in brackets, like [pdf]. Here are a few examples of story titles with these tags:
+
+```{r}
+# [video] Google Self-Driving SUV Sideswipes Bus
+# New Directions in Cryptography by Diffie and Hellman (1976) [pdf]
+# Wallace and Gromit  The Great Train Chase (1993) [video]
+```
+
+[In this screen, our task is going to be to find how many titles in our dataset have tags.]{color="brown"}
+
+Our first inclination may be to create the regex `[pdf]`. Unfortunately, the brackets would be interpreted as a set, so our pattern would match the single characters `p`, `d`, or `f.`
+
+<center>![](https://s3.amazonaws.com/dq-content/399/without_escaped_character_syntax_breakdown.svg)\
+</center>
+
+To match the substring "[pdf]", we can use backslashes to escape both the open and closing brackets: `\[pdf\]`
+
+<center>![](https://dq-content.s3.amazonaws.com/399/escaped_character_syntax_breakdown.svg)\
+</center>
+
+The other critical part of our task of identifying how many titles have tags is knowing how to match the characters between the brackets (like `pdf` and `video`) without knowing ahead of time what the different topic tags will be.
+
+To match unknown characters using regular expressions, we use character classes. Character classes allow us to match certain groups of characters. We've actually seen two examples of character classes already:
+
+The set notation using brackets to match any of a number of characters. The range notation, which we used to match ranges of digits (like `[0-9]`).
+
+Let's look at a summary of syntax for some of the regex character classes:
+
+![](https://s3.amazonaws.com/dq-content/399/character_classes_v2_1.svg)\
+
+There are two new things we can observe from this table:
+
+Ranges can be used for letters as well as numbers. Sets and ranges can be combined. Just like with quantifiers, there are some other common character classes which we'll use a lot. ![](https://dq-content.s3.amazonaws.com/399/character_classes_v2_2.svg)\
+
+The one that we'll use to match characters in tags is `\w`, which represents any digit, uppercase or lowercase letter. Each character class represents a single character, so to match multiple characters (e.g. words like `video` and `pdf`), we'll need to combine them with quantifiers.
+
+In order to match word characters between our brackets, we can combine the word character class (\w) with the "one or more" quantifier (+), giving us a combined pattern of `\w+`.
+
+This will match sequences like `pdf`, `video`, `Python`, and `2018`, but won't match a sequence containing a space or punctuation character like `PHP-DEV` or `XKCD Flowchart`. If we wanted to match those tags as well, we could use `.+`; however, in this case, we're just interested in single-word tags without special characters.
+
+[In R, as in many other languages, a backslash followed by certain characters represents an escape sequence --- like the `\n` sequence --- which we previously learned represents a new line. These escape sequences can result in unintended consequences for our regular expressions. For example, if we use the string `"\w"` as a pattern, we will have the following error (or similar) --- because R tries to interpret it as escape sequence:]{color="blue"}
+
+```{r}
+# Error: '\w' is an unrecognized escape in character string
+```
+
+To avoid string interpretation errors by R, it is always necessary to escape the backslash itself. To do so, we double the backslashes for regular expression character sequences; i.e., always write, in R code, `\\w` or `\\[` instead of `\w` or `\[`. To escape the backslash itself as a regular expression, four backslashes are necessary: `\\\\`.
+
+We are going to teach regular expressions as they are valid according to the concept of regular expressions. [However, in R codes, we are going to use, if necessary, versions with double backslashes as needed to ensure that it is correctly interpreted in R.]{color="red"}
+
+Let's quickly recap the concepts we learned in this screen:
+
+-   We can use a backslash to escape characters that have special meaning in regular expressions (e.g. `\[`will match an open bracket character).
+-   Character classes let us match certain groups of characters (e.g. `\w`will match any word character).
+-   Character classes can be combined with quantifiers when we want to match different numbers of characters. [- In R codes, we use **double backslashes for character classes** to avoid incorrect string interpretation.]{color="blue"}
+
+We'll use these concepts to count the number of titles of stories submitted to Hacker News include a topic tag in brackets, like `[pdf]`, `[video]`, etc.
+
+1.  Write a regular expression, assigning it as a string to the variable `pattern`. The regular expression should match, in order:
+
+-   A single open bracket character.
+-   One or more word characters.
+-   A single close bracket character.
+
+2.  Use the regular expression to select only items from `titles` that match. Assign the result to the variable `tag_titles`.
+3.  Count how many matching titles there are. Assign the result to `tag_count`.
+
+```{r}
+pattern  <-  "\\[\\w+\\]"
+tag_logical  <-  str_detect(titles, pattern)
+tag_titles  <-  titles[tag_logical] # return the titles that contain tags
+tag_count  <-  sum(tag_logical)
+tag_count
+```
+
+## Accessing the Matching Text with Capture Groups
+
+On the previous screen, we were able to calculate that 444 of the 20,100 Hacker News stories in our dataset contain tags. What if we wanted to find out what the text of these tags were, and how many of each are in the dataset?
+
+We'll learn how to access the matching pattern by looking at just the six first matching titles from the previous exercise (`tag_titles` contains the titles which match tags pattern from the previous screen):
+
+```{r}
+tag_titles_head  <-  head(tag_titles)
+print(tag_titles_head)
+```
+
+[We use the `str_extract()` function to extract the matching pattern:]{color="blue"}
+
+```{r}
+pattern  <-  "\\[\\w+\\]"
+tags_matches <- str_extract(tag_titles_head, pattern)
+print(tags_matches)
+```
+
+What if we wanted to find out this tag without square brackets `[ ]`?
+
+In order to do this, we'll need to use **capture groups**. [Capture groups allow us to specify one or more groups within our match that we can access separately.]{color='red'} In this lesson, we'll learn how to use one capture group per regular expression, but in the next lesson we'll learn some more complex capture group patterns.
+
+We specify capture groups using parentheses. Let's add an open and close parentheses to the pattern we wrote in the previous screen, and break down how each character in our regular expression works:
+
+![](https://dq-content.s3.amazonaws.com/399/rtags_syntax_breakdown_v2.svg)\
+
+We use the `str_match()` function to extract the match within our parentheses:
+
+```{r}
+pattern  <-  "\\[(\\w+)\\]"
+tags_matches <- str_match(tag_titles_head, pattern)
+print(tags_matches)
+```
+
+The output of `str_match()` function is a matrix where :
+
+[the first column represents the whole matching pattern. That is the output of `str_extract()` function. the second column represents the match within parentheses. and the rows are the matches.]{color='red'} Hence, we can get just the text by indexing the second column:
+
+```{r}
+tags_text_matches <- tags_matches[,2]
+print(tags_text_matches)
+```
+
+If we then use the built-in function `table()` we can quickly get a frequency table of the tags:
+
+```{r}
+tags_freq <- table(tags_text_matches)
+print(tags_freq)
+```
+
+Let's use this technique to extract all of the tags from the Hacker News titles and build a frequency table of those tags.
+
+We have loaded the tag_titles variable which contains the titles in our dataset with tags. We have also provided the pattern from the previous exercise in comment for you.
+
+1.  Modify this pattern and add parentheses to create a capture group inside the brackets `[ ]`, assigning it as a string to the variable `pattern.`
+2.  Create `tags_text_matches` variable to store the matching pattern with these parentheses using `str_match()` function and the modified regex pattern.
+3.  Use `table()` function on `tags_text_matches` variable to produce a frequency table of all the tags in the `tag_titles.` Assign the frequency table to `tags_freq`.
+
+```{r}
+tag_titles  <-  titles[str_detect(titles, "\\[\\w+\\]")]
+#the previous pattern  is "\\[\\w+\\]"
+
+pattern <- "\\[(\\w+)\\]"
+
+tags_text_matches <- str_match(titles, pattern)[,2] # return the matched piece
+
+tags_freq <- table(tags_text_matches)
+```
+
+## [Negative Character Classes]{color="red"}
+
+On the previous screens, we wrote fairly simple regular expressions. In reality, regular expressions are often complex. When creating complex regular expressions, you often need to work iteratively so you can find "bad" instances that match your pattern and then exclude them.
+
+In order to work faster as you build your regular expression, it can be helpful to create a function that returns the first few matching strings:
+
+```{r}
+first_10_matches <- function (data, pattern) {
+    matches <- str_detect(data, pattern) # finding pattern matches
+    matched_df <- data[matches] # subsetting data (keep only matches)
+    head(matched_df, 10) # taking the first ten matched elements
+}
+```
+
+Another useful approach is to use an online tool like RegExr that allows you to build regular expressions and includes syntax highlighting, instant matches, and regex syntax reference. For this screen, we'll use the `first_10_matches()` function we just built to iteratively build a regular expression.
+
+Earlier, we counted the titles that included `Amazon`, `Google`, and tags --- let's write a simple regular expression to match `Java` (a popular language), and use our function to look at the matches:
+
+```{r}
+first_10_matches(titles, "[Jj]ava")
+```
+
+We can see that there are a number of matches that contain `Java` as part of the word `JavaScript.` We want to exclude these titles from matching so we get an accurate count.
+
+One way to do this is by using negative character classes. Negative character classes are character classes that match every character except a character class. Let's look at a table of the common negative character classes:
+
+![](https://dq-content.s3.amazonaws.com/399/negative_character_classes.svg)\
+Let's use the negative set `[^Ss]` to exclude instances like `JavaScript` and `Javascript`:
+
+We have provided the `first_10_matches()` function implementation.
+
+1.  Write a regular expression that will match titles containing Java.
+
+-   You might like to use the `first_10_matches()` function or a site like RegExr to build your regular expression.
+-   The regex should match whether or not the first character is capitalized.
+-   [The regex shouldn't match where 'Java' is followed by the letter "S" or "s", except when the string contains both 'Java' and 'JavaScript' in the title. In this case, the `str_detect()` function will always recognize the combined pattern as a match, even if the pattern for 'Java' followed by 'S' or 's' fails."]{color="red"}
+
+2.  Select every row from `titles` that match the regular expression. Assign the result to `java_titles.`
+
+```{r}
+first_10_matches(titles, "[Jj]ava[^Ss]")
+pattern  <-  "[Jj]ava[^Ss]"
+java_titles  <-  titles[str_detect(titles, pattern)]
+```
+
+## Word Boundaries
+
+While the negative set was effective in removing any bad matches that mention "JavaScript", it also had the side-effect of removing any titles where Java occurs at the end of the string(*because the string ends and no text can be indexed*), like this title:
+
+```{r}
+# Pippo  Web framework in Java
+```
+
+This is because the negative set `[^Ss]` must match one character, so instances at the end of a string do not match.
+
+A different approach to take in cases like these is to use the word boundary anchor, using the syntax `\b` or the function `boundary()` from `stringr` package. A word boundary matches the position between a word character and a non-word character, or a word character and the start/end of a string. The diagram below shows all the word boundaries in an example string:
+
+![](https://s3.amazonaws.com/dq-content/399/word_boundaries.svg)\
+
+Let's look at how using a word boundary changes the match from the string in the example above:
+
+```{r}
+string  <-  "Sometimes people confuse JavaScript with Java"
+pattern_1  <-  "Java[^S]"
+
+m_1  <-  str_detect(string, pattern_1)
+print(m_1)
+```
+
+The regular expression returns `FALSE`, because there is no substring that contains `Java` followed by a character that isn't `S`.
+
+Let's instead use word boundaries (`\b`) in our regular expression:
+
+```{r}
+pattern_2  <-  "\\bJava\\b"
+
+m_2  <-  str_detect(string, pattern_2)
+print(m_2)
+```
+
+With the word boundary, our pattern matches the `Java` at the end of the string.
+
+Let's use the word boundary anchor as part of our regular expression to select the titles that mention `Java.`
+
+1.  Write a regular expression that will match titles containing Java.
+
+-   You might want to use the `first_10_matches()` function or a site like RegExr to build your regular expression.
+-   The regex should match whether or not the first character is capitalized.
+-   The regex should match only where "Java" is preceded and followed by a word boundary.
+    -   Note that in cases where our string contains both 'Java' and 'JavaScript' in the title, the `str_detect()` function will always recognize the combined pattern as a match, even if the pattern for 'Java' followed by 'S' or 's' fails."
+
+2.  Select from `titles` only the items that match the regular expression. Assign the result to `java_titles.`
+
+```{r}
+pattern <- "\\b[Jj]ava\\b"
+first_10_matches(titles, pattern)
+java_titles  <-  titles[str_detect(titles, pattern)]
+```
+
+## Matching at the Start and End of Strings
+
+So far, we've used regular expressions to match substrings contained anywhere within text. There are often scenarios where we want to specifically match a pattern at the start and end of strings.
+
+On the previous screen, we learned that the **word boundary anchor** matches the space between a word character and a non-word character. In regular expressions, an **anchor** matches something that isn't a character, as opposed to character classes which match specific characters.
+
+Other than the word boundary anchor, the other two most common anchors are the **beginning anchor** and the **end anchor**, which represent the start and the end of the string.
+
+![](https://s3.amazonaws.com/dq-content/399/positional_anchors.svg)\
+
+Note that the`^`character is used both as a beginning anchor and to indicate a negative set, depending on whether the character preceding it is a`[`or not.
+
+Let's start with a few test cases that all contain the substring `Red` at different parts of the string, as well as a test function:
+
+```{r}
+test_cases  <-  c("Red Nose Day is a well-known fundraising event",
+    "My favorite color is Red",
+    "My Red Car was purchased three years ago")
+print(test_cases)
+```
+
+If we want to match the word `Red` only if it occurs at the start of the string, we add the beginning anchor to the start of our regular expression:
+
+```{r}
+print(str_detect(test_cases, "^Red"))
+```
+
+As a result, only the first sentence matches.
+
+If we want to match the word `Red` only if it occurs at the end of the string, we add the end anchor to the end of our regular expression:
+
+```{r}
+print(str_detect(test_cases, "Red$"))
+```
+
+Let's use the beginning and end anchors to count how many titles have tags at the start versus the end of the story title in our Hacker News dataset.
+
+1.  Count the number of times that a tag (e.g. `[pdf]` or `[video]`) occurs at the start of a title in `titles.` Assign the result to `beginning_count.`
+2.  Count the number of times that that a tag (e.g. `[pdf]` or `[video]`) occurs at the end of a title in `titles.` Assign the result to ending_count.
+
+```{r}
+beginning_count <- sum(str_detect(titles, "^\\[\\w+\\]"))
+ending_point <- sum(str_detect(titles, "\\[\\w+\\]$"))
+```
+
+## Using Flags to Modify Regex Patterns
+
+Up until now, we've used sets like `[Pp]` to match different capitalizations in our regular expressions. This strategy works well when there is only one character that has capitalization, but becomes cumbersome when we need to cater for multiple instances.
+
+Within the titles, there are many different formatting styles used to represent the word "email." Here is a vector of the variations:
+
+```{r}
+# email
+# Email
+# e Mail
+# e mail
+# E-mail
+# e-mail
+# eMail
+# E-Mail
+# EMAIL
+```
+
+To write a regular expression for this, we would need to use a set for all five letters in email (`[Ee]`, `[Mm]`, `[Aa]`, `[Ii]`, and `[Ll]`), which would make our regular expression very hard to read.
+
+When you use this flag, all uppercase letters will match their lowercase equivalents and vice versa. Let's look at an example without using the flag:
+
+Instead, we can use flags to specify that our regular expression should ignore case. [To do so, this sequence of characters, called **ignorecase** flag]{color="red"}, is used: `(?i)` at the beginning of the pattern.
+
+```{r}
+email_tests  <-  c('email', 'Email', 'eMail', 'EMAIL')
+print(str_detect(email_tests, "email"))
+```
+
+Now let's look at what happens when we use the flag:
+
+```{r}
+email_tests  <-  c('email', 'Email', 'eMail', 'EMAIL')
+print(str_detect(email_tests, "(?i)email"))
+```
+
+No matter what the capitalization is, our regular expression matches.
+
+We'll finish this lesson by writing a regular expression and count the number of times that email is mentioned in story titles. You'll need to use both ignorecase flag as well as some of the other regex components you've already learned in this lesson.
+
+This screen is a challenge screen, so it's a little less guided than the exercises so far. As we mentioned at the start of this lesson, regular expressions can be very complex, and unless you write them frequently, it's unlikely that you will remember all the syntax.
+
+With that in mind, we don't expect that you will immediately remember how to perform this task so don't get disheartened if this exercise takes you more attempts than the other exercises in this lesson. If you get stuck, you might try one or more of the following:
+
+-   Scan over the regex concepts we've taught in the previous lessons.
+-   Use the test cases that we'll provide.
+-   Use a web tool like RegExr that lets you write a regex iteratively and see how it matches the test cases.
+
+We've also provided a number of hints --- however, we strongly recommend trying to complete the challenge first without using them. The skills you build as you try to solve the puzzle will be extremely valuable for you as you continue on your journey to becoming a data expert!
+
+To help you test the regular expression that you build, we have provided a variable that includes each of the different ways "email" is included in the data.
+
+The variable `email_tests` contains different ways "email" is included in the data.
+
+1.  Write a regular expression that will match all variations of email included in the starter code. Write your regular expression in a way that will be compatible with the ignorecase flag.
+
+-   As you build your regular expression, you might like to use `str_detect()` like we did in the examples earlier in this screen.
+
+2.  Once your regular expression matches all the test cases, use it to count the number of mentions of email in titles in the dataset. Assign the result to `email_mentions.`
+
+```{r}
+email_tests  <-  c('email', 'Email', 'e Mail', 'e mail', 'E-mail',
+                   'e-mail', 'eMail', 'E-Mail', 'EMAIL')
+
+pattern <- "(?i)e[-\\s]?mail"
+
+print(str_detect(email_tests, pattern))
+
+email_mentions <- sum(str_detect(titles, pattern))
+email_mentions
+```
+
+# **2. Advanced Regular Expressions**
+
+## Introduction
+
+In the previous lesson, we learned that regular expressions provide powerful ways to describe patterns in text that can help us clean and extract data. In this lesson, we're going to build on those foundational principles.
+
+We'll learn:
+
+-   Several new regex syntax components that allow us to express more complex criteria.
+-   How to combine regular expression patterns to extract and transform data.
+-   How to replace and clean data using regular expressions.
+
+We're going to continue working with the dataset from the previous lesson from technology site Hacker News. Let's take a moment to refresh our memory of the different columns in this dataset:
+
+-   `id`: The unique identifier from Hacker News for the story
+-   `title`: The title of the story
+-   `url`: The URL that the stories links to, if the story has a URL
+-   `num_points`: The number of points the story acquired, calculated as the total number of upvotes minus the total number of downvotes
+-   `num_comments`: The number of comments that were made on the story
+-   `author`: The username of the person who submitted the story
+-   `created_at`: The date and time at which the story was submitted
+
+We'll continue to analyze and count mentions of different patterns in the dataset, and then we'll finish by extracting the different components of the URLs submitted to Hacker News. We'll also continue to use functions from `stringr` package.
+
+As we mentioned in the previous lesson, you shouldn't expect to remember every single detail of regular expression syntax. The most important thing is to understand the core principles, what is possible, and where to look up the details. This means you can quickly jog your memory whenever you need regular expressions.
+
+We'll build on the foundational concepts that we learned in the previous lesson. If you need to refresh any points of the syntax while you complete exercises in this lesson, we recommend using a regex syntax reference like RegExr so you can practice looking up syntax as you need it.
+
+Let's start by reading in the dataset using `readr` package and extracting the story titles from the `title` column:
+
+```{r}
+library(readr)
+
+hn  <-  read_csv("hacker_news.csv")
+titles  <-  hn$title
+```
+
+In the story titles, for example, we have two different capitalizations for the Python language: Python and python. In the previous lesson, we learned three techniques for handling cases like these. The first is to use a set to match either P or p:
+
+```{r}
+pattern  <-  "[Pp]ython"
+python_counts  <-  sum(str_detect(titles, pattern))
+print(python_counts)
+```
+
+In the previous lesson, we created an intermediate variable to store the result of each function. As you can see here we chain the functions `sum()` and `str_detect` in one line, `sum(str_detect(titles, pattern))`. This is a common way R's programmers write code. However, for the sake of clarity here we'll still use intermediate variables if needed.
+
+The second technique we have learned is **alternative** patterns:
+
+```{r}
+pattern  <-  "Python|python"
+python_counts  <-  sum(str_detect(titles, pattern))
+print(python_counts)
+```
+
+The last technique is to use `(?i)` **the ignorecase flag** to make our pattern case insensitive:
+
+```{r}
+pattern  <-  "(?i)python"
+python_counts  <-  sum(str_detect(titles, pattern))
+print(python_counts)
+```
+
+The ignorecase flag is particularly useful when we have many different capitalizations for a word or phrase. In our dataset, the SQL language has three different capitalizations: `SQL`, `sql`, and `Sql.`
+
+To capture all of these variations, we would need to use a set for each character:
+
+```{r}
+pattern  <-  "[Ss][Qq][Ll]"
+sql_counts  <-  sum(str_detect(titles, pattern))
+print(sql_counts)
+```
+
+Instead, let's use a single ignorecase flag to write a case-insensitive version of this entire pattern.
+
+Create a case-insensitive regex pattern that matches all case variations of the letters `SQL.`
+
+Use that regex pattern and the ignorecase flag to count the number of mentions of SQL in `titles.` Assign the result to `sql_counts.`
+
+```{r}
+SQL <- "(?i)sql"
+
+sql_counts <- sum(str_detect(titles, SQL))
+```
+
+## Capture Groups
+
+In the previous exercise, we counted the number of mentions of "SQL" in the titles of stories. As we learned in the previous lesson, we have two ways to extract those mentions:
+
+1. If we want to extract the **complete matching**, we use `str_extract()` function, where precise extraction is done. [It can be restrictive given we cannot locate specific part of the pattern, (i.e., part of a word)]{color='red'}
+
+2. If we want only a targeted part of the matching pattern, we need to do two things:
+
+-   Use the `str_match()` function
+-   Use a regex capture group
+
+Hence, `str_match()` works with only capture group 
+
+We define a capture group by wrapping the part of our pattern we want to capture in parentheses. If we just wrap the whole pattern in a pair of parentheses, `str_match()` will capture the whole pattern:
+
+![](https://s3.amazonaws.com/dq-content/400/single_capture_group.svg)\
+
+Let's look at how we can use a capture group to create a frequency table of the different capitalizations of SQL in our dataset. We start by wrapping our regex pattern in parentheses:
+
+```{r}
+pattern  <-  "(?i)(SQL)"
+```
+
+Next, we use `str_match()` to extract the different capitalizations:
+
+```{r}
+sql_capitalizations  <-  str_match(titles, pattern)[,2]
+```
+
+Remember the output of str_match() function is a matrix where the captured group is the second column. For each element of the vector --- titles --- if there is a matching, "SQL", "sql", or "Sql" are outputted (as it is in the title) otherwise NA. See an illustration below:
+
+![](https://dq-content.s3.amazonaws.com/400/str_match_sql_2.svg)\
+
+Lastly, we use the table() function to create a frequency table of those capitalizations:
+
+```{r}
+sql_capitalizations_freq  <-  table(sql_capitalizations)
+print(sql_capitalizations_freq)
+```
+
+We can extend this analysis by looking at titles that have letters immediately before the "SQL", which is a convention often used to denote different variations or flavors of SQL. To do so, we can build a new pattern from the previous one, `"(?i)(SQL)"`, by taking into account:
+
+-   Letters immediately before the "SQL" using the word character class (\w) with the "one or more" quantifier (`+`).
+-   Double the backslash of `\w`, in the R code, to avoid wrong string interpretation.
+
+```{r}
+pattern  <-  "(?i)(\\w+SQL)"
+sql_flavors  <-  str_match(titles, pattern)[,2]
+sql_flavors_freq  <-  table(sql_flavors)
+print(sql_flavors_freq)
+```
+Notice how there is some duplication due to varied capitalization in this frequency table:
+
+-   `NoSQL` and `nosql`
+-   `MySQL` and `mysql`
+
+One way to get rid of this issue is to use `str_to_lower()` or `str_to_upper()` functions to transform SQL flavors into lower or upper case before applying the `table()` function.
+
+```{r}
+sql_flavors_freq  <-  table(str_to_lower(sql_flavors))
+print(sql_flavors_freq)
+```
+
+In order to compute how many `python 2`, `python 3`, etc are mentioned in titles, in this exercise, we're going to:
+
+-   Extract the mentions of different python flavors and its version
+-   Clean those duplicates by making them all lowercase
+
+1.  Create a variable, `pattern`, containing the regular expression to capture python flavor mentions and their versions using capture groups.
+
+-   Any time 'python' is mentioned, followed by a space, followed by one digit characters.
+-   Ignoring all case variation.
+
+2.  Create a vector, `python_flavors`, containing extracted mentions of python flavors from the `titles` vector.
+3.  Use the `str_to_lower()` function to clean the values in the `python_flavors` column by converting them to lowercase.
+
+-   Compute the frequency of python flavor mentions and their versions.
+-   Assign the values to the vector `python_titles_freq.`
+
+```{r}
+pattern  <-  "(?i)(python [\\d])"
+python_flavors  <-  str_match(titles, pattern)[,2]
+python_titles_freq  <-  table(str_to_lower(python_flavors))
+python_titles_freq
+```
+
+## Using Capture Groups to Extract Data
+
+So far we've used capture groups to extract all or most of the text in our regular expression pattern. Capture groups can also be useful to extract specific data from within our expression.
+
+Let's look at a sample of Hacker News titles that mention Python, denoted as `python_sample`:
+
+```{r}
+python_sample <- c(
+    "Developing a computational pipeline using the asyncio module in Python 3",
+    "Python 3 on Google App Engine flexible environment now in beta",
+    "Python 3.6 proposal, PEP 525: Asynchronous Generators",
+    "How async/await works in Python 3.5.0",
+    "Ubuntu Drops Python 2.7 from the Default Install in 16.04",
+    "Show HN: First Release of Transcrypt Python3.5 to JavaScript Compiler"
+)
+```
+
+All of these examples have a number after the word "Python", which indicates a version number. Sometimes a space precedes the number, sometimes it doesn't. We can use the following regular expression to match these cases:
+
+![](https://dq-content.s3.amazonaws.com/400/python_versions_fixed.svg)\
+
+```{r}
+pattern <- "[Pp]ython ?[\\d\\.]+"
+python_versions <- str_extract(python_sample, pattern)
+print(python_versions)
+```
+
+We can use capture groups to extract only the version of Python that is mentioned most often in our dataset by wrapping parentheses around the part of our regular expression which captures the version number.
+
+We'll use a capture group to capture the version number after the word "Python," and then build a frequency table of the different versions.
+
+We have created the variable `python_titles`, containing the `titles` in titles where python is mentioned with its version.
+
+1.  Write a regular expression pattern that will match `Python` or `python`, followed by a space, followed by one or more digit characters or periods.
+
+-   The regular expression should contain a capture group for the digit and period characters (the Python versions).
+
+2.  Extract the Python versions from `python_titles` using the regular expression pattern.
+3.  Create a frequency table of the extracted Python versions. Assign the result to `python_versions_freq.`
+
+```{r}
+
+python_titles <- titles[str_detect(titles,"[Pp]ython [\\d\\.]+")]
+# str_detect produces logical vector that matches the pattern in the titles list. Hence, the python_list returns a list of titles that contain the mathced ones. 
+
+pattern <- "[Pp]ython ([\\d\\.]+)"
+python_versions <- str_match(python_titles, pattern)[,2]
+# This line of code can refer to the definiton of capture group
+python_versions_freq <- table(python_versions)
+python_versions_freq
+```
+
+## Counting Mentions of the "C" Language
+
+So far, we've created regular expressions to clean and analyze the number of mentions of the Python, SQL, and Java languages. Next up: counting the mentions of the C language.
+
+We can start with a simple regular expression and then iterate as we find and exclude incorrect matches. Let's start with a simple regex that matches the letter "c" with word boundary anchors on either side:
+
+![](https://dq-content.s3.amazonaws.com/400/c_regex_1.svg)\
+
+We'll re-use the `first_10_matches()` function that we defined in the previous lesson to see the results we get from this regular expression:
+
+```{r}
+first_10_matches <- function (data, pattern) {
+    matches <- str_detect(data, pattern) # finding pattern matches
+    matched_df <- data[matches] # subsetting data (keep only matches)
+    head(matched_df, 10) # taking the first ten matched elements
+}
+
+c_10_matches <- first_10_matches(titles, "\\b[Cc]\\b")
+
+print(c_10_matches)
+```
+
+Immediately, our results are reasonably relevant. However, we can quickly identify a few match types we want to prevent:
+
+-   Mentions of C++, a distinct language from C.
+-   Cases where the letter C is followed by a period, like in the substring `C.E.O`.
+
+Let's use a negative set (taught in the previous lesson) to prevent matches for the `+` character and the `.` character. Don't hesitate to use an online tool like RegExr that allows you to build regular expressions to check your regular expression.
+
+We provided a commented line of code containing the regular expression we used above.
+
+1.  Uncomment the line of code. Add a negative set to the end of the regular expression that excludes:
+
+-   The period character `.`
+-   The plus character `+`.
+
+2.  Use the `first_10_matches()` function to return the matches for the regular expression you built, assigning the result to `first_ten.`
+
+```{r}
+
+pattern <- "\\b[Cc]\\b[^.+]"
+
+# ^ excludes characters '.' and '+'
+
+first_ten <- first_10_matches(titles, pattern)
+
+first_ten
+```
+
+## Using Lookarounds to Control Matches Based on Surrounding Text
+
+It looks like we're getting close. We have one irrelevant result in our first 10 matches, which is about "Series C," a term used to represent a particular type of startup fundraising.
+
+Additionally, we've run into the same issue as we did in the previous lesson --- by using a negative set, we may have eliminated any instances where the last character of the title is "C" *(the second last line of output matches in spite of the fact that it ends with "C" (because the string ends and no text can be indexed), but it also has "C" earlier in the string)*.
+
+Neither of these can be avoided using negative sets, which are used to allow multiple matches for a single character. Instead we'll need a new tool: **lookarounds.**
+
+Lookarounds let us define a character or sequence of characters that either must or must not come before or after our regex match. There are four types of lookarounds:
+
+![](https://s3.amazonaws.com/dq-content/400/lookarounds.svg)
+
+These tips can help you remember the syntax for lookarounds:
+
+-   Inside the parentheses, the first character of a lookaround is always `?`.
+-   If the lookaround is a **lookbehind**, the next character will be`<`, which you can think of as an arrow head pointing behind the match.
+-   The next character indicates whether the is lookaround is positive (`=`) or negative (`!`).
+
+Let's create some test data that we'll use to illustrate how lookarounds work:
+
+```{r}
+test_cases  <-  c(
+                   'Red_Green_Blue',
+                   'Yellow_Green_Red',
+                   'Red_Green_Red',
+                   'Yellow_Green_Blue',
+                   'Green'
+                 )
+```
+
+We'll also create a function that will tell us whether our pattern matches or not. This function will output the matching pattern if it there is a match otherwise "NO MATCH".
+
+```{r}
+run_test_cases <- function(data, pattern){
+    data_matches <- str_match(data, pattern) # extracting pattern mentions
+    data_matches[is.na(data_matches)] <- "NO MATCH" # assigning "NO MATCH" to mismatch patterns
+    data_matches
+}
+```
+
+In each instance, we'll aim to match the substring `Green` depending on the characters that precede or follow it. Let's start by using a **positive lookahead** to include instances where the match is followed by the substring `_Blue.` We'll include the underscore character in the lookahead, otherwise we will get zero matches:
+
+```{r}
+run_test_cases(test_cases, "Green(?=_Blue)")
+```
+
+Notice how the matches themselves are purely the text `Green` and don't include the lookahead. Let's look at a **negative lookahead** to include instances where the match is not followed by the substring `_Red`:
+
+```{r}
+run_test_cases(test_cases, "Green(?!_Red)")
+```
+
+Next, we'll use a **positive lookbehind** to include instances where the match is preceded by the substring `Red_`:
+
+```{r}
+run_test_cases(test_cases, "(?<=Red_)Green")
+```
+
+And finally, using a **negative lookbehind** to include instances where the match isn't preceded by the substring `Yellow_`:
+
+```{r}
+run_test_cases(test_cases, "(?<!Yellow_)Green")
+```
+
+The contents of a lookaround can include any other regular expression component. For instance, here is an example where we match only cases that are followed by exactly five characters:
+
+```{r}
+test_cases  <-  c(
+                   'Red_Green_Blue',
+                   'Yellow_Green_Red',
+                   'Red_Green_Red',
+                   'Yellow_Green_Blue',
+                   'Green'
+                 )
+# detect returns logical vector while match performs a specific match with capture group. In this case, it is "een"
+str_detect(test_cases, "Green(?=.{5})")
+str_match(test_cases, "Gr(een)(?=.{5})")
+
+# The output of extract is exactly the same as first column of match function
+str_extract(test_cases,"Green(?=.{5})")
+
+run_test_cases(test_cases, "Green(?=.{5})")
+```
+
+The second and third test cases are followed by four characters, not five, and the last test case isn't followed by anything.
+
+Sometimes programming languages won't implement support for all lookarounds (notably, lookbehinds are not in the official JavaScript specification). As an example, to get full support in the RegExr tool, you'll need to set it to use the PCRE regex engine.
+
+In this exercise, we're going to use lookarounds to refine the regular expression we build on the last screen to capture mentions of the "C" programming language. As a reminder, here is the last of the regular expressions we attempted to use with this exercise earlier, and the resultant titles that match:
+
+```{r}
+first_10_matches(titles, "\\b[Cc]\\b[^.+]")
+```
+
+Let's now use lookarounds to exclude the matches we don't want. We want to:
+
+-   Keep excluding matches that are followed by `.` or `+`, but still match cases where "C" falls at the end of the string.
+-   Exclude matches that have the word 'Series' immediately preceding them. This exercise is a little harder than those you've seen so far in this course --- it's okay if it takes you a few attempts!
+
+1.  Write a regular expression and assign it to `pattern.` The regular expression should:
+
+-   Match instances of `C` or `c` where they are not preceded or followed by another letter.
+-   Exclude instances where the match is followed by a `.` or`+`character, without removing instances where the match occurs at the end of the string.
+-   Exclude instances where the word 'Series' immediately precedes the match.
+
+2.  Count how many stories in `titles` match the regular expression. Assign the result to `c_mentions.`
+
+```{r}
+pattern  <-  "(?<!Series\\s)\\b[Cc]\\b(?![\\.\\+])"
+# lookarounds is a combination of lookaheads and lookbehind, mostly negative)
+
+# To represent the literal meaning of the special character, backslash "\" is used in regexr standalone. In R, to implement regexr, we need to add double backslashes ,"\", to avoid confusion in interpretation, where original regexr can be preserved while some of the R built-in escape can be understood and processed correctly.
+c_mentions  <-  sum(str_detect(titles, pattern))
+```
+
+
+## BackReferences: Using Capture Groups in a RegEx Pattern
+
+Let's say we wanted to identify strings that had words with double letters, like the "ee" in "feed." Because we don't know ahead of time what letters might be repeated, we need a way to specify a capture group and then to repeat it. We can do this with **backreferences**.
+
+Whenever we have one or more capture groups, we can refer to them using integers left to right as shown in this regex that matches the string `HelloGoodbye`:
+
+![](https://s3.amazonaws.com/dq-content/400/backreference_syntax_1.svg)\
+
+Within a regular expression, we can use a backslash followed by that integer to refer to the group:
+
+![](https://dq-content.s3.amazonaws.com/400/backreference_syntax_2.svg)\
+
+The regular expression above will match the text `HelloGoodbyeGoodbyeHello.` Let's look at how we could write a regex to capture instances of the same two word characters in a row:
+
+![](https://dq-content.s3.amazonaws.com/400/backreference_syntax_3.svg)\
+
+Let's see this in action using R:
+
+```{r}
+test_cases  <-  c(
+    "I'm going to read a book.",
+    "Green is my favorite color.",
+    "My name is Aaron.",
+    "No doubles here.",
+    "I have a pet eel."
+)
+
+print(str_match(test_cases, "(\\w)\\1"))
+# The reason for adding "\\" for this is because "\" serves as an escape sign for "\\", where only one backslash will be eventually interpreted, so "\w" and "\1" could be recognised by R and not confused with other escape sequence. As for specicial characters, such as "." and "+", "\\" is used for the same purpose, where one extra "\" is used to help identify the "\" in Regexr, hence, validating the literal meaning of one special character. 
+
+# To understand the logic, think of the code experience three satges being processed
+# R -> Regexr -> Matches (symbols, numbers, or characters)
+```
+
+In the example above, the goal is to find and display any consecutive repeated characters (double letters) within a set of given sentences (test_cases). The `str_match` function from the `stringr` package is used to achieve this. Let's look at specific parts of this code in more detail:
+
+Regular expression pattern`(\\w)\\1`:
+
+  -   `(\\w)`: This is a capture group that matches a single word character (letters or digits). The double backslash is used to escape the backslash in the R string, so the regex engine sees it as `\w`.
+  -   `\\1`: This is a backreference that refers to the first capture group (the single word character). It ensures that the same character matched in the capture group is matched again immediately after the capture group.
+
+`str_match(test_cases, "(\\w)\\1")`:
+
+  -   The `str_match` function is used to apply the regular expression pattern to the `test_cases` vector. It returns a matrix where each row corresponds to an element from the `test_cases` vector, and each column corresponds to a capture group (including the full match).
+  -   In this case, there are two columns: one for the full match (the repeated characters) and one for the capture group (the single character).
+
+`print()`:
+
+  -   The print function displays the resulting matrix, showing the full match (column 1) and the capture group (column 2) for each element in the `test_cases` vector. If no consecutive repeated characters are found in a sentence, it shows `NA` in both columns.
+
+The resulting output shows that: - In the first sentence, "oo" is the repeating character, originating from the word "book". - In the second sentence, "ee" is the repeating character, found in the word "Green". - In the third sentence, no repeating characters are found. Note that "Aaron" has a double "a", but one is uppercase and the other is lowercase, so they are considered different characters. - In the fourth sentence, no repeating characters are found. - In the fifth sentence, "ee" is the repeating character, found in the word "eel".
+
+Notice that there was no match for the word `Aaron`, despite it containing a double "a." This is because the uppercase and lowercase "a" are two different characters, so the backreference does not match.
+
+Let's use this technique to identify story titles that have repeated words.
+
+1.  Write a regular expression to match cases of repeated words:
+
+-   We'll define a word as a series of one or more word characters that are preceded and followed by a boundary anchor.
+-   We'll define repeated words as the same word repeated twice, **separated by a whitespace character**.
+
+2.  Select only the items in `titles` that match the regular expression. Assign the result to `repeated_words.`
+
+```{r}
+pattern  <-  "\\b(\\w+)\\s\\1\\b"
+test <- str_match(titles, pattern)
+repeated_words  <-  titles[str_detect(titles, pattern)]
+repeated_words
+```
+
+
+## Clean our dataset
+
+In the previous screens, we learned how to: - Use capture group regular expressions and the `str_match()` function to extract mentions of pattern - Clean different mentions of pattern flavors with `str_to_lower()` function - Count the different mentions.
+
+All those operations were performed over `vector.` In this, screen we will clean our dataset.
+
+In this exercise, we're going to extract the mentions of different SQL flavors into a new column and clean those duplicates by making them all lowercase. We'll then analyze the results to look at the average number of comments for each flavor.
+
+We have loaded the dataframe `hn` for you, including the necessary packages.
+
+1.  Create a variable, `pattern`, containing the regular expression to capture SQL flavor mentions using capture groups.
+
+-   Any time 'SQL' is preceded by one or more word characters.
+-   Ignoring all case variation.
+
+2.  Create a new dataframe, `hn_sql`, including only rows of that mention a SQL flavor in the column `title` of `hn` using `filter()` function from `dplyr` package and `str_detect()` function from `stringr` package.
+
+-   Create a new column called `flavor` in the `hn_sql` dataframe, containing extracted mentions of SQL flavors.
+-   Use the `str_to_lower()` function to clean the values in the `flavor` column by converting them to lowercase. Assign the values back to the column in `hn_sql.`
+-   Use the `summarize()` and `group_by()` functions from dplyr package, to create a new dataframe, `hn_sql_flavor_avg.`
+    -   Select `flavor` and `num_comments` columns from `hn_sql.`
+    -   Create a new column called `avg`, containing the mean of the `num_comments` column, aggregated by SQL flavor.
+
+```{r}
+pattern  <-  "(?i)(\\w+SQL)"
+hn_sql <-  hn %>% 
+    filter(str_detect(title, pattern)) %>%
+    mutate(flavor = str_match(title, pattern)[,2]) %>%
+    mutate(flavor = str_to_lower(flavor))
+
+hn_sql_flavor_avg <- hn_sql %>%
+    select(flavor, num_comments) %>%
+    group_by(flavor) %>%
+    summarise(average = mean(num_comments))
+
+write_xlsx(hn_sql, "hn_sql.xlsx")
+# Exporting the data from R to Excel 
+```
+
+## Substituting Regular Expression Matches
+
+So far, we've learned how to identify, filter and extract match to a pattern with `str_detect()`, `str_extract()` and `str_match()` functions. On this screen, we are interested in how to replace matching patterns by another string.
+
+To do so, we use the `str_replace()` or `str_replace_all()` functions from `stringr` package. The basic syntax for `str_replace()` and `str_replace_all()` is:
+
+```{r}
+# str_replace(string, pattern, replacement)
+# str_replace_all(string, pattern, replacement)
+```
+
+The `replacement` parameter is the text that you would like to substitute for the match. The difference between `str_replace()` and`str_replace_all()` is that the first replaces only the first match while the second replaces all matches.
+
+Let's look at a couple simple examples:
+
+-   Where we replace the first capital letters in a string with dash:
+
+```{r}
+string  <-  "aBcDEfGHIj"
+
+print(str_replace(string, "[A-Z]", "-"))
+```
+
+Where we replace all capital letters in a string with dashes:
+
+```{r}
+string  <-  "aBcDEfGHIj"
+
+print(str_replace_all(string, "[A-Z]", "-"))
+```
+
+Earlier, we discovered that there were multiple different capitalizations for SQL in our dataset. Let's look at how we could make these uniform with the `str_replace()` function and a regular expression:
+
+```{r}
+sql_variations  <- c("SQL", "Sql", "sql")
+
+sql_uniform  <-  str_replace(sql_variations, "(?i)sql", "SQL")
+print(sql_uniform)
+```
+
+Let's use the same technique to make all the different variations of "email" in the dataset uniform.
+
+We have provided email_variations, containing all the variations of "email" in the dataset.
+
+1.  Use a regular expression to replace each of the matches in email_variations with "email" and assign the result to email_uniform.
+
+-   You may need to iterate several times when writing your regular expression in order to match every item.
+
+2.  Use the same syntax to replace all variations of email in titles with "email".
+
+-   Assign the result to titles_clean.
+
+```{r}
+email_variations  <-  c('email', 'Email', 'e Mail',
+                        'e mail', 'E-mail', 'e-mail',
+                        'eMail', 'E-Mail', 'EMAIL')
+email_uniform <- str_replace(email_variations, "(?i)e[-\\s]?mail", "email")
+
+titles_clean <- str_replace(titles,"(?i)e[-\\s]?mail", "email" )
+# OR
+pattern  <-  "(?i)e[\\-\\s]?mail"
+email_uniform  <-  str_replace(email_variations, pattern, "email")
+titles_clean  <-  str_replace_all(titles, pattern, "email")
+
+# remember all the operations are done in vector format
+```
+
+## Extracting Domains from URLs
+
+Over this screen and the next one in this lesson, we'll extract components of URLs from our dataset. As a reminder, most stories on Hacker News contain a link to an external resource.
+
+The task we will be performing first is extracting the different components of the URLs in order to analyze them. On this screen, we'll start by extracting just the domains. Below is a vector of some of the URLs in the dataset, with the domains highlighted in color, so you can see the part of the string we want to capture.
+
+![](https://s3.amazonaws.com/dq-content/400/url_examples_1.svg)\
+
+The domain of each URL excludes the protocol (e.g. `https://`) and the page path (e.g. `/Technology-Ventures-Enterprise-Thomas-Byers/dp/0073523429`).
+
+Once you have extracted the domains, you will build a frequency table to determine the most popular domains. There are over 7,000 unique domains in our dataset, so to make the frequency table easier to analyze, we'll look at only the top 20 domains.
+
+We have provided some of the URLs from the dataset which will help you to iterate while you build your regular expression.
+
+1.  Write a regular expression to extract the domains from `test_urls` and assign the result to `test_urls_clean.` We suggest the following technique:
+
+-   Use a capture group to match the domain name.
+-   Include any necessary character classes for the domain name within the capture group.
+
+2.  Use the same regular expression to extract the domains from the `url` column of the `hn` dataframe. Assign the result to domains.
+3.  Use `table()` function to build a frequency table of the domains in `domains`, limiting the frequency table to just to the first 20. Assign the result to `top_domains.`
+
+```{r}
+test_urls  <-  c(
+ 'https://www.amazon.com/Technology-Ventures-Enterprise-Thomas-Byers/dp/0073523429',
+ 'http://www.interactivedynamicvideo.com/',
+ 'http://www.nytimes.com/2007/11/07/movies/07stein.html?_r=0',
+ 'http://evonomics.com/advertising-cannot-maintain-internet-heres-solution/',
+ 'HTTPS://github.com/keppel/pinn',
+ 'Http://phys.org/news/2015-09-scale-solar-youve.html',
+ 'https://iot.seeed.cc',
+ 'http://www.bfilipek.com/2016/04/custom-deleters-for-c-smart-pointers.html',
+ 'http://beta.crowdfireapp.com/?beta=agnipath',
+ 'https://www.valid.ly'
+)
+ 
+pattern  <-  "(?i)://([\\w\\.]+)/?"
+
+test_urls_clean  <-  str_match(test_urls, pattern)[,2]
+test_urls_clean
+domains  <- str_match(hn$url, pattern)[,2]
+top_domains  <-  head(table(domains),20)
+```
+
+## Extracting URL Parts Using Multiple Capture Groups
+
+Having extracted just the domains from the URLs, we'll extract each of the three component parts of the URLs:
+
+1.  Protocol
+2.  Domain
+3.  Page path
+
+![](https://s3.amazonaws.com/dq-content/400/url_examples_2.svg)\
+In order to do this, we'll create a regular expression with multiple capture groups. Multiple capture groups in regular expressions are defined the same way as single capture groups --- using pairs of parentheses.
+
+Let's look at how this works using the first few values from the `created_at` column in our dataset:
+
+```{r}
+created_at  <-  head(hn$created_at)
+print(created_at)
+```
+
+We'll use capture groups to extract these dates and times into two columns:
+
+|           |       |
+|-----------|-------|
+| 8/4/2016  | 11:52 |
+| 1/26/2016 | 19:30 |
+| 6/23/2016 | 22:20 |
+| 6/17/2016 | 0:01  |
+| 9/30/2015 | 4:12  |
+
+In order to do this, we can write the following regular expression: ![](https://s3.amazonaws.com/dq-content/400/multiple_capture_groups.svg)\
+
+Notice how we put a space character between the capture groups, which matches the space character in the original strings.
+
+The good news is that we won't learn a new function for that. The `str_match()` function also allows for handling several capture groups.
+
+Let's look at the result of using this regex pattern with `str_match()`:
+
+```{r}
+pattern  <-  "(.+)\\s(.+)"
+dates_times  <-  str_match(created_at, pattern)
+print(dates_times)
+```
+
+The result is a matrix with each of our capture groups defining a column of data.
+
+Now let's write a regular expression that will extract the URL components into individual columns of a dataframe.
+
+1.  Revise the regular expression pattern to extract URL components using three capture groups:
+
+-   The first capture group should include the protocol text, up to but not including `://`.
+-   The second group should contain the domain, from after`://`up to but not including`/`or`:`.
+-   The third group should contain the page path, from after `/` (or after the domain, if no `/` exists) to the end of the string.
+-   The revised pattern should avoid matching incorrect protocols when `://` occurs more than once.
+
+2.  Use the regular expression pattern to extract the URL components from the `test_urls` series. Assign the results to `test_url_parts.`
+
+3.  Use the regular expression pattern to extract the URL components from the `url` column of the `hn` dataframe. Assign the results to `hn_urls` dataframe:
+
+-   Create in this dataframe a column `protocol` to store the protocols.
+-   Create in this dataframe a column `domain` to store the domains.
+-   Create in this dataframe a column `page_path` to store the page path.
+
+```{r}
+test_urls  <-  c(
+ 'https://www.amazon.com/Technology-Ventures-Enterprise-Thomas-Byers/dp/0073523429',
+ 'http://www.interactivedynamicvideo.com/',
+ 'http://www.nytimes.com/2007/11/07/movies/07stein.html?_r=0',
+ 'http://evonomics.com/advertising-cannot-maintain-internet-heres-solution/',
+ 'HTTPS://github.com/keppel/pinn',
+ 'Http://phys.org/news/2015-09-scale-solar-youve.html',
+ 'https://iot.seeed.cc',
+ 'http://www.bfilipek.com/2016/04/custom-deleters-for-c-smart-pointers.html',
+ 'http://beta.crowdfireapp.com/?beta=agnipath',
+ 'https://www.valid.ly'
+)
+ 
+
+
+pattern  <-  "(.+)://([^:/]+)/?(.*)"
+
+# consider the middle as exclusion methods
+
+test_url_parts  <-  str_match(test_urls, pattern)
+test_url_parts
+
+hn_urls  <-  hn %>%
+    mutate(protocol = str_match(url, pattern)[,2]) %>%
+    mutate(domain = str_match(url, pattern)[,3]) %>%
+    mutate(page_path = str_match(url, pattern)[,4])
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

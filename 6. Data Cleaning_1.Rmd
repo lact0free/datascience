@@ -1,0 +1,2039 @@
+---
+title: "6. Data Cleaning 1"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# **1. Data Cleaning**
+
+## Introduction
+
+It's rare that data is ready to use without any processing. Most of the time, we need to prepare the data before we can use it. Data practitioners spend a lot of time preparing data for analysis.. We call this data preparation data cleaning, and it includes the following:
+
+-   Removing data we don't need for our analysis
+-   Removing duplicate data
+-   Addressing inconsistencies
+-   Dealing with missing data and outliers
+-   Creating new variables where necessary
+-   Combining separate datasets
+
+Data cleaning is also often a nonlinear process. We need to spend time researching our data, then, we use our professional judgment to make decisions, and sometimes we revisit our data cleaning choices mid-project.
+
+**Data cleaning is a crucial part of working as a data analyst or scientist, and getting good at it takes practice.** We'll guide you through the process, and equip you with the data cleaning skills you need.
+
+In this lesson, we'll begin learning techniques for cleaning messy, real-world data for analysis. Here are a few takeaways you can expect by the end of the lesson:
+
+-   How to identify data cleaning needs for analysis
+-   How to simplify DataFrames for necessary variables
+-   How to change the data types of multiple variables at once
+-   How to create new variables by calculating summary statistics from existing variables
+-   How to use functionals to check for duplicate observations
+
+To get the most out of this lesson, you'll need to be comfortable programming in R, and you'll need to be able to import a CSV file into R and save it as a DataFrame. It will also be beneficial if you're familiar with the split-apply-combine workflow in R, as well as data visualization.
+
+## Data Cleaning Tasks
+
+Data cleaning is an iterative process that helps us be sure that our data is ready for analysis. Here are some questions we need to ask about new data as we prepare to clean it.
+
+1.  Which data do we need for our analysis? Often, we won't need all the data the in datasets to answer our research questions. So, it may make sense to create a new DataFrame containing only the necessary data. This will make our work more efficient when we're dealing with large datasets.
+
+2.  Do we need to create any new variables? Sometimes, our analysis will require a variable that isn't currently defined in our data (e.g., the sum or mean of several variables).
+
+3.  Are the data the correct type? Is any of the data we need to calculate new variables formatted as character instead of numeric?
+
+4.  Do we need to combine DataFrames? To analyze our data, we want to be able to visualize relationships between variables. For example, to understand how demographic factors affect a school's test performance, we will need to combine the schools and population datasets.
+
+5.  Do we need to reshape the data? When visualizing data, different arrangements of variables in rows and columns are necessary for different tasks.
+
+6.  Are there missing data? In some datasets, many values are missing (represented by NA). We will have to decide how to handle these missing values as we clean the data.
+
+Here is a summary of the mains operations in data cleaning.
+
+![](https://dq-content.s3.amazonaws.com/323/datacleaning.svg)\
+Let's begin exploring these operations and their use cases.
+
+## Understanding the Data
+
+The datasets we'll be working with in this course come from the New York City Department of Education. They contain data on NYC schools, including student demographics, test scores, graduation and dropout rates, and school locations.
+
+![](https://dq-content.s3.amazonaws.com/323/nycschools.svg)\
+
+These datasets contain interesting information about the characteristics of schools in a large, diverse city.
+
+We'll focus on using this dataset to understand how NYC high schools' demographics (race, sex, income, etc.) affect student performance.
+
+We'll analyze the data to answer questions like the following:
+
+-   Is there a relationship between school class size and test performance?
+-   Are there any demographic factors that seem related to student test performance?
+-   Does academic performance vary by school location?
+
+The datasets are stored in six files:
+
+-   `sat_results.csv`: Data on Scholastic Aptitude Test (SAT) scores. The SAT is a standardized test taken by most high school students for college preparation.
+
+-   `ap_2010.csv`: Data on Advanced Placement (AP) test results. Advanced high school students take AP tests, often at schools that can afford to provide the specialized classes needed to prepare for them.
+
+-   `class_size.csv`: Data on average school class size.
+
+-   `demographics.csv`: Data on demographics of NYC school students, including race and sex.
+
+-   `graduation.csv`: Data on graduation outcomes, including the percentages of students who graduated or dropped out of school.
+
+-   `hs_directory.csv`: A directory of high schools that contains location information for each school.
+
+**When we're working with new data, we must familiarize ourselves with any dataset's available descriptions. We refer to this description as metadata.** We also have to do a bit of research to make sure we understand what the data represent.
+
+Take some time to follow the links in the dataset descriptions above and learn about the variables included in the datasets.
+
+We've downloaded the data files for you. When you're ready, let's import the files into R.
+
+## Instructions
+
+In this exercise, we are going to import the CSV-files listed above into R and save them as DataFrames with the following names:
+
+-   `sat_results`
+-   `ap_2010`
+-   `class_size`
+-   `demographics`
+-   `graduation`
+-   `hs_directory`
+
+1.  Import each CSV-file by using the `read_csv()` from the `readr` package.
+
+-   We have loaded the readr package for you.
+-   Store the result in the corresponding variable listed above.
+
+2.  You'll see messages in the console regarding column specifications when you import files into R using read_csv(). These are not error messages.
+
+3.  Preview the six DataFrames and think about which data cleaning operations may be necessary.
+
+```{r}
+sat_results <- read_csv("sat_results.csv")
+ap_2010 <- read_csv("ap_2010.csv")
+class_size <- read_csv("class_size.csv")
+demographics <- read_csv("demographics.csv")
+graduation <- read_csv("graduation.csv")
+hs_directory <- read_csv("hs_directory.csv")
+glimpse(sat_results)
+glimpse(ap_2010)
+```
+
+## SAT Data: Changing Data Types and Creating New Variables
+
+We'll begin by assessing data cleaning needs for the `sat_results` DataFrame. Look at the `sat_results` DataFrame using the `head()` function to return the first six rows.
+
+```{r}
+head(sat_results)
+glimpse(sat_results)
+```
+
+Note that tick marks (\`\`) surround each variable name. This is because the titles contain spaces, which aren't valid in R variable names. When we work with tidyverse functions, surrounding invalid R variable names with tick marks will allow R to interpret them properly.
+
+The DataFrame contains information about each of the 478 public schools in NYC. Since we know only high school students take the SAT, the fact that each school lists SAT scores means that these are all high schools.
+
+This DataFrame contains six variables:
+
+Two (`DBN` and `SCHOOL NAME)` that provide information about the high school One that tells us the number of students who took the SAT (`Num of SAT Test Takers`), Three that tell us the average scores students at each high school earned on SAT sections (`SAT Critical Reading Avg. Score, SAT Math Avg. Score, SAT Writing Avg. Score`).
+
+**What data cleaning operations do we need to perform?** We can work through the first several questions from the previous screen. We will save reshaping data and dealing with missing data for later lessons.
+
+**Which data do we need for our analysis?** These variables are all relevant in the context of understanding the effect of demographics on test scores, so we will retain all the data in this DataFrame.
+
+We can also see that there seems to be only one observation for each high school, so we won't need to remove any rows.
+
+**Do we need to create any new variables?** As we researched the SAT, we would have learned that the test consists of three sections:
+
+1.  Critical Reading
+2.  Math
+3.  Writing
+
+![](https://dq-content.s3.amazonaws.com/323/colsums.gif) To perform this operation, we must ensure that the relevant columns are numeric (refer to the data cleaning question Are the data of the correct type?). Let's use the `map()`function of the `purrr` package to check this information. If you forget how to use it, take a look at our lesson on the Map Function in R.
+
+```{r}
+map(sat_results, class)
+```
+
+We see that all the columns of our DataFrame are characters. However, the `SAT Critical Reading Avg. Score`, `SAT Math Avg. Score`, and `SAT Writing Avg. Score` columns contain numbers, so we need to convert them to numeric.
+
+To convert a column to numeric, we can combine the functions`mutate()` and `as.numeric()`. For example, the following code snippet converts the `SAT Critical Reading Avg. Score` column to numeric:
+
+```{r}
+sat_results <- sat_results %>%
+    mutate(`SAT Critical Reading Avg. Score` = as.numeric(`SAT Critical Reading Avg. Score`))
+glimpse(sat_results)
+```
+
+To convert `SAT Math Avg. Score` and `SAT Writing Avg`. Score columns, we can repeat the previous operation for each.
+
+```{r}
+sat_results <- sat_results %>%
+    mutate(`SAT Math Avg. Score` = as.numeric(`SAT Math Avg. Score`)) %>%
+    mutate(`SAT Writing Avg. Score` = as.numeric(`SAT Writing Avg. Score`))
+glimpse(sat_results)
+```
+
+If we reuse the code snippet to check the columns' type, we will see the changes in the three columns we are interested in.
+
+```{r}
+map(sat_results, class)
+```
+
+Let's use the same technique to perform the necessary cleaning operations on `sat_results.` We have loaded the `dplyr` library for you.
+
+1.  Change the data types of the following columns from character to numeric combining the functions `mutate()`, and `as.numeric()`.
+
+-   `SAT Critical Reading Avg. Score`
+-   `SAT Math Avg. Score`
+-   `SAT Writing Avg. Score`
+
+2.  Create a new variable, `avg_sat_score`, that consists of the sum of each school's average scores on the SAT sections.
+
+-   Save the modified DataFrame as `sat_results_clean.`
+
+3.  For now, don't worry about warning messages like the following, which occur when some character values cannot be changed to numeric.
+
+```{r}
+sat_results_clean <- sat_results %>% 
+  mutate(`SAT Critical Reading Avg. Score` = as.numeric(`SAT Critical Reading Avg. Score`)) %>% 
+  mutate(`SAT Writing Avg. Score`= as.numeric(`SAT Writing Avg. Score`)) %>% 
+  mutate(`SAT Math Avg. Score`=as.numeric(`SAT Math Avg. Score`)) %>% 
+  mutate(avg_sat_score = `SAT Writing Avg. Score`+`SAT Math Avg. Score`+`SAT Critical Reading Avg. Score`)
+
+glimpse(sat_results_clean)
+```
+
+## SAT Data: Changing Columns' Data Types Simultaneously
+
+On the previous screen, we converted several columns to numeric so we could sum them up.
+
+If we had more than a dozen columns to change, it would have been difficult. Fortunately, R has other simpler ways to achieve the same result. For this, we use the `across()` function whose syntax is as follows:
+
+```{r}
+# across(targeted_columns, operations)
+```
+
+The `across()` function makes it easy to apply the same transformation `(operations)` to multiple columns (`targeted_columns`). Typically, the `targeted_columns` parameter is a vector of columns names (e.g., `SAT Critical Reading Avg. Score`, `SAT Math Avg. Score`, and `SAT Writing Avg. Score`) and the operations parameter is a function (e.g., `as.numeric()`).
+
+For our previous code snippet, we could have written the following.
+
+```{r}
+sat_results_clean <- sat_results %>%
+    mutate(across(c(`SAT Critical Reading Avg. Score`, `SAT Math Avg. Score`, `SAT Writing Avg. Score`), as.numeric))
+```
+
+Note that we used the function `c()` to create the column names vector. We don't add a closing parenthesis at the end of the function.
+
+In order to avoid listing all column names in across, R provides selection helpers to use under certain conditions, for example: - If all the targeted column names start with the same string, we use the `starts_with()` function. - If all the targeted column names end with the same string, we use the`ends_with()` function. - If all the targeted column names contain the same string, we use the`contains()` function.
+
+For example, the following code snippet is equivalent to the previous ones, and it changes all columns containing "`Avg. Score`" to numeric.
+
+```{r}
+sat_results <- sat_results %>%
+    mutate(across(contains("Avg. Score"), as.numeric))
+```
+
+Let's use the same technique to redo the previous exercise. We have loaded the `dplyr` library from the previous screen.
+
+1.  Change the data types of the columns containing `"SAT"` from character to numeric combining the functions `mutate()`, `across()`, `contains()`, and `as.numeric()`. As a reminder, the column names that contain `"SAT"` are the following:
+
+-   `Num of SAT Test Takers`
+-   `SAT Critical Reading Avg. Score`
+-   `SAT Math Avg. Score` -`SAT Writing Avg. Score`
+
+2.  Create a new variable, `avg_sat_score`, that consists of the sum of each school's average scores on the SAT sections.
+
+-   Save the modified DataFrame as `sat_results` to overwrite the original.
+
+```{r}
+sat_results <- sat_results %>% 
+  mutate(across(contains("SAT"), as.numeric)) %>% 
+  mutate(avg_sat_score = `SAT Writing Avg. Score`+`SAT Math Avg. Score`+`SAT Critical Reading Avg. Score`)
+glimpse(sat_results)
+```
+
+## AP Exam Data: Changing Data Types and Creating a New Variable
+
+Now that we've identified and performed data cleaning operations for the `sat_results` DataFrame, let's look at the `ap_2010` DataFrame and run through questions to help identify data cleaning needs.
+
+The DataFrame contains five variables. `DBN` is the same as in the other datasets. `AP Test Takers` provides information about the number of students who took one AP exam (AP Exams are standardized exams designed to measure how well students have mastered the content and skills of a specific AP course.), and `Total Exams Taken` tells us how many exams students took at the school (since students can take exams in multiple subjects). The variable `Number of Exams with scores 3 4 or 5` tells us how many students earned high scores on the exams, which range on a scale from one (lowest) to five (highest).
+
+**Which data do we need for our analysis?** All the `ap_2010` variables provide information about test scores, so they are relevant for our analysis. Since only high school students take AP exams, we know that all the data are for high schools. We don't need to remove any rows.
+
+**Do we need to create any new variables?** There are a few interesting variables we can create to help us understand the data better.
+
+Since students can take multiple AP exams, it would be interesting to calculate the average number of exams students take by dividing `Total Exams Taken` by `AP Test Takers`.
+
+We could also calculate the percentage of high-scoring AP exams by dividing `Number of Exams with scores 3 4 or 5` by `Total Exams Taken` and multiplying by 100.
+
+**Are the data the correct type?** As was the case for `sat_results`, the data in `ap_2010` are all formatted as character data. We'll need to change them to numeric.
+
+Unlike the columns in the previous dataset `sat_results`, the columns `AP Test Takers`, `Total Exams Taken`, and `Number of Exams with scores 3 4 or 5` don't have a common element in their names that would allow the use of functions `contains()`, `starts_with()`, or `ends_with()`. However, these columns follow each other.
+
+In this case, we can still use the `across()` function with other ways to select the targeted columns.
+
+Let's look at how we could change the data type of the four columns in `sat_results` using `mutate()`, `across()`, and the range selection helper:
+
+```{r}
+sat_results <- sat_results %>%
+  mutate(across(`Num of SAT Test Takers`: `SAT Writing Avg. Score`, as.numeric))
+```
+
+Notice that instead of typing out the names of all the columns we want to modify, we can use a colon (`:`) to specify the range. We can use the range helper only if the **targeted columns are consecutive**.
+
+We can also specify the indices of the columns we want to modify:
+
+```{r}
+sat_results <- sat_results %>%
+  mutate(across(3: 6, as.numeric))
+```
+
+Now that we've learned to change the data type of multiple DataFrame columns, let's clean the `ap_2010` dataframe.
+
+1.  Use the `mutate()` and `across()` functions to change the `AP Test Takers`, `Total Exams Taken`, and `Number of Exams with scores 3 4 or 5` variables to numeric.
+
+2.  Add two new variables to the DataFrame:
+
+-   `exams_per_student`: The average number of AP exams each student takes.
+-   `high_score_percent`: The percentage of all exams with scores of three, four, or five.
+
+3.  Save the modified DataFrame as `ap_2010` to overwrite the original.
+
+```{r}
+glimpse(ap_2010)
+ap_2010 <- ap_2010 %>% 
+  mutate(across((3:5), as.numeric)) %>% 
+  mutate(exams_per_student = `AP Test Takers`/`Total Exams Taken`,
+         high_score_percent = `Number of Exams with scores 3 4 or 5`/`Total Exams Taken`)
+```
+
+## Class Size Data: Simplifying the Dataframe
+
+Next, let's look at the `class_size` DataFrame to identify data cleaning needs.
+
+This DataFrame contains information about class sizes associated with different grades and classes of NYC schools.
+
+Information about class size (the variables `AVERAGE CLASS SIZE`, `SIZE OF SMALLEST CLASS`, `SIZE OF LARGEST CLASS`) may be useful in our analysis of how demographic factors can affect student academic performance. For example, wealthier schools may be able to offer smaller classes because they can afford more teachers.
+
+One of the first things that we can see when we look at `class_size` is that there are multiple rows for each school. Let's determine why.
+
+First, look at the `GRADE` column. It appears that each school has multiple rows for different grades. Since we're only interested in high schools, we can select only rows in this dataset for which the GRADE variable has the value of "09-12" --- the grade levels for high school in the U.S.
+
+Next, look at the `PROGRAM TYPE` column. Some schools have several different types of programs. For consistency among datasets, let's only keep rows for which `PROGRAM TYPE` has the value of `"GEN ED"`, which is short for "general education."
+
+Let's start cleaning the `class_size` DataFrame by removing unnecessary rows for our analysis.
+
+1.  Filter the `class_size` DataFrame to retain only rows where `GRADE` values are equal to `"09-12"` and PROGRAM TYPE values are `"GEN ED"`.
+
+2.  Save the modified DataFrame as `class_size` to overwrite the original.
+
+```{r}
+glimpse(class_size)
+class_size <- class_size %>% 
+  filter(GRADE == "09-12",
+         `PROGRAM TYPE` == "GEN ED")
+
+```
+
+## Class Size Data: Calculating School Averages
+
+We have now filtered the `class_size` DataFrame to retain only observations for general education classes at high schools, but there is still some work to do. The new, filtered DataFrame still contains multiple rows for some of the high schools. The rows contain information about class sizes of various courses (see the `CORE COURSE (MS CORE and 9-10 ONLY)` variable).
+
+To calculate single values for each high school's class size variables, we can calculate an average across courses. We can achieve it by combining the `group_by()` and `summarise()` functions, known as the split-apply-combine workflow.
+
+This approach will work well for calculating high school averages for the `AVERAGE CLASS SIZE`, `SIZE OF SMALLEST CLASS`, and `SIZE OF LARGEST CLASS` variables.
+
+Before we use `group_by()` and `summarize()` to calculate the averages, though, we need to make sure all necessary variables are retained in the summary DataFrame.
+
+Let's look once again at the `class_size` DataFrame.
+
+```{r}
+glimpse(class_size)
+```
+
+Recall that we need the DataFrame to contain the variable `DBN` so we can use it as a key to join the DataFrames together. After spending time working with the `sat_results` and `ap_2010` dataframes, we may notice that `DBN` appears is a combination of `CSD` and `SCHOOL CODE`. We will need this information soon to create a `DBN` key for the `class_size` DataFrame.
+
+When we group the DataFrame using `group_by()`, be sure to list the following variables so they are in the summary DataFrame we produce using `summarize()`:
+
+-   `CSD`
+-   `SCHOOL CODE`
+-   `SCHOOL NAME`
+
+Since `CSD` and `SCHOOL CODE` are the same for each value of `SCHOOL NAME`, including them in the `group_by()` function simply ensures they are in the summary DataFrame.
+
+![](https://dq-content.s3.amazonaws.com/323/summarize.gif)\
+
+Let's create a new DataFrame containing average class size information for each high school.
+
+1.  Create a new class_size DataFrame that contains the following:
+
+-   The following variables from the original DataFrame:
+
+-   `CSD`
+
+-   `SCHOOL CODE`
+
+-   `SCHOOL NAME` The following new variables:
+
+`avg_class_size` (average of `AVERAGE CLASS SIZE` for each school) `avg_largest_class` (average of `SIZE OF LARGEST CLASS` for each school) `avg_smallest_class` (average of `SIZE OF SMALLEST CLASS` for each school)
+
+```{r}
+class_size <- class_size %>%
+  group_by(CSD, `SCHOOL CODE`, `SCHOOL NAME`) %>%
+  summarize(avg_class_size = mean(`AVERAGE CLASS SIZE`), 
+            avg_largest_class = mean(`SIZE OF LARGEST CLASS`),
+            avg_smallest_class = mean(`SIZE OF SMALLEST CLASS`))
+```
+
+## Graduation Data: Simplifying the Dataframe
+
+We've now cleaned the `sat_results`, `ap_2010`, and `class_size` DataFrames. We've simplified them so that they contain data relevant to our analysis, made sure data types are correct, and created necessary variables.
+
+We have three DataFrames left to work on. Let's look at the `graduation` DataFrame.
+
+As was the case for `class_size`, there are multiple rows for each school in the `graduation` DataFrame. This is because, for each school, there are rows for different demographics and for multiple years.
+
+Let's focus on graduation rates for each school's entire cohort by selecting rows for which the value of `Demographic` is "Total Cohort." We'll work with the `graduation` data from 2006.
+
+Do we need all the variables in the DataFrame for our analysis? To understand students' academic success, the most relevant variables are probably the ones that have to do with whether students successfully graduate or if they drop out: `Total Grads - % of cohort` and `Dropped Out - % of cohort`.
+
+This DataFrame has a `DBN` variable, and it doesn't seem that we need to create any new variables.
+
+Let's simplify the DataFrame to include data relevant to our analysis.
+
+1.  Create a new graduation DataFrame.
+
+-   Filter the rows that contain only the following:
+
+    -   Data for the total cohort of students (the Demographic variable is equal "Total Cohort") and
+    -   Data from the 2006 Cohort (the Cohort variable is equal "2006").
+
+-   Select the following columns : `DBN`, `School Name`, `Total Grads - % of cohort`, `Dropped Out - % of cohort`.
+
+```{r}
+graduation <- graduation %>% 
+  filter(Demographic == "Total Cohort",
+         Cohort == "2006") %>% 
+  select(DBN, `School Name`, `Total Grads - % of cohort`, `Dropped Out - % of cohort`)
+```
+
+## Demographics Data: Simplifying the Dataframe
+
+Look at the demographics DataFrame next.
+
+Like the `class_size` and `graduation` DataFrames, this one has multiple rows for each school.
+
+There are data for multiple years (the `schoolyear` variable). Let's work with data from the most recent year, rows for which values of `schoolyear` are "20112012".
+
+The duplicate rows for each school also are because data from elementary schools, as well as high schools, is in `demographics.` There are columns (`grade_1`, `grade_2`, etc.) that contain the number of students in each grade for each school. Because we are only interested in working with high schools (grades 9, 10, 11, and 12), we can filter the data to select only schools for which the value of one of the high school grade columns (like `grade_9` or `grade_10`) is not "NA").
+
+The DataFrame also contains many columns that seem to contain very little data or are not likely to be useful in our analysis.
+
+For example, some columns provide information about the number of students that are English Language Learners (`ell_num`). Comparing numbers of students among schools isn't likely informative because schools have different total numbers of enrolled students. Instead, using `ell_percent` to compare percentages of English Language Learners among schools would be more useful.
+
+For our analysis, we will retain variables that provide information about percentages of students of different races and sexes:
+
+-   `asian_per`
+-   `black_per`
+-   `hispanic_per`
+-   `white_per`
+-   `male_per`
+-   `female_per`
+
+We'll also retain variables that provide information about the percentage of students in programs that can indicate socioeconomic conditions of schools' student bodies:
+
+-   `frl_percent`: the percentage of students who receive lunch at a price discount
+-   `ell_percent`: the percentage of students who do not speak English as their first language
+-   `sped_percent`: the percentage of students participating in special education programs
+-   `total_enrollment`: the size of the school
+
+A simple way to select all those columns is to list them all, like this:
+
+```{r}
+demographics_1 <- demographics %>%
+  select(DBN, Name, 
+         asian_per, black_per, hispanic_per, white_per, male_per, female_per, 
+         frl_percent, ell_percent, sped_percent, total_enrollment)
+```
+
+This solution isn't scalable, though. Since some columns contain/start or end with the same character, we can also use `contains()`, `starts_with()` or `ends_with()` functions to select them. For example, `frl_percent`, `ell_percent`, and `sped_percent` variables end with `"_percent"`, so we could use the following code snippet to do the same operation as before.
+
+```{r}
+demographics_2 <- demographics %>%
+  select(DBN, Name, 
+         asian_per, black_per, hispanic_per, white_per, male_per, female_per,
+         ends_with("_percent"), total_enrollment)
+```
+
+Let's simplify the demographics DataFrame using the same tricks.
+
+1.  Create a new `demographics` DataFrame.
+
+-   Filter the rows that contain only the following:
+
+    -   Data for which values of schoolyear are "20112012" and
+    -   Data for which values of grade9 are not "NA" (i.e., ! is.na(grade9)).
+
+-   Select Columns containing the following variables using the fact that some of them contain `"_per"` in their name:
+
+    -   DBN
+    -   Name
+    -   frl_percent
+    -   ell_percent
+    -   sped_percent
+    -   asian_per
+    -   black_per
+    -   hispanic_per
+    -   white_per
+    -   male_per
+    -   female_per
+    -   total_enrollment
+
+-   Maintain the order of columns as listed above.
+
+```{r}
+demographics <- demographics %>%
+  filter(schoolyear == "20112012" & !is.na(grade9)) %>%
+  select(DBN, Name, contains("_per"), total_enrollment)
+glimpse(demographics)
+```
+
+## Demographics Data: Removing Variables to Simplify DataFrames
+
+On the previous screen, we simplified the DataFrame by selecting 12 variables out of the 38 variables in the DataFrame.
+
+Let's look at the first few rows of this new DataFrame.
+
+```{r}
+head(demographics)
+```
+
+We see that columns `male_per`, and `female_per` are complementary to each other, so we can remove one of them. Let's remove the last column, `female_per.` We can use three techniques to do this:
+
+We can use the technique we have already learned by listing the first 11 columns.
+
+```{r}
+demographics_clean <- demographics %>%
+  select(DBN, Name, frl_percent, ell_percent, 
+         sped_percent, asian_per, black_per, 
+         hispanic_per, white_per, male_per, total_enrollment) #we removed `female_per` from here.
+```
+
+We can use a range of variables (i.e., provide to the `select()` function the first variable name, followed by a colon, followed by the name of the last variable). We use this when the desired variables are consecutive. Here, the variables from `DBN` to `male_per` are consecutive, so we can replace them with a range of variables: `DBN:male_per`. Since this doesn't include `total_enrollment` we have to add it in the `select()`. The previous code looks like this:
+
+```{r}
+demographics_clean <- demographics %>%
+  select(DBN:male_per, total_enrollment)
+```
+
+Finally, we can remove the few variables not concerned (in our case here only `female_per`) by adding a dash symbol in front of the name of unwanted variables. We denote these columns as negative columns (Find more detail in our DataFrames lesson).
+
+```{r}
+demographics_clean <- demographics %>%
+  select(-female_per) #we used -`female_per` to remove it.
+```
+
+Let's simplify the `demographics` DataFrame by removing the `Name` and the `female_per` columns.
+
+1.  Create a new `demographics_clean` DataFrame by removing the `Name` and the `female_per` columns from the `demographics` DataFrame available from the previous screen.
+
+-   Use the negative column technique to remove the `Name` and the `female_per` columns.
+-   Save the new DataFrame as `demographics_clean.`
+
+```{r}
+demographics_clean <- demographics %>% 
+  select(-Name, -female_per)
+```
+
+## High School Directory: Simplifying the DataFrame
+
+It's time to clean the final DataFrame: hs_directory.
+
+It contains some information that will be useful for us later when we want to look at patterns based on school locations: GPS coordinates.
+
+These coordinates are buried within character strings contained in the `Location 1` variable column. We can simplify this DataFrame to retain only the `Location 1` column and the columns to identify the school.
+
+The `hs_directory` DataFrame contains a `DBN` variable to use as a key, but notice that it is named with lowercase letters (`dbn`). We will need to capitalize it. The `dplyr` package contains a handy function, `rename()`, we can use.
+
+The syntax for using the `rename()` function to rename a column in a DataFrame is as follows:
+
+```{r}
+# data_frame %>%
+#     rename(new_column_name = old_column_name)
+```
+
+Let's clean the `hs_directory` DataFrame.
+
+1.  Create a new `hs_directory` DataFrame that contains columns for the variables `dbn`, school_name, and `Location 1`.
+
+2.  Rename the `dbn` variable so it's consistent with the `DBN` variables in the other DataFrames.
+
+```{r}
+hs_directory <- hs_directory %>%
+  select(dbn, school_name, `Location 1`) %>%
+  rename(DBN = dbn)
+```
+
+# **3. String Manipulation**
+
+## Importing the Cleaned NYC Schools Data into R
+
+We worked on cleaning six dataframes containing data on New York City high school test scores, demographics, and school locations in the previous lesson. We used tools for dataframe manipulation to remove data that we won't need for our analysis, create new variables, and change data types.
+
+In this lesson, we'll learn about efficiently organizing data and how to use string manipulation techniques to finish cleaning the data.
+
+```{r}
+sat_results <- read_csv("sat_results_1.csv")
+ap_2010 <- read_csv("ap_2010_1.csv") 
+class_size <- read_csv("class_size_1.csv")
+demographics <- read_csv("demographics_1.csv") 
+graduation <- read_csv("graduation_1.csv") 
+hs_directory <- read_csv("hs_directory_1.csv")
+```
+
+## Tidy Data and Efficient Analysis
+
+We'll finish cleaning the six dataframes in this lesson. We'll also discuss an important aspect of data cleaning: *Structuring data so that it is optimally organized for analysis.*
+
+Hadley Wickham, a chief scientist at RStudio and the creator of the tidyverse, coined the concept of "tidy data" to describe the organization principles. They optimize our ability to make sense of data and analyze it using popular tidyverse tools.
+
+According to the tidy data concept, for a dataset to be tidy:
+
+-   Each variable must have its own column. ![](https://s3.amazonaws.com/dq-content/324/Variables.svg)
+
+-   Each observation must have its own row. ![](https://s3.amazonaws.com/dq-content/324/Observations.svg)
+
+-   Each value must have its own cell
+
+    ![](https://s3.amazonaws.com/dq-content/324/Values.svg)
+
+Most R functions (in base R as well as the tidyverse) work best with data where variables are placed in columns. This is because R is written to work with vectors of values. For a refresher, you can always revisit the Working With Vectorized Functions lesson.
+
+Real-world data often violate the tidy data principles. For example, consider test score data for 15 students who attend three different schools. This data can be stored in many ways, and many of them can be considered untidy. This dataset is untidy:
+
+| school A       | school B        | school C        |
+|----------------|-----------------|-----------------|
+| student 1, 115 | student 6, 169  | student 11, 178 |
+| student 2, 157 | student 7, 135  | student 12, 142 |
+| student 3, 125 | student 8, 136  | student 13, 123 |
+| student 4, 146 | student 9, 122  | student 14, 135 |
+| student 5, 119 | student 10, 156 | student 15, 118 |
+
+This dataset violates multiple tidy data principles. The columns are not set up with variable names, but rather with the variable "school" values. Also, there are multiple values (student and score) per cell.
+
+This dataset also is **untidy**:
+
+| school A  |       | school B   |       | school C   |       |
+|-----------|-------|------------|-------|------------|-------|
+| student   | score | student    | score | student    | score |
+| student 1 | 115   | student 6  | 169   | student 11 | 178   |
+| student 2 | 157   | student 7  | 135   | student 12 | 142   |
+| student 3 | 125   | student 8  | 136   | student 13 | 123   |
+| student 4 | 146   | student 9  | 122   | student 14 | 135   |
+| student 5 | 119   | student 10 | 156   | student 15 | 118   |
+
+[Although each value now has its own cell, the columns are still set up with values of the variable "school" instead of variable names.]{color="red"}
+
+This dataset is **tidy**:
+
+| student    | school   | score |
+|------------|----------|-------|
+| student 1  | school A | 115   |
+| student 2  | school A | 157   |
+| student 3  | school A | 125   |
+| student 4  | school A | 146   |
+| student 5  | school A | 119   |
+| student 6  | school B | 169   |
+| student 7  | school B | 135   |
+| student 8  | school B | 136   |
+| student 9  | school B | 122   |
+| student 10 | school B | 156   |
+| student 11 | school C | 178   |
+| student 12 | school C | 142   |
+| student 13 | school C | 123   |
+| student 14 | school C | 135   |
+| student 15 | school C | 118   |
+
+There are three columns: one for each variable in the dataset. Each row represents one observation (a score for each student from each school), and each value has its own cell.
+
+Some work upfront to create a tidy dataset can save lots of time and allow you to write cleaner, more reproducible code as you work on your project.
+
+Take a moment to preview the six dataframes and think about whether their organization fits tidy data principles. Next, we'll dive into using string manipulation to finish cleaning and organizing the NYC schools data for analysis according to tidy data principles.
+
+Preview each of the six dataframes one-at-a-time using the `head()` function. See below for the name of each variable: 1. `sat_results` 2. `ap_2010` 3. `class_size` 4. `demographics` 5. `graduation` 6. `hs_directory`
+
+```{r}
+glimpse(sat_results)
+```
+
+## Graduation Data: Parsing Numbers from Strings
+
+Keeping the tidy data principles we illustrated on the previous screen in mind, let's return to the final data cleaning tasks we need to complete before we combine the NYC schools dataframes.
+
+In this course's first lesson, we performed data cleaning operations that primarily involved numeric data: Changing data types from character to numeric and creating new variables by performing calculations with existing numeric variables. In this lesson, we'll focus on data cleaning operations that involve working with strings.
+
+Earlier, in the Intermediate R Programming courses, we learned about fundamentals of string manipulation. In this lesson, we'll apply some of those concepts, as well as some new tools, to data cleaning tasks.
+
+Let's have a look at the `graduation` dataframe. In the last lesson, we used `filter()` and `select()` to simplify the original dataset to contain only data relevant to our analysis.
+
+Now, we need to change the data type of values of the `Total Grads - % of cohort` and `Dropped Out - % of cohort` variables from character to numeric. Notice that the values of these variables are all followed by a`%`symbol. As a result, instead of using `as.numeric()` to change the data type, we will need to extract only the character strings' numeric portion.
+
+[We can parse each string, or subset it into its different data types, using a handy function from the `readr` package: `parse_number()`. The `parse_number()` function takes a vector as input and drops any characters before or after the first number in strings:]{color="blue"}
+
+![](https://dq-content.s3.amazonaws.com/324/parsenumber.svg)\
+The syntax for creating a new Total Grads - % of cohort variable containing only numbers is:
+
+```{r}
+graduation$`Total Grads - % of cohort`= parse_number(graduation$`Total Grads - % of cohort`)
+```
+
+To extract numbers from strings for multiple variables at once using `parse_number()`, we can use the `mutate()` and `across()` functions as we did to change data type from character to numeric in Lesson 1. Specify the range of columns we want to transform, and apply the `parse_number()` function to those columns' values:
+
+```{r}
+# data_frame %>%
+#     mutate(across(`first column in range`:`last column in range`, parse_number))
+```
+
+When we use `parse_number()`, the output values will be numeric. If an observation's string does not contain a number, such as rows with the letter 's' in the `graduation` dataframe to represent missing values, a warning message will appear identifying the rows with parsing failures. In the `parse_number()` output, values for these observations will be represented by `NA`. We'll learn much more about working with missing values later in this course --- don't worry about this warning message for now.
+
+1.  Create a new `graduation` dataframe in which all values of the following variables consist of numeric data:
+
+-   `Total Grads - % of cohort`
+-   `Dropped Out - % of cohort`
+
+2.  Remember that warning messages alerting you to parsing failures are to be expected when there are non-numeric values of the variable you are passing to `parse_number()`.
+
+3.  For this exercise, several solutions are possible. We encourage you to try different approaches.
+
+For example, we can use `mutate()`, `across()`, and `ends_with(" - % of cohort")` to achieve the same result.
+
+```{r}
+graduation <- graduation %>% 
+  mutate(
+    across(4, parse_number))
+```
+
+## High School Directory: Splitting Strings
+
+Now, the variables `Total Grads - % of cohort` and `Dropped Out - % of cohort` variables in the graduation dataframe consist of numeric data.
+
+The `Location 1` variable of the `hs_directory` dataset is untidy because it contains several elements in the same variable.
+
+```{r}
+head(hs_directory)
+```
+
+Actually, the `Location 1` variable contains useful information for looking at spatial patterns in the data: The latitude and longitude, collectively known as the geographic coordinates, of each school.
+
+We will learn more about coordinate systems and creating maps to visualize data later on. For now, let's focus on cleaning and preparing the data for these next steps.
+
+For each value of `Location 1`, coordinates are contained within a lengthy character string. We'll need to isolate and use them to visualize spatial trends in the future. The latitude values are those that begin with "40," and the longitude values are those that begin with "-73."
+
+![](https://s3.amazonaws.com/dq-content/324/extract_coords.svg)\
+
+To create maps using the NYC schools data, we will need to extract information from `Location 1` to create two new variables: one for latitude and one for longitude:
+
+![](https://s3.amazonaws.com/dq-content/324/coord_extract_summary.svg)\
+
+Within each value of `Location 1`, there are two instances of the character sequence `\n`:
+
+![](https://s3.amazonaws.com/dq-content/324/split_string.svg)\
+
+Splitting the string at `\n` will result in three strings for each value of `Location 1`:
+
+![](https://s3.amazonaws.com/dq-content/324/multiple_strings.svg)\
+
+The tidyr function, separate(), is the perfect solution for that. Its syntax is as follows:
+
+```{r}
+# dataframe %>%
+#     separate(col = the_name_of_the_column_to_separate,
+#            into = c("string_1", "string_2", "string_3"), # the names of new columns
+#            sep = "\n") # the separator of string
+```
+
+In this step, let's split the `Location 1` string and add a new variable containing the latitude and longitude coordinates to the `hs_directory` dataframe.
+
+Create a new `hs_directory` dataframe containing a new variable column, `lat_long`, containing the coordinates (surrounded by parentheses) extracted from the `Location 1` column.
+
+-   Use the `separate()` function to split the column `Location 1` into three new columns: `"string_1"`, `"string_2"`, and `"string_3"` with `"\n"` as separator.
+-   Use the `select()` function to remove the columns string_1 and `string_2` because we don't need them.
+-   Use the `rename()` function to rename the `string_3` column into `lat_long.`
+
+```{r}
+hs_directory <- hs_directory %>% 
+  separate(col = `Location 1`,
+           into = c("string_1", "string_2", "string_3"), 
+           sep = "\n") %>% 
+  select(-string_1, -string_2) %>% 
+  rename(lat_long = string_3)
+head(hs_directory)
+```
+
+## High School Directory: Creating New Variables from a String
+
+We now have a new column in hs_directory, lat_long, containing the latitude and longitude for each school. ![](https://s3.amazonaws.com/dq-content/324/lat_long_column.svg)\
+However, we need latitude and longitude to be split into separate variables. This way, when we're ready to create spatial visualizations, our data will be in the correct format for working with other R data visualization packages.
+
+In the `lat_long` variable, they used a comma to separate the latitude and longitude. We can once again use the `separate()` function to split `lat_long` at the comma.
+
+```{r}
+# dataframe %>%
+#     separate(col = the_name_of_the_column_to_separate,
+#            into = c("string_1", "string_2"), # the names of new columns
+#            sep = ",") # the separator of string
+```
+
+The `tidyr` package is loaded from the previous screen. 1. Create a new `hs_directory` dataframe containing new columns, `lat` and `long`, containing the coordinates extracted from the `lat_long` column.
+
+-   Use the `separate()` function to split the column `lat_long` into two new columns: `"lat"` and `"long"` with `","` as the separator.
+
+```{r}
+hs_directory <- hs_directory %>% 
+  separate(col = lat_long, 
+           into = c("lat", "long"),
+           sep = ",")
+head(hs_directory)
+```
+
+## High School Directory: Extracting Numeric Data From Strings
+
+We have now extracted the latitude and longitude coordinates from Location 1 and created two new variables, `lat` and `long`, in the `hs_directory` dataframe:
+
+![](https://s3.amazonaws.com/dq-content/324/unfinished_lat_long.svg)\
+
+We aren't quite finished cleaning the latitude and longitude data, though. Although each column now contains its own variable, the strings still contain non-numeric characters (the parentheses) that will later present a problem when we want to transform the data type to numeric. Note that we want to retain the`-`in the `longitude` column. Negative longitudes denote geographic locations in the Earth's western hemisphere.
+
+For this last step, we can use the `stringr` function, `str_sub()`, to subset strings to include only characters between specified starting and ending positions, as demonstrated in the following diagram:
+
+![](https://s3.amazonaws.com/dq-content/324/str_sub.svg)\
+
+The str_sub() function takes as its input the character string we want to subset and the positions, from left to right, of the first and last characters we want to return.
+
+```{r}
+# Vector_2  <- Vector_1 %>%
+#     str_sub(5, 7)
+```
+
+We can perform the same operation by specifying character positions from right to left using `-`:
+
+```{r}
+# Vector_2  <- Vector_1 %>%
+#     str_sub(-6, -4)
+```
+
+We can use the `str_sub()` function to subset the lat character strings `(40.67029890700047`, to retain only the characters we need.
+
+Let's create new `lat` and `long` variables that contain only numeric values.
+
+1.  Use `str_sub()` and `mutate()` to create a new `hs_directory` dataframe with lat and long variables containing only numeric characters.
+
+2.  Convert the data type of the `lat` and `long` variables from character to numeric.
+
+3.  For this exercise, we can also use `parse_number()` to achieve the same result. Don't hesitate to try it!
+
+```{r}
+hs_directory <- hs_directory %>% 
+  mutate(
+    lat = str_sub(lat, 2, -1), long = str_sub(long, 1, -2)) %>% 
+  mutate(across(c(lat, long), as.numeric))
+```
+
+## Class Size Data: Creating a Key Using String Manipulation
+
+The new `class_size` dataframe was simplified, in the previous lesson, to contain the information we'll need for our analysis. There is one row for each high school, and averages for smallest class size, largest class size, and average class size.
+
+This dataframe is nearly ready for analysis, but there's one more step we'll need to complete: Creating a `DBN` variable that we can use as a key to join the dataframes in the next lesson.
+
+We can observe that the `DBN` variable in the other dataframes appears to be a combination of `CSD` and `SCHOOL CODE`. So we retained those variables in the summarized `class_size` dataframe. We can confirm this by comparing the `CSD` and `SCHOOL CODE` values for a few high schools in the `class_size` dataframe with the `DBN` of those high schools in the `sat_results` or `ap_2010` dataframes.
+
+![](https://s3.amazonaws.com/dq-content/324/compare_formats.svg)\
+To combine `CSD` and `SCHOOL CODE` into a new `DBN` variable, we will use concatenation and padding techniques for string manipulation that we learned about in our Fundamentals of String Manipulation lesson.
+
+Let's think through the steps we'll need to take. Compare the formats of `CSD` and `SCHOOL CODE` in the `class_size` dataframe and `DBN` in the `sat_results` dataframe:
+
+We can begin by creating a new variable, `DBN`, in the `class_size` dataframe by combining `CSD` and `SCHOOL CODE`:
+
+![](https://s3.amazonaws.com/dq-content/324/combine_strings.svg)\
+
+Compare the new `class_size` DBN column in the diagram above with the `sat_results` `DBN` column. Notice that the `sat_results` `DBN` values all have six digits -- there is a zero at the beginning of the number. ![](https://s3.amazonaws.com/dq-content/324/pad_strings.svg)\
+
+Remember from Fundamentals of String Manipulation that we can pad character strings so that all values have the same number of characters.
+
+Let's finish cleaning the `class_size` data by adding a `DBN` column following this process.
+
+![](https://dq-content.s3.amazonaws.com/324/str_c_pad.gif)\
+
+We have loaded the `stringr` package for you.
+
+1.  Create a new `DBN` variable in the `class_size` dataframe.
+
+-   Combine the columns `CSD` and `SCHOOL CODE` and assign the result to a new column `DBN.`
+-   Update the `DBN` column making sure that its values have six characters.
+
+```{r}
+class_size <- class_size %>%
+  mutate(DBN = str_c(CSD, `SCHOOL CODE`)) %>%
+  mutate(DBN = str_pad(DBN, width = 6, side = 'left', pad = "0")) 
+glimpse(class_size)
+```
+
+# **4. Relational data**
+
+## Importing the Cleaned NYC Schools Data into R
+
+In the previous lesson, we used dataframe manipulation tools to remove data that we won't need for our analysis, to create new variables, and to change data types.
+
+In this lesson, we'll learn how to combine dataframes into one single, clean dataframe for further analysis.
+
+We saved the data we made changes to in the last lesson in .csv files:
+
+-   `sat_results_2.csv`
+-   `ap_2010_2.csv`
+-   `class_size_2.csv`
+-   `demographics_2.csv`
+-   `graduation_2.csv`
+-   `hs_directory_2.csv`
+
+Let's import them into R and get started with the next steps in our data cleaning process.
+
+Import the `sat_results_2.csv`, `ap_2010_2.csv`, `class_size_2.csv`, `demographics_2.csv`, `graduation_2.csv`, and `hs_directory_2.csv` files into R as dataframes with the following names: `sat_results` `ap_2010` `class_size` `demographics` `graduation` `hs_directory`
+
+To import the file, use `read_csv()`. We have loaded the `readr` package for you.
+
+```{r}
+sat_results <- read_csv("sat_results_2.csv")
+ap_2010 <- read_csv("ap_2010_2.csv") 
+class_size <- read_csv("class_size_2.csv")
+demographics <- read_csv("demographics_2.csv") 
+graduation <- read_csv("graduation_2.csv") 
+hs_directory <- read_csv("hs_directory_2.csv")
+```
+
+## Relational Data: Keys and Joins
+
+So far, we've performed a variety of data cleaning operations on the dataframes:
+
+-   Simplified the dataframes to contain only variables and observations that we need for our analysis.
+-   Created new variables from existing ones using calculations and string manipulation.
+
+Now that the six individual dataframes have been cleaned, the next step is to combine them.
+
+In R Fundamentals, we learned to combine vectors and matrices by rows and columns using `rbind()` and `cbind()`.
+
+When we combined vectors and matrices, we bond values of rows or columns together by position. We learned that if vectors are of different lengths, the recycling rule dictates that the shorter vector is repeated.
+
+We can combine dataframes by using the same ways with the functions `bind_rows()` and `bind_cols()`, which work similarly to `rbind()` and `cbind()`.
+
+In contrast, when we combine a pair of dataframes, we can bind columns together based on a variable's matching values rather than on observation positions. The variable used to connect each pair of tables is called a key. In this case, we will combine dataframes based on the key variable `DBN`:
+
+![](https://s3.amazonaws.com/dq-content/546/key_diagram.svg)
+
+To combine the dataframes, we'll use `dplyr` tools for working with multiple tables of data. When we have multiple tables containing data that we are interested in relationships between, they are collectively referred to as relational data.
+
+The six dataframes we have been working with are considered relational data. This because we are interested in relationships between variables in different tables, such as SAT score and average class size.
+
+We'll use the `dplyr` functions to combine the tables for performing mutating joins, which add new variables to one dataframe based on matching observations in another dataframe.
+
+If you are familiar with how joining data tables works in SQL, the `dplyr` functions for joining tables will seem very familiar. If you aren't familiar with SQL, don't worry! We will learn how to join dataframes and practice using them (and we'll learn SQL in upcoming courses) together!
+
+## Confirm that Dataframes are Prepared for Joining
+
+Before joining dataframe, for our analysis, we have to ensure that each dataframe has one observation - that is, one row - for each school. The `DBN` variable must be unique to each school. To successfully combine the dataframes, we should have no more than one instance of each `DBN` value per dataframe.
+
+There are various ways we could check for duplicate values of `DBN` within each dataframe. However, we'll learn one that we find to be incredibly efficient, using the `duplicated()` function.
+
+`duplicated()` is a base R function, so we don't need to load any new packages to use it. The function takes a vector as input and returns a logical vector that indicates whether the value is a duplicate of one that comes before it in the vector.
+
+To illustrate how this works, let's create a vector with a duplicated value:
+
+```{r}
+vector <- c(1,2,3,4,5,5,6)
+```
+
+If we apply the duplicated() function to vector, the output is a vector of logical data:
+
+```{r}
+duplicated(vector)
+```
+
+Because the second instance of 5 in vector is in the sixth position, the sixth value of the duplicated() output is TRUE.
+
+We could apply the duplicated() function to each dataframe's DBN column, for example:
+
+```{r}
+duplicated(sat_results$DBN)
+```
+
+We could use the sum() function to check how many duplicated values we have:
+
+```{r}
+sum(duplicated(vector))
+```
+
+Which yield `1` in this case.
+
+Let's use the same technique to count the number of duplicated values for our datasets.
+
+In this exercise we will count the number of duplicated DBN values for each dataset.
+
+1.  Assign the number of duplicated `DBN` values to the following variables:
+
+-   `sat_results_duplicated`
+-   `ap_2010_duplicated`
+-   `class_size_duplicated`
+-   `demographics_duplicated`
+-   `graduation_duplicated`
+-   `hs_directory_duplicated`
+
+2.  Create a list named `duplicate_DBN` that contains the result for the six datasets associated with the following names:
+
+-   `"sat_results"`
+-   `"ap_2010"`
+-   `"class_size"`
+-   `"demographics"`
+-   `"graduation"`
+-   `"hs_directory"`
+
+```{r}
+sat_results_duplicated <- sum(duplicated(sat_results$DBN))
+ap_2010_duplicated <- sum(duplicated(ap_2010$DBN))
+class_size_duplicated <- sum(duplicated(class_size$DBN))
+demographics_duplicated <- sum(duplicated(demographics$DBN))
+graduation_duplicated <- sum(duplicated(graduation$DBN)) 
+hs_directory_duplicated <- sum(duplicated(hs_directory$DBN)) 
+
+duplicate_DBN <- list( "sat_results" = sat_results_duplicated, 
+                      "ap_2010" = ap_2010_duplicated, 
+                      "class_size" = class_size_duplicated,
+                      "demographics" = demographics_duplicated, 
+                      "graduation" = graduation_duplicated, 
+                      "hs_directory" = hs_directory_duplicated)
+
+duplicate_DBN
+```
+
+## Removing Duplicate Rows
+
+We have now generated a list of rows from each dataframe that contain duplicate values of `DBN.`
+
+Let's have a look at the list and decide how to address any duplicate rows in preparation for combining the dataframes:
+
+Only `ap_2010` has a duplicate `DBN` value.
+
+To remove the duplicated rows from `ap_2010` we can use the `dplyr` function `distinct()`. Its syntax is as follows:
+
+```{r}
+# dataframe %>%
+#     distinct(the_name_of_the_column, .keep_all = TRUE)
+```
+
+The `.keep_all = TRUE` parameter allows keeping all the columns in the dataframe.
+
+Let's use this technique to remove the `DBN` duplicated row from `ap_2010.`
+
+1.  Create a new `ap_2010` dataframe that does not contain any `DBN` duplicated values.
+
+```{r}
+ap_2010 <- ap_2010 %>% distinct(DBN, .keep_all = TRUE)
+sum(duplicated(ap_2010$DBN))
+```
+
+## Inner Joins
+
+As we combine the six NYC schools dataframes, we will begin with one dataframe and then add variables from the other dataframes to it by matching them up with the values of `DBN`, the key.[Recall that the term for joins that add new variables to a dataframe based on matching observations in another dataframe is mutating joins.]{color="red"} There are two main types of mutating joins that we will discuss:
+
+-   **Inner Joins**
+-   **Outer Joins**
+
+To illustrate how different types of joins work, we'll use abbreviated versions of the `sat_results` and `class_size` dataframes as examples.
+
+Let's start with inner joins, which match pairs of variables in two dataframes whenever their values of the key are the same. The resulting dataframe does not include any rows with unmatched keys:
+
+![](https://s3.amazonaws.com/dq-content/546/inner.join.gif)\
+
+Inner joins are useful when we only want to include results that appear in both of the tables we're joining. For example, suppose we're interested in using our data to make a scatter plot to understand the relationship between class size and how well students score on the SAT. In that case, our new dataframe probably doesn't need to include data on total SAT scores that doesn't have a matching class size value.
+
+To combine two tables using an inner join, we can use the `dplyr` function `inner_join()`. The syntax involves beginning with one dataframe and specifying the dataframe we want to join with it. To specify the **identity of the key** you'll use for the join, use `by = "DBN"`:
+
+```{r}
+sat_results %>%
+  inner_join(class_size, by = "DBN")
+```
+
+Let's practice combining two dataframes using an inner join.
+
+We have loaded the `ggplot2` and `dplyr` packages for you.
+
+1.  Use the `inner_join()` function to combine the `sat_results` and `class_size` dataframes.
+
+-   Save the new dataframe as `sat_class_size.`
+
+2.  Create a scatter plot with `avg_class_size` on the x-axis and `avg_sat_score` on the y-axis to see if SAT scores seem to be related to class size.
+
+-   As a reminder, here is the code snippet to generate a scatter plot using the `ggplot2` package:
+
+```{r}
+# ggplot(data = data_frame) +
+#     aes(x = x_axis_variable, y = y_axis_variable) +
+#      geom_point()
+```
+
+```{r}
+# combine the data
+sat_class_size <- sat_results %>%
+  inner_join(class_size, by = "DBN")
+# Making the plot
+sat_class_size %>% 
+  ggplot(aes(x = avg_class_size, y = avg_sat_score)) +
+  geom_point()
+```
+
+## Outer Joins
+
+Now that we've learned about using inner joins to combine dataframes, let's move on to discussing the other type of mutating join we'll be working with: Outer joins.
+
+Outer joins keep observations that appear in at least one of the two tables we're combining. Outer joins can be divided into three types:
+
+-   Left joins
+-   Right joins
+-   Full joins
+
+To illustrate how these different types of outer joins work, we'll once again use abbreviated versions of the `sat_results` and `class_size` dataframes as examples.
+
+**Performing a [left join]{color="red"} keeps all observations in the dataframe on the left (`sat_results`) and drops observations from the dataframe on the right (`class_size`) that have no key (`DBN`) match:**
+
+![](https://s3.amazonaws.com/dq-content/546/left.join.gif)\
+**Performing a [right join]{color="blue"} keeps all observations in the dataframe on the right (`class_size`) and drops observations from the dataframe on the left (`sat_results`) that have no key (`DBN`) match:** ![](https://s3.amazonaws.com/dq-content/546/right.join.gif)\
+
+**Performing a [full join]{color="orange"} keeps all observations from both the `sat_results` and `class_size` dataframes, and fills in missing variables with "NA":** ![](https://s3.amazonaws.com/dq-content/546/full.join.gif)\
+The syntax for combining dataframes using outer joins is similar to that which we used to perform inner joins. The `dplyr` functions to perform the different types of outer joins are:
+
+-   `left_join()`
+-   `right_join()`
+-   `full_join()`
+
+As with the `inner_join()` function, when using the three functions for performing outer joins, use `by = "DBN"` to specify the key's identity.
+
+```{r}
+sat_results %>%
+  left_join(class_size, by = "DBN")
+```
+
+These three types of outer joins are useful under different circumstances, and which one we choose will depend on our data analysis needs.
+
+For example, let's say we mainly are interested in how class size (`avg_class_size` in the `class_size` dataframe) and the percentage of a school's students learning English (`ell_percent` in the `demographics` dataframe) are related to scores on the writing portion of the SAT. When we combine the `sat_score`, `class_size`, and `demographics` dataframes, we may choose to join `class_size` and `demographics` to `sat_score` using `left_join()`, **so we retain all class size and `demographics` data that match an SAT score.**
+
+We can use the `%>%` piping operator to chain multiple types of join functions together. To join `class_size` and `demographics` to `sat_results` as described above, we could write:
+
+```{r}
+combined <- sat_results %>%
+  left_join(class_size, by = "DBN") %>%
+  left_join(demographics, by = "DBN")
+```
+
+Let's combine dataframes using the different types of outer joins to feel how the operations work in practice.
+
+1.  Join `demographics` to sat_results using `left_join()`.
+
+-   Save the resulting dataframe as `demo_sat_left.`
+
+2.  Join `demographics` to sat_results using `right_join()`.
+
+-   Save the resulting dataframe as `demo_sat_right.`
+
+3.  Join `demographics` to sat_results using `full_join()`.
+
+-   Save the resulting dataframe as `demo_sat_full.`
+
+4.  Compare the three new dataframes.
+
+-   We can use the `nrow()` function to print out the sizes of the dataframes: `sat_results`, `demographics`, `demo_sat_left`, `demo_sat_right`, and `demo_sat_full.`
+-   Then, we compare the sat_results and `demographics` sizes to `demo_sat_left`, `demo_sat_right`, and `demo_sat_full` sizes.
+-   Now, let's think about when the different types of outer joins may be useful.
+
+```{r}
+demo_sat_left <- sat_results %>% 
+  left_join(demographics, by = "DBN")
+demo_sat_right <- sat_results %>% 
+  right_join(demographics, by = "DBN")
+demo_sat_full <- sat_results %>% 
+  full_join(demographics, by = "DBN")
+nrow(sat_results)
+```
+
+## Using Joins to Create A Single Dataframe
+
+We've learned about the different types of joins that we can use to combine dataframes. It's now time to combine the six dataframes to create a single, clean one to use for analyses that we'll perform over the rest of this course.
+
+As we decide which types of joins to use to combine the dataframes, let's briefly revisit our goal for this analysis: **We will use the data to understand how NYC high schools' demographics (race, sex, income, etc.) affect how well students perform academically.**
+
+We'll start with the data that provides us with information about students' academic performance: `sat_results` and `ap_2010.` Some high schools may have data only for either SAT scores or AP exams. To make sure we retain all observations from these two dataframes, let's combine `ap_2010` with `sat_results` using a full join.
+
+Next, let's consider which type of join we should use to add the `class_size`, `demographics`, `graduation`, and hs_directory data to the new dataframe we're building. We want to retain all observations in `sat_results` and `ap_2010.` Thus, it makes sense to use left joins, so only matching rows of the `class_size`, `demographics`, `graduation`, and hs_directory dataframes will be included.
+
+Let's use the joins we discussed to build the new dataframe you'll work with over the next few lessons.
+
+Create a new dataframe, `combined`, containing data from the six separate dataframes we've been working with.
+
+1.  Use `full_join()` to join `ap_2010` to `sat_results.`
+
+2.  Use `left_join()` to add `class_size`, `demographics`, `graduation`, and `hs_directory` to the new dataframe.
+
+```{r}
+combined <- sat_results %>%
+  full_join(ap_2010, by = "DBN") %>%
+  left_join(class_size, by = "DBN") %>%
+  left_join(demographics, by = "DBN") %>%
+  left_join(graduation, by = "DBN") %>%
+  left_join(hs_directory, by = "DBN")
+```
+
+# **5. Correlations and Reshaping Data**
+
+## Analyzing New York City Public Schools Data
+
+In the past three lessons, we've done lots of work to clean the NYC schools data. We now have a single dataframe, `combined`, that contains all data we'll be using for analysis.
+
+It's time to begin using the data to understand how NYC high schools' demographics (race, sex, income, etc.) affect students' academic performance.
+
+In Data Visualization in R, we performed exploratory data visualization to learn about new datasets. In this lesson, we'll build on that knowledge as we use scatter plots to examine relationships between variables. We'll take our analyses a step further as we learn to quantify those relationships' strength using `correlation analysis`.
+
+As we analyze the data, we'll learn to use functions from the `tidyr` package for reshaping our data to make our analyses as efficient as possible.
+
+Let's get started by importing the data into R and ensuring that it's ready for analysis.
+
+1.  We have saved the data we compiled in the previous lesson in the file "combined.csv."
+
+-   Import it into R using `read_csv()` function from `readr` package.
+-   Save the output as a dataframe called `combined.`
+
+2.  Since we joined the six dataframes to create `combined`, some variables contain redundant information. Create a new `combined` dataframe that does not contain the following columns:
+
+-   `SchoolName`, `SCHOOL NAME.y`, `Name`, `School Name`, `school_name`, `Location 1`.
+-   One way to do this is to use negative columns as we learned in this lesson.
+
+3.  Rename `SCHOOL NAME.x` to `school_name`, using `rename()` function, to make it easier to work with.
+
+```{r}
+# combined <- read_csv("combined.csv")
+# 
+# combined <- combined %>% 
+#   select(-school_name, -SchoolName, -`SCHOOL NAME.y`, -`School Name`, -`Location 1`, -Name) %>% 
+#   rename(school_name = `SCHOOL NAME.x`)
+```
+
+## Visualizing Relationships Between Variables Using Scatter Plots
+
+As the first step in our analysis, let's start visually exploring some of the NYC schools data using scatter plots. Recall from the Data Visualization in R course that scatter plots represent data using points that have the value of one variable determining the position on the x-axis, and the value of the other variable determining the position on the y-axis
+
+![](https://s3.amazonaws.com/dq-content/325/example.scatter.svg)\
+
+As a reminder, to create a scatter plot using `ggplot()`, we need to specify:
+
+1.  the dataset we are working with,
+2.  the axes we will be plotting on,
+3.  and then add objects, or "geoms", to represent the data.
+
+Let's start by exploring relationships between SAT scores and several variables that provide socioeconomic or demographic information:
+
+-   `frl_percent`: The percentage of a school's students eligible for receiving school lunch at a discount based on household income.
+
+-   `ell_percent`: The percentage of a school's students who are learning to speak English.
+
+-   `sped_percent`: The percentage of a school's students who receive specialized instruction to accommodate special needs such as learning or physical disabilities.
+
+Suppose we view SAT scores as an indicator of academic performance. In that case, these visualizations can provide insight into how these demographic variables may be related to schools' academic performance.
+
+1.  Use the `ggplot()` function to create scatter plots to investigate relationships between the following variables:
+
+-   `frl_percent` and `avg_sat_score.`
+-   `ell_percent` and `avg_sat_score.`
+-   `sped_percent` and `avg_sat_score.`
+
+2.  Since we are interested in how the demographic variables may affect `avg_sat_score`:
+
+-   place `avg_sat_score` on the y-axis, use default backgrounds and colors for the plots.
+
+```{r, fig.asp= 0.618}
+combined %>% 
+  ggplot(aes(x = frl_percent, y = avg_sat_score)) +
+  geom_point()
+combined %>% 
+  ggplot(aes(x = ell_percent, y = avg_sat_score)) +
+  geom_point()
+combined %>% 
+  ggplot(aes(x = sped_percent, y = avg_sat_score)) +
+  geom_point()
+
+```
+
+## Reshaping Data for Visualization
+
+These scatter plots reveal different relationships between the demographic variables and avg_sat_score. While viewing the scatter plots on separate axes does allow for visualization of relationships, recall that sometimes plotting variable relationships on the same axis can improve visualization effectiveness.
+
+Let's think about how to depict the following variable relationships on the same set of axes
+
+The variables `frl_percent`, `ell_percent`, and `sped_percent` all share the same unit (percent), and all are being compared with `avg_sat_score`. Therefore, we could plot the three demographic variables using different colors to distinguish them, creating a plot that looks like this:
+
+![](https://s3.amazonaws.com/dq-content/325/multiple_scatters.svg)\
+
+How would we write the code to create a plot of the three variable relationships on a single axis? Remember that, in the `aes()`layer, we can map variables to the x-axis, y-axis, and aesthetics like color. This allows us to visualize three variables at once. The syntax looks similar to the following:
+
+```{r}
+# ggplot(data = data_frame,
+#   aes(x = var_1, y = var_2, color = var_3)) +
+#   geom_point()
+```
+
+There's one problem: the `combined` dataframe is not currently organized properly for this task. The three variables we want to visualize are organized into three separate columns:
+
+![](https://dq-content.s3.amazonaws.com/325/need_to_reshape.svg)\
+
+The percentages of students for `frl_percent`, `ell_percent`, and sped_percent are organized into three columns instead of one. The names `frl_percent`, `ell_percent`, and `sped_percent` are column titles instead of being values of a variable.
+
+Instead, we need to reorganize the dataframe to have each variable that we'll need to create the plot in its own column:
+
+![](https://dq-content.s3.amazonaws.com/325/reshaped.svg)\
+
+Changing dataframe organization, otherwise known as "reshaping" data, is a common task we'll need to perform as we clean and analyze data.
+
+For such tasks, we'll find many useful functions in the package tidyr. Let's load the package.
+
+## Pivoting a Dataframe into a Longer One
+
+Now that we've loaded the `tidyr` package, let's proceed with reshaping the `combined` dataframe so we can efficiently place multiple scatter plots on the same axes.
+
+We need to modify the dataframe, so the names `frl_percent`, `ell_percent`, and `sped_percent` are values of one variable. The percentages of students are another variable.
+
+![](https://s3.amazonaws.com/dq-content/325/gathered_combined.svg)\
+
+In situations like this, where we increase the number of rows and decrease the number of columns, we'll need to use the `pivot_longer()` function from the tidyr package. The dataframe is longer because the output dataframe is longer than the input one. If you are using an earlier version of tidyr (version 0.8.3 or before), the `gather()` function was used instead of `pivot_longer()`. We don't cover the `gather()` function here.
+
+The `pivot_longer()` function takes targeted columns and collapses them into key-value pairs, duplicating all other columns as needed. The targeted columns are provided to the `pivot_longer()` function through the parameter `cols.` In our example, the targeted variables would be the socioeconomic indicators represented by the columns `frl_percent`, `ell_percent`, and `sped_percent.`
+
+-   The key parameter is the name of the targeted columns, stored as a new single column. In our example, the names of the targeted variables would be "`frl_percent`", "`ell_percent`", and "`sped_percent`". We want to store them in a new column called `socio_indicator.`
+
+-   The value parameter refers to the targeted columns' values, stored as a new single column. In our example, the values would be the percent of students contained in the columns `frl_percent`, `ell_percent`, and `sped_percent.` We want to store them in a new column called `percent.`
+
+See below animation of how this reshaping process works.
+
+![](https://dq-content.s3.amazonaws.com/325/gathered_combined_anim.gif)\
+
+To create a new dataframe, `combined_socio_longer`, that has separate columns for `socio_indicator` and `percent`, we would write:
+
+```{r}
+combined_socio_longer <- combined %>%
+  pivot_longer(cols = c(frl_percent, ell_percent, sped_percent),
+               names_to = "socio_indicator",
+               values_to = "percent")
+```
+
+Using the reshaped data, we could then create a scatter plot that shows the points that represent relationships between `avg_sat_score` and the different socioeconomic indicators using different colors:
+
+```{r}
+ggplot(data = combined_socio_longer,
+  aes(x = percent, y = avg_sat_score, color = socio_indicator)) +
+  geom_point()
+```
+
+Let's continue investigating the data using scatter plots to understand relationships between demographics and NYC school performance.
+
+We want to create a single scatter plot that shows the relationships between schools' percentage of students of different races (the variables `asian_per`, `black_per`, `hispanic_per`, and `white_per`) and schools' average SAT scores (`avg_sat_score`).
+
+1.  To create the plot, we'll need to reshape the data using the tidyr function pivot_longer().
+
+-   The target variables are `asian_per`, `black_per`, `hispanic_per`, and `white_per.`
+-   The name of the keys variable is "`race`".
+-   The name of the values variable is "`percent`".
+-   Save the output as `combined_race_longer.`
+
+2.  Generate the scatter plot.
+
+-   Use the `combined_race_longer` as data.
+-   Use `percent` as x-axis and `avg_sat_score` as y-axis.
+-   Color each point using the `race` column.
+
+```{r}
+combined_race_longer <- combined %>% 
+  pivot_longer(
+    cols = c (asian_per, black_per, hispanic_per, white_per),
+    names_to = "race",
+    values_to = "percent"
+  )
+combined_race_longer %>% 
+  ggplot(aes(percent,avg_sat_score, color = race)) +
+  geom_point()
+```
+
+## Pivoting a Dataframe into a Wider One
+
+On the previous screen, we learned how to transform a dataframe into a longer dataframe by increasing the number of rows and decreasing the number of columns. Before we continue examining the relationship between the variables, let's talk about the reverse transformation.
+
+We need to modify the dataframe, `combined_socio_longer`, so the `socio_indicator` variable's values become a dataframe's variables containing the percentages of students from the variable `percent`:
+
+![](https://s3.amazonaws.com/dq-content/325/spreaded_combined.svg)\
+
+In situations like this, where we decrease the number of rows and increase the number of columns, we'll need to use the pivot_wider() function from the tidyr package. The dataframe is wider because the output dataframe is wider than the input one. If you are using an earlier version of tidyr (version 0.8.3 or before), the `spread()` function was used instead of `pivot_wider()`. We don't cover the `spread()` function here.
+
+The `pivot_wider()` function takes two parameters (`names_from` and `values_from`) and expands `names_from` variable into distinct columns containing values from `values_from` parameter.
+
+See below animation of how this reshaping process works.
+
+![](https://dq-content.s3.amazonaws.com/325/spreaded_combined_anim.gif)\
+
+To create a new dataframe, `combined_socio_wider`, that has separate columns for each distinct value of `socio_indicator` containing the `percent` column's values, we would write:
+
+```{r}
+combined_socio_wider <- combined_socio_longer %>%
+  pivot_wider(names_from = socio_indicator,
+              values_from = percent)
+```
+
+Let's use `pivot_wider()` to get our combined dataframe back.
+
+The `combined_race_longer` dataframe is available from the previous screen exercise.
+
+1.  Reshape the `combined_race_longer` dataframe using the tidyr function `pivot_wider()` such that:
+
+-   The names from the race variable become variables.
+-   The values for the new variables are from the percent variable.
+-   Save the output as `combined_race_wider.`
+
+```{r}
+combined_race_wider <- combined_race_longer %>% 
+  pivot_wider(names_from = race,
+              values_from = percent)
+```
+
+## Comparing the Strength of Relationships Among Pairs of Variables
+
+Let's go back to our analysis.
+
+We've now reshaped the data and created a scatter plot. This plot shows the relationships between schools' percentage of students of different races and schools' average SAT scores using points of different colors for each group:
+
+![](https://s3.amazonaws.com/dq-content/325/race_scores_plot.svg)\
+
+In this instance, the points have a significant overlap. It would be difficult to see differences among the four groups, even if we were to make the points transparent. Remember, it's common to iterate among different visualization types and styles as we explore our data. Let's try faceting the plot by group to see if it makes our visualization clearer:
+
+```{r}
+ggplot(data = combined_race_longer,
+  aes(x = percent, y = avg_sat_score, color = race)) +
+  geom_point() +
+  facet_wrap(~race)
+```
+
+The resulting plot makes it easier to see the differences among groups.
+
+It seems that while the percentages of white and asian students display positive relationships with SAT scores, the percentages of black and hispanic students display a negative relationship with SAT scores.
+
+We may explain this finding by the existence of pervasive inequalities in how resources are allocated to schools with a high number of black and hispanic students. Such schools are less likely to have experienced teachers, advanced courses, and high-quality instructional materials to prepare students for the SAT.
+
+As we look at the four scatter plots above, can we use what we know about interpreting scatter plots to figure out which race percentage has the strongest relationship with `avg_sat_score`?
+
+## Correlation Analysis: Measuring the Strength of Relationships Between Variables
+
+What was your answer to the question we asked on the previous screen? Despite knowing how to use scatter plots to understand relationships between variables, did you find it difficult to identify the strongest relationship?
+
+We've learned to understand and visualize relationships between variables. We can now take our analysis a step further by quantitatively assessing the strength of relationships between variables by calculating their correlation.
+
+Correlation is a statistic that quantifies the strength of the relationship between two variables.
+
+To test for correlation between pairs of variables, we'll calculate the Pearson correlation coefficient, a commonly used measure of the correlation between two variables. We also refer to Pearson's correlation coefficient as "Pearson's r" or "r".
+
+Pearson's r has a value between +1 and −1. The closer a correlation coefficient is to zero, the weaker the relationship between the two variables is. The closer it is to -1 or 1, the stronger the relationship is. Generally, r values above .25 or below -.25 are enough to qualify a correlation as potentially interesting and worthy of further investigation, and r values above 0.75 or below -0.75 indicate strong relationships:
+
+![](https://s3.amazonaws.com/dq-content/325/corr_strengths.svg)\
+
+Here are some illustrations of scatter plots associated with different values of Pearson's correlation coefficient (r):\
+**Weak or no correlation: r = 0.08**
+
+![](https://s3.amazonaws.com/dq-content/325/weak_corr.svg)\
+
+The correlation coefficient is very small, indicating that the relationship between x and y is weak.
+
+**Positive correlation: r = 0.75**
+
+![](https://s3.amazonaws.com/dq-content/325/poscorr.svg)\
+
+The correlation coefficient is positive and relatively large, keeping with the apparent positive relationship between x and y.
+
+**Negative correlation: r = -0.83**
+
+![](https://s3.amazonaws.com/dq-content/325/negcorr.svg)\
+
+The correlation coefficient is negative and relatively large, keeping with the apparent negative relationship between x and y.
+
+**Strong positive correlation: r = 0.97**
+
+![](https://s3.amazonaws.com/dq-content/325/strongcor.svg)
+
+The correlation coefficient is positive and close to 1, suggesting a strong, positive relationship between x and y.
+
+To calculate r for two vector variables, we can use the base R function `cor()`.
+
+```{r}
+# cor(vector_1, vector_2, use = "pairwise.complete.obs")
+```
+
+When using the `cor()` function, `NA`s are "contagious", as is often the case in R. If either of our vector variables contains `NA`, the function output will also be `NA`. We specify pairwise.complete.obs in the cor() function to exclude the cases with `NA`s in computing the correlation coefficient between a pair of variables. We'll learn more about handling missing data in the next lesson.
+
+1.  Calculate Pearson's r for `asian_per` and `avg_sat_score.`
+
+2.  In order for our answer checking system to properly assess your output, please round the correlation coefficient using the following syntax: `round(your_correlation_coefficient, 7)`.
+
+```{r}
+round(cor(combined$asian_per, combined$avg_sat_score, use = "pairwise.complete.obs"), 7)
+```
+
+## Creating and Interpreting Correlation Matrices
+
+We've now calculated Pearson's Correlation Coefficient (r) to quantify the strength of the relationship between schools' percentage of asian students and average SAT score. The value of r we calculated is about **0.57**.
+
+An r value of 0.57 indicates a moderately strong, positive relationship between `asian_per` and `avg_sat_score.`
+
+Having a precise value for the correlation coefficient allows for comparison among multiple relationships between pairs of variables.
+
+To illustrate how such comparisons work, let's return to our analysis of the relationships between schools' percentages of students of different races and average SAT scores.
+
+To avoid writing out the `cor()` function repeatedly, we can calculate r for multiple pairs of variables at once by creating a correlation matrix.
+
+A correlation matrix is a table that contains correlation coefficients for pairs of variables, with each cell in the table showing the correlation between two variables. If we select multiple variables and call the `cor()` function:
+
+```{r}
+combined %>%
+  select(avg_sat_score, black_per, hispanic_per, white_per, asian_per) %>%
+  cor(use = "pairwise.complete.obs")
+```
+
+Because of how correlation matrices are arranged, there will be two cells that contain the correlation for each pair of variables. Both column and row highlighted in the correlation matrix below contain values of r for the relationships between `avg_sat_score` and percentages of students of different races.
+
+![](https://s3.amazonaws.com/dq-content/325/cor_mat_sat.svg)\
+
+Notice that cells running diagonally from the top left to the bottom right of the correlation matrix contain `1`.
+
+![](https://s3.amazonaws.com/dq-content/325/cor_mat_ones.svg)\
+As the datasets we're working with increase in size, calculating correlation coefficients among all numeric variables can be a good way to decide which relationships to explore further using visualizations and focus on while planning further analysis.
+
+To select variables under some conditions (here all numeric variables) we can combine the `dplyr` functions: `select()` and `where()`. Thus, to select all numeric variables we can write:
+
+```{r}
+combined %>%
+  select(where(is.numeric))
+```
+
+Let's create a correlation matrix to investigate relationships among all pairs of numeric variables in the `combined` dataframe.
+
+1.  Create a correlation matrix for all numeric variables in the combined dataframe.
+
+-   To select numeric variables to include in the correlation matrix, we can use `select(where(is.numeric))`.
+-   Store the result as `cor_mat.`
+
+2.  Don't worry if you cannot visualize the matrix properly in this exercise.
+
+-   In the next screen we will learn how to convert a matrix into dataframe. That way, we can visualize and manipulate it using tools like `ggplot()`, `select()`, and `filter()`.
+
+```{r}
+cor_mat <- combined %>%
+  select(where(is.numeric)) %>%
+  cor(use = "pairwise.complete.obs")
+```
+
+## Identifying Interesting Relationships
+
+We've now generated a correlation matrix that we can use to quickly assess relationships between all variables and decide which to investigate in greater depth.
+
+By working through the example on the previous screen, we cannot visually inspect the correlation matrix we generated and identify pairs of variables with moderate or strong correlations. In this screen, we will learn how we can visualize this matrix, and how to identify interesting relationships in large correlation matrix programmatically.
+
+We can identify interesting relationships in the correlation matrix programmatically using techniques we've learned about in previous courses: manipulating dataframes and using comparison operators.
+
+First, let's think about the correlation coefficients we want to identify within the correlation matrix:
+
+-   Let's continue focusing on the relationship between `avg_sat_score` and other variables. This means that, at this point, we will not focus on correlation coefficients that describe the relationships between other pairs of variables, such as `total_enrollment` and `ell_percent.`
+
+-   Remember, we are interested in moderate or strong relationships, as indicated by correlation coefficients that are greater than 0.25 or less than -0.25.
+
+Let's start by converting the previous matrix into a tibble. Tibble is the tidyverse version of a dataframe that we have worked on in all lessons so far. Recall from previous courses that the function for converting a matrix or base R dataframe to a tibble is `as_tibble()`.
+
+Although the default behavior of `as_tibble()` is to drop the name attributes associated with the `cor_mat` matrix, we can specify these names' inclusion in a named column in the new dataframe. In the example below, we name the new column `"variable"`:
+
+```{r}
+cor_tib <- cor_mat %>%
+  as_tibble(rownames = "variable")
+```
+
+Now that we have a dataframe (tibble) version of the correlation matrix, we can:
+
+-   Select the columns that contain relationships between all variables paired with `avg_sat_score` and the names of the variables.
+-   Filter the selected columns to retain only rows with correlation coefficient values greater than 0.25 or less than -0.25.
+
+```{r}
+sat_cors <- cor_tib %>%
+  select(variable, avg_sat_score) %>%
+  filter(avg_sat_score > 0.25 | avg_sat_score < -0.25)
+```
+
+The resulting table sat_cors contains a summary of the variable relationships we're interested in.
+
+Like SAT scores, AP exam scores can provide information about academic performance in NYC schools.
+
+Let's investigate the relationship between performance on AP exams and demographic factors using the variable `high_score_percent`.
+
+Remember that we calculated `high_score_percent`earlier in this course. We divided the number of students who performed well on AP exams (`Number of Exams with scores 3 4 or 5`) by the number of AP exams taken (`Total Exams Taken`), and multiplying the result by `100.`
+
+1.  Previously, we created a correlation matrix, `cor_mat`, that contains correlation coefficients for all numeric variables in `combined.` We then converted that matrix into a dataframe, `cor_tib.` Manipulate `cor_tib` to return a summary of the correlation coefficients that meet the following criteria:
+
+-   Describe relationships between `high_score_percent` and other variables.
+-   Describe moderate to strong relationships (correlation coefficients \< than -0.25 OR \> than 0.25).
+
+2.  Save the resulting table as `apscore_cors.`
+
+```{r}
+apscore_cor <- cor_tib %>% 
+  select(variable, high_score_percent) %>% 
+  filter(high_score_percent > 0.25 | high_score_percent < -0.25)
+```
+
+# **6. Dealing with Missing Data**
+
+## Exploring Academic Success and Demographics by Borough
+
+We created scatter plots in the previous lesson. We used correlation analysis to quantify relationships between demographic variables and SAT scores.
+
+Like the percentage of students who graduate from a high school (`grads_percent`), some variables displayed strong positive correlations with SAT scores. Others, like the percentage of students eligible for receiving school lunch at a discount due to low household income (`frl_percent`), displayed strong negative correlations with SAT scores.
+
+The correlations suggest that students from communities with specific demographic and socioeconomic features may be at a disadvantage when it comes to performance on standardized tests like the SAT.
+
+In this lesson, we will continue exploring the NYC school's data --- this time by comparing academic and demographic indicators among communities. We will calculate summary statistics and create boxplots to understand how academic performance and demographic variables vary geographically in NYC.
+
+As we explore differences in academic performance and demographics among NYC boroughs, we will learn about an especially important data cleaning component: Dealing with missing data.
+
+Geographically, NYC is divided into five administrative districts called boroughs:
+
+![](https://s3.amazonaws.com/dq-content/326/borough_map.jpg)\
+
+Very different socioeconomic conditions characterize the five boroughs. For example, the linked Wikipedia article contains the following table illustrating differences in household income among the five boroughs:
+
++---------------+-------------------+-----------------+-----------------------+
+| Area          | Median Household\ | Mean Household\ | Percentage in Poverty |
+|               | Income (USD)      | Income (USD)    |                       |
++---------------+-------------------+-----------------+-----------------------+
+| The Bronx     | 34,156            | 46,298          | 27.1%                 |
++---------------+-------------------+-----------------+-----------------------+
+| Brooklyn      | 41,406            | 60,020          | 21.9%                 |
++---------------+-------------------+-----------------+-----------------------+
+| Manhattan     | 64,217            | 121,549         | 17.6%                 |
++---------------+-------------------+-----------------+-----------------------+
+| Queens        | 53,171            | 67,027          | 12.0%                 |
++---------------+-------------------+-----------------+-----------------------+
+| Staten Island | 66,985            | 81,498          | 9.8%                  |
++---------------+-------------------+-----------------+-----------------------+
+
+Let's import the NYC schools data into R and get started.
+
+We saved the data we compiled in the previous lesson in the file "`combined.csv.`" Import it into R using `read_csv()`, and save it as a dataframe called combined.
+
+```{r}
+combined <- read_csv("combined.csv")
+```
+
+## Defining "Missing Data"
+
+In this lesson, we analyze the NYC schools data for differences among boroughs. Doing that, we'll learn three types of techniques for handling missing data in R. First, though, let's clarify what we mean when we talk about missing data.
+
+Recall that when we adhere to tidy data principles, dataframes are arranged with variables in columns, observations in rows, and values in cells. When a data point is missing, it means that no value is present for an observation of a variable. In R, `NA`, which stands for "`not available`," represents missing values.
+
+![](https://s3.amazonaws.com/dq-content/326/missing_vals.svg)\
+
+In the table above, there are five missing values:
+
+-   A value of `avg_sat_score` for the high school with `DBN` 17K467
+-   A value of `frl_percent` for the high school with `DBN` 17K467
+-   A value of `boro` for the high school with `DBN` 17K467
+-   A value of `boro` for the high school with `DBN` 18K578
+-   A value of `avg_sat_score` for the high school with `DBN` 02M399
+
+Missing data represented by `NA` is referred to as explicit missing data. Missing data that are simply not included in a dataset are referred to as implicit. In this lesson, we will focus on handling explicit missing data represented by `NA.`
+
+Now that we've defined missing data, let's begin our analysis.
+
+As a first step for understanding differences in academic performance among boroughs, let's calculate the average SAT score for each borough.
+
+1.  Calculate the average SAT score (`avg_sat_score`) for each borough (`boro`).
+
+-   Save the resulting dataframe as `summary.`
+
+```{r}
+
+summary <- combined %>%
+  group_by(boro) %>%
+  summarize(mean(avg_sat_score))
+summary
+```
+
+## Contagious Missing Values
+
+Now that we've calculated summary averages for SAT scores by NYC borough, let's have a look at them in the `summary` table:
+
+The table isn't very informative. We only have an average SAT score for Staten Island. Also notice that, although there are only five boroughs in NYC, our table contains a sixth row with a NA value for borough.
+
+What happened?
+
+Let's first discuss the `NA` values in the `mean(avg_sat_score)` column. To understand why we got `NA` when we calculated averages by borough, we need to understand that missing values are "contagious" in R.
+
+In other words, if a variable contains any `NA` values, any summary calculations performed on that variable will result in an answer of `NA`.
+
+For example, we know that the variable `frl_percent` in `combined` contains `NA` values. If we calculate the average of the `frl_percent` variable, the result of the calculation will be `NA.`
+
+```{r}
+mean(combined$frl_percent)
+```
+
+To exclude `NA` values from a calculation, we can add the argument `na.rm = TRUE` to our functions. This argument specifies that the calculation should include only values that are not missing. `na.rm` stands for "NA remove."
+
+Suppose we return to our calculation of the average of `frl_percent.` In that case, we could exclude `NA` values from the calculation using the following syntax:
+
+```{r}
+mean(combined$frl_percent, na.rm = TRUE)
+```
+
+If we use this approach to calculate the average of `avg_sat_score`, the following highlighted values would be omitted from the calculation:
+
+![](https://s3.amazonaws.com/dq-content/326/na.rm_example.svg)\
+
+Let's use `na.rm = TRUE` to calculate average SAT scores for each borough.
+
+1.  Calculate the average SAT score (`avg_sat_score`) for each borough (`boro`).
+
+-   Do not include missing values of `avg_sat_score` in the analysis.
+
+-   Save the resulting dataframe as `summary.`
+
+```{r}
+summary <- combined %>% 
+  group_by(boro) %>% 
+  summarise(mean(avg_sat_score, na.rm = TRUE))
+summary
+```
+
+## Dropping Rows With Missing Values for one Variable
+
+The new summary table we've calculated is much more informative than the previous one. By using the `na.rm = TRUE` argument, we have excluded values of `NA` from our analysis. We therefore have calculated an average SAT score for each borough:
+
+It's interesting to note the differences among scores. According to the table we included earlier in this lesson, Staten Island, the wealthiest borough, has the highest SAT scores. The Bronx, which has the most poverty, has much lower scores. Notice, however, that the lowest average SAT score is associated with the borough `NA.` What happened here?
+
+Since `NA` values are present as values of the `boro` variable, when we grouped the dataframe by `boro` using `group_by()`, R assigned `NA` as a sixth category of the variable.
+
+To avoid including observations of `avg_sat_score` associated with `NA` values of `boro` in our calculation, we could use the `filter()` function as we learned to do previously:
+
+```{r}
+combined %>% 
+  filter(!is.na(boro))
+```
+
+In the code above, the function `is.na()` returns a logical vector with either `TRUE` or `FALSE` value, for each value of the boro variable. Preceding `is.na()` with the operator `!` specifies that we want to filter `boro` to return only values that are not `NA`.
+
+For a shorthand way of dropping the `boro` variable's `NA` values, we can use the function `drop_na()` from the `tidyr` package:
+
+```{r}
+combined %>%
+  drop_na(boro)
+```
+
+The `drop_na()` function takes the variables we want to omit `NA` values for as arguments (`boro` in the example above). If we use this approach to perform a calculation only for observations which do not have a `NA` value for `boro`, the following highlighted values would be omitted from the calculation:
+
+![](https://s3.amazonaws.com/dq-content/326/drop_na_example.svg)\
+
+Notice that, since we dropped rows with `NA` values for `boro`, we will also drop a row with a non-`NA` value of `avg_sat_score` from the calculation.
+
+Let's use `drop_na()` to calculate average SAT scores for each borough that does not have a value of `NA`.
+
+1.  Calculate the average SAT score (avg_sat_score) for each borough (boro).
+
+-   Do not include rows for which values of `boro` are `NA.`
+-   Exclude missing values (`NA`) of `avg_sat_score` from the calculation.
+-   Name the summary column: `sat_avg.`
+-   Save the resulting summary dataframe as `summary_2.`
+
+```{r}
+summary_2 <- combined %>% 
+  drop_na(boro) %>% 
+  group_by(boro) %>% 
+  summarise(mean(avg_sat_score, na.rm = TRUE))
+summary_2
+```
+
+## Complete Cases: Dropping All Rows With Missing Data
+
+Now that we've dropped rows with missing values of `boro` and excluded missing values from our calculation of boroughs' average SAT scores, we have the following summary table:
+
+So far, we've used two approaches to exclude missing values from our analysis:
+
+**- Including the `na.rm` = `TRUE` argument when performing calculations on numeric data** **- Using the `drop_na()` function to drop rows for which a specified variable has a value of `NA`**
+
+**In some cases, we can be more efficient in our calculation by simply dropping all rows that contain a value of NA for any variable in our dataframe.**
+
+We can use this approach, known as using [complete cases]{color="red"}, using the `drop_na()` function. If we don't specify any variables, the function will automatically drop rows for which any variable in the dataframe contains an `NA`.
+
+The following code would return a new `combined` dataframe without any rows containing an `NA` for any variable:
+
+```{r}
+combined %>%
+    drop_na()
+```
+
+If we used data_frame %\>% drop_na() on the example dataframe below, the following three highlighted rows would be dropped:
+
+![](https://s3.amazonaws.com/dq-content/326/complete_cases.svg)\
+
+When we use complete cases to perform calculations, we don't need to use the na.rm = TRUE argument for calculations since our dataframe will contain no additional missing values.
+
+Let's try calculating the average SAT score for each borough using only rows of combined for which there are no missing values.
+
+1.  Calculate the average SAT score (`avg_sat_score`) for each borough (`boro`).
+
+-   Only use complete cases; that is, rows of the `combined` dataframe that contain no `NA` values.
+-   Save the resulting dataframe as `summary_3.`
+
+```{r}
+summary_3 <- combined %>% 
+  drop_na() %>% 
+  group_by(boro) %>% 
+  summarise(mean(avg_sat_score))
+summary_3
+```
+
+## Using Complete Cases: When to Avoid
+
+We've used several techniques for handling missing values of `boro` and · And so, we've seen that using complete cases to deal with missing values in our data allows us to write efficient code.
+
+We don't need to worry about contagious · values turning up when we perform calculations after using · to exclude all rows containing missing data from our dataframe.
+
+Using complete cases makes sense when we're working with a dataset in which a missing value for any variable indicates that an observation should be discarded. For example, perhaps we're working with the output of a scientific instrument that includes five variables, all of which are needed to calculate a single data point. In that instance, a missing value for one variable may be cause to omit an observation from our analysis.
+
+Are there any downsides to using complete cases to deal with missing data?
+
+The answer is that there can be, depending on why the missing values in our dataset are missing.
+
+Let's dig into this idea further by taking a close look at two of the summary tables we calculated:
+
+-   `summary_2`, which we calculated by dropping observations with `NA` values for `boro` and omitted `NA` values of `avg_sat_score` from our calculation
+
+Do you notice any differences in the average scores that we calculated using the two approaches?
+
+It is often easier to interpret graphs instead of tables of data. Let's look at a bar chart that compares the average SAT scores calculated using the two approaches to handle missing values: complete (red) and incomplete (blue) cases.
+
+![](https://s3.amazonaws.com/dq-content/326/technique_comparison.svg)\
+
+Interestingly, the average SAT scores calculated using complete cases (`drop_na()`) are higher than those calculated by specifically excluding missing values of `boro` and `avg_sat_score.`
+
+This difference in our approaches' outcome illustrates that **how we choose to handle missing data can affect the results of our analysis**, sometimes quite significantly.
+
+In the case of our example, why do you think omitting all rows with missing values in our dataframe resulted in higher average SAT scores for each borough?
+
+To dig into this question, a good first step might be to see how many missing values exist for each variable. If a certain variable has an especially large number of missing values, dropping those rows could bias the analysis of a different variable.
+
+For example, suppose there were many missing values for the variable `ell_percent` because lower-performing schools were less likely to report that information. In that case, using complete cases would result in a calculation of `avg_sat_score` that does not include SAT scores from lower-performing schools. Therefore, the scores we calculated would be higher than the actual average scores.
+
+Let's calculate the number of missing values for each variable in the `combined` dataframe. To do this, we'll introduce a handy base R function: `colSums()`. The `colSums()` function allows us to quickly calculate each column's summaries in a dataframe, which are output as a vector. For more detail, check our mission about matrix operations.
+
+To calculate the number of `NA` values in each column, we will use the `is.na()` function, which we learned earlier in this lesson. It returns a logical vector with `TRUE` when a value is `NA` and `FALSE` otherwise.
+
+The syntax for calculating the number of missing values in each column of a dataframe looks like this:
+
+```{r}
+# colSums(is.na(data_frame))
+```
+
+The `colSums()` function returns a vector with a count of missing values for each column of the dataframe.
+
+Let's calculate the number of missing values for each variable in `combined.`
+
+Calculate the number of missing values (`NA`) in the `combined` dataframe. Save the resulting vector as `na_count.`
+
+```{r}
+na_count <- colSums(is.na(combined))
+na_count
+```
+
+## Understanding Effects of Different Techniques for Handling Missing Data
+
+Now, we've calculated the number of explicitly missing values for each variable in the `combined` dataframe. We can use this information to understand whether large numbers of missing values for certain variables may have biased our calculations of boroughs' average SAT scores when we used complete cases.
+
+Let's have a look at the number of missing values for each variable in `combined`:
+
+Since we used `DBN` as a key to identify observations in the dataframe, we did not include any observations for which values of `DBN` were `NA`. Most other variables have at least some missing values, though. By far, the variables with the most missing values are those that relate to AP exams:
+
+| AP Test Takers | Total Exams Taken | Number of Exams with scores 3 4 or 5 | exams_per_student | high_score_percent |
+|----------------|-------------------|--------------------------------------|-------------------|--------------------|
+| 247            | 247               | 328                                  | 247               | 328                |
+
+**Remember from earlier in this course that AP (Advanced Placement) exams are taken by advanced high school students, often at schools that can afford to provide the specialized classes needed to prepare for them.**
+
+Could omitting all observations for which AP test-related variables have values of NA, as we did when we used complete cases, bias the results of our calculation of borough's average SAT scores so that they are higher? This would explain the higher average SAT scores we calculated when using complete cases:
+
+Therefore, in our analysis it probably does not make sense to use complete cases to deal with missing data when performing calculations. The approach to calculate `summary_2`, dropping observations with `NA` values for `boro` and omitting `NA` values of `avg_sat_score` from our calculation using the argument `na.rm = TRUE`, is less likely to bias our results by omitting observations of `avg_sat_score` from lower-performing schools.
+
+Now that we've built some intuition around when to use different techniques for handling missing data, let's summarize some additional variables by borough.
+
+1.  Calculate the average of the following variables by borough (`boro`):
+
+-   `avg_sat_score`
+-   `frl_percent`
+-   `AP Test Takers`
+
+2.Drop observations for which values of `boro` are `NA`.
+
+3.  Exclude `NA` values of the three variables from the calculation.
+
+4.  Save the resulting summary table as `summary_4`.
+
+```{r}
+summary_4 <- combined %>% drop_na(boro) %>% 
+  group_by(boro) %>% 
+  summarise(mean(avg_sat_score, na.rm = TRUE ), mean(frl_percent, na.rm = TRUE), mean(`AP Test Takers`, na.rm = TRUE))
+
+summary_4
+```
+
+## Imputing to Replace Missing Data
+
+So far in this lesson, we've learned techniques for working with missing data that involved omitting `NA` values from our analysis. To do so, we either drop entire observations or specify the exclusion of `NA` values for calculations using a specific parameter.
+
+We have spent less time thinking about why the missing values are present in the dataset. Often, knowing the specifics of how the data were collected or entered can help with choosing the best method for dealing with them.
+
+To illustrate this concept, let's return to investigating the large number of missing values for the variables related to AP exams
+
+When we performed the summary calculation of the average number of students at each school who took AP exams per borough, did that number reflect the true average? In other words, did values of `NA` represent missing data or did they actually represent a number? Perhaps that zero students at the school took an exam?
+
+Suppose those `NA` values actually represent zeros, and we excluded them from our analysis. In that case, the averages we calculated may be much higher than the actual average number of students who took exams.
+
+For example, let's compare the average number of students who took AP exams (`AP Test Takers`) calculated from the following two dataframes:
+
+![](https://s3.amazonaws.com/dq-content/326/means_compare.svg)\
+
+
+When the `NA` values of `AP Test Takers` are replaced with zeros, the mean number of test-takers we calculate is only half as large.
+
+Often, datasets contain values of `NA` that actually mean something other than "this value is missing." While this is confusing for those of us who must analyze the data, it is a reality that needs to be considered when we decide how best to work with missing data.
+
+If we can't simply ask the person who shared the data with us, the best approach for figuring out why our dataset contains so many `NA` values is to consult the metadata. Let's revisit the [metadata](https://data.cityofnewyork.us/Education/2010-AP-College-Board-School-Level-Results/itfs-ms3e) for the `ap_2010` dataset to see what we can find out.
+
+The metadata states that, for `AP Test Takers`, "Records with 5 or fewer students are suppressed." This tells us that some of the `NA` values may represent values between zero and five. However, unfortunately, this dataset does not contain information to help us differentiate between values for schools where five or fewer students took the AP exam and actual missing data.
+
+This is an example of a typical challenge when it comes to working with messy, real-world data. In this case, we can't be sure that every `NA` in the `AP Test Takers` column represents a value between zero and five. However, since the AP exam is often taken by students at schools in more affluent areas, knowing that very few or zero students at a school took the exam is useful for understanding the relationship between SAT scores and demographics.
+
+**Let's decide to replace the `NA` values for `AP Test Takers` with the median of zero and five: 2.5.** This technique for handling missing data, replacing them with appropriate substituted values, is called imputing.
+
+To replace `NA` values with 2.5 for our selected variables, we will use the `tidyr` package function `replace_na()`.
+
+The `replace_na()` function takes as arguments a dataframe or vector and the value we want to replace its `NA` values with. For example, to replace all `NA` values of `avg_sat_score` with `0`, we would write:
+
+```{r}
+replace_na(combined$avg_sat_score, 0)
+```
+
+We can use `mutate()` with `replace_na()` to create a new column for the variable we replaced missing values for, as we've seen in earlier courses.
+
+Let's replace `NA` values of `AP Test Takers` with 2.5 and recalculate the average number of AP test takers per borough.
+
+1. Create a new `AP Test Takers` variable in the `combined` dataframe in which `NA` values are replaced by 2.5.
+
+2. Remember to overwrite the old `combined` dataframe with the new one containing imputed values for `AP Test Takers`.
+
+3. Drop the `NA` values of `boro` variable and save the resulting dataframe as `combined_2.`
+
+4. Create a boxplot showing a summary of the number of AP test takers by borough using the `combined_2` dataframe. Use default `ggplot2` settings for background and axis titles.
+
+```{r}
+combined <- combined  %>%
+  mutate(`AP Test Takers` = replace_na(`AP Test Takers`, 2.5))
+    
+combined_2 <- combined %>%
+  drop_na(boro)
+
+ggplot(data = combined_2) +
+    aes(x = boro, y = `AP Test Takers`) +
+    geom_boxplot()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
