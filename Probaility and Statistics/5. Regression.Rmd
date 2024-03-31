@@ -1,0 +1,2171 @@
+---
+title: "6. Regression"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(broom)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+# 1. Introduction to Modelling
+## Introduction
+At this point in our learning journey, we have experience loading data into R, cleaning and preparing data, and exploring data through visualization and analysis. We applied statistical techniques to form a deeper understanding of our data by estimating characteristics like the median and standard deviation. We generated frequency distributions and confidence intervals to describe our data. In this series of lessons, we will expand upon that knowledge to build models that estimate, or predict, an output based on the value of an input.
+
+Why would we want to build a model to predict the value of an output variable? Models provide a way to summarize or describe general patterns in a dataset, and these patterns can be used to estimate future outcomes. For example, we might use modeling to estimate sales growth based on the increase in advertizing budget at a company we work for. Or we could build a model to predict the total cost for an Uber ride based on distance traveled, using data from previous car trips.
+
+
+![](https://dq-content.s3.amazonaws.com/454/uber_lm.png)\
+
+With linear models — or, more specifically, linear regression models — we can model these types of relationships with a straight line. We begin our modeling journey with linear regression because it provides a straightforward approach to predict the value of an output based on the value of an input. Whether you are looking to work as a data analyst, a data scientist, or a machine learning engineer, it is important to understand linear regression because this decades-old technique is still useful today.
+
+In this series of lessons, we'll build a solid understanding of how and when we can use linear regression models to make predictions. We'll build linear regression models, learn how to interpret their output, and assess model accuracy. We'll discuss the limitations of linear regression models when data is not linear. And we'll use programming tools to fit and visualize many linear regression models at once.
+
+Before we begin to build linear regression models, let's cover fundamental modeling concepts to build our intuition around modeling. Many of the concepts we will cover in this lesson apply to predictive models of all types, not just linear regression models. If you are interested in machine learning and other types of predictive modeling, this lesson will provide key foundational knowledge.
+
+## Motivation
+
+To build our intuition around modeling, let's use a motivating example. In this series of lessons let's imagine that we live in the Brooklyn borough of New York City. We are interested in the real estate market and use Dataquest to learn data science so that we can analyze home sales data.
+
+This diagram shows the location of Brooklyn, and the other boroughs of New York City:
+
+![](https://dq-content.s3.amazonaws.com/454/Boroughs%20of%20New%20York%20City.png)\
+
+We don't own a car, so one of the main expenses that we incur living in Brooklyn is the cost of using Uber to get around. We've recorded data for 50 recent Uber rides and wonder if it is possible to use this data to build a model to predict the cost of future rides? If we build a model to predict the cost of an Uber ride, maybe then we can figure out how to reduce travel costs in the future.
+
+In this series of lessons we will use the terms model and predictive model interchangeably. So what, exactly, do we mean by predictive model? The book "Applied Predictive Modeling" by Max Kuhn and Kjell Johnson defines predictive modeling as the process of developing a mathematical tool or model that generates an accurate prediction. We find this definition of predictive modeling useful here.
+
+This course focuses on linear regression modeling specifically, which is a type of statistical model for predicting, or estimating, an output based on one or more inputs. In the next few lessons we will attempt to estimate the cost of an Uber trip using only a single input. This is known as bivariate regression, or simple regression.
+
+Why would we choose a linear model that uses a straight line when we know there is variation our the data? With an increase in flexibility comes the risk that our model will follow the error — or noise — in the dataset too closely. If the model "works too hard" to find patterns in the data when fitting a model, then the model may not perform well when evaluating unseen data. This is known as overfitting.
+
+We will not encounter an overfit model in this course because bivariate linear regression is, by definition, simple and therefore not prone to overfitting. However, as we build our foundational knowledge of predictive modeling, it is essential to know about overfitting and why it can sometimes be advantageous to choose a simpler model instead of a more complex model that may be at risk of following patterns that do not exist in the unseen data.
+
+In the next screen we will learn more about the general form of a predictive model. But first let's load our Uber trip data and have a look. The data contains four variables:
+
+- `date`: Day that the Uber trip was taken
+- `destination`: Specific neighborhood in Brooklyn that we traveled to
+- `distance`: Total trip distance (in miles)
+- `cost`: Total cost of the trip
+
+This dataset was built using real Uber trip cost data from this dataset on Kaggle. The date and destination data in our dataset are fictitious, but all distance and associated cost observations are sampled from actual data. To build this dataset, we used simple random sampling to extract information for 50 "UberX" trips out of over 55,000 observations. Simple random sampling was also used to randomly generate the date and destination data. The specific neighborhood names for Brooklyn were pulled from this data on property sales in New York City, which we will work with in later lessons of this course.
+
+- Load the csv file `uber_trips.csv` and assign this dataframe to an object named `uber_trips`. Be sure to load the readr package to read-in the data.
+- Once you have loaded the data, take a look at the type of information available. Do you think any of this information can be used to predict the cost of a future trip with Uber?
+
+
+```{r}
+uber_trips <- read_csv("uber_trips.csv")
+```
+## General Model Form
+
+Did you see any variables in the uber_trips data that might be useful for predicting Uber trip cost? Recall that our goal is to build an accurate model that predicts the cost of a future trip with Uber. To build a model we provide an input variable to explain, or predict, an output variable.
+
+An input — or input variable — is also sometimes referred to as a predictor, independent variable, feature, attribute, descriptor, or simply variable. Throughout these lessons on linear modeling, we will generally use the terms input variable, predictor variable, or independent variable.
+
+An output or output variable is also known as a dependent variable, outcome, response variable, response, target, or class. Throughout this lesson on linear modeling we will generally use the terms output variable, response variable or dependent variable.
+
+The general form of a model that performs such a prediction can be represented as:
+
+
+$$Y = f(X) + \epsilon$$
+In this context:
+
+- $X$ represents a set of inputs.
+- $Y$ represents a set of outputs.
+- $\epsilon$ represents the error term.
+
+The random error term $\epsilon$ is independent of $X$ and has a mean of approximately zero. We'll learn more about the error term in a later screen. For now, let's discuss terminology about inputs and outputs.
+
+Returning to the formula above, $f$ is a precise function that represents the information 
+$X$ provides about $Y$. In the process of modeling we rarely know the value of $f$, so we observe values of $X$ to make predictions about $Y$. Estimates of $f$ may use more than one predictor variable, in which case the $X$ variables are represented as $X_1, X_2, ..., X_p$ where $p$ refers to the total number of predictors. But for learning purposes we will focus on using a single predictor variable for now, so we only need to be concerned about the single predictor variable $X$. 
+
+In our example above, $Y$ represents the cost of an Uber trip, which is considered a quantitative response to an input variable. Bivariate regression can be performed with pairs of variables measured on a ratio or interval scale. Which variables from our uber_trips data are either ratio or interval? The only variable that is not either interval or ratio scale data is destination.
+
+Let's plot our data to see if any of our variables might be suitable to predict the cost of future Uber trips.
+
+Generate two plots with `ggplot2`. Include cost on the y-axis in each plot, because we are treating this as the dependent variable. In each case, a simple exploratory plot is fine. There is no need to customize axis labels or chart titles.
+
+1. Generate a line plot with cost on the y-axis and date on the x-axis.
+2. Generate a scatter plot with cost on the y-axis and distance on the x-axis.
+Take a look at each plot. Do you notice a relationship between cost and date, or cost and distance?
+
+```{r}
+ggplot(data = uber_trips, 
+       aes(x = date, y = cost)) +
+  geom_line()
+
+ggplot(data = uber_trips, 
+       aes(x = distance, y = cost)) +
+  geom_point()
+```
+## Prediciton
+
+Looking at the two plots we generated, we observe that there does not appear to be any obvious relationship between cost and date, but there is a relationship between cost and distance. We've updated the titles, but these plots are otherwise identical to what we generated in the last exercise:
+
+
+![](https://dq-content.s3.amazonaws.com/454/grid.png)\
+
+Let's break-down each plot individually. With regards to date, suppose we take an Uber trip from our home to the same destination every day. We would expect that this trip would cost rougly the same each time. Sure there could be some variation day-to-day because of traffic levels, weather, or driver habits, for example, but overall we would expect the costs to be relatively consistent. The line chart we generated does not demonstrate any sort of stability or trend, something else must be influencing trip cost.
+
+On the other hand, looking at the scatterplot of cost and distance we see that, in general, trips that are a greater distance have a higher cost than trips of a shorter distance. This is an example of a situation where we have two variables that appear to have some sort of a relationship. We may be able to build a model that provides a resonable estimate of cost based on distance. As stated previously, our goal is to build an accurate model that predicts trip cost on the basis of trip distance. Is prediction the only reason that we would want to build a model?
+
+Modeling is generally performed for one of two purposes: prediction or inference. Let's begin with prediction.
+
+If our primary purpose of building a model is to generate an accurate prediction, we aren't too concerned if the function form of cost explained by distance is unknown. In other words, rather than understanding the intricacies of $f$,  our primary concern is that our model gives us accurate predictions for cost for each input $X$. This is the main point to convey about prediction!
+
+In the real world, we will often encounter situations where we have $X$ inputs available, but we do not have information available for $Y$. Take, for example, our hypothetical situation of living in Brooklyn and frequently using Uber to get around.
+
+![](https://dq-content.s3.amazonaws.com/454/Prediciton.png)\
+
+Suppose, in an effort to reduce trip cost, we are planning our routes for the week to minimize distance traveled from location to location. We can estimate the total cost 
+$Y$ for each planned trip of $X$  distance, based on the data we have previously collected. In this situation, we predict $Y$ with:
+$$\hat{Y} = \hat{f}(X)$$
+We can omit the error term because it averages to 0. Recall from earlier courses that the "hat" symbol indicates an estimate. We can formulate an estimate of $Y$  with an estimate of $f$ using our $X$ inputs. Technically, we are also estimating $X$- our drivers could take a different route than the online map service suggested — but let's assume that our routes are travelled exactly as planned. So, if we know $X$, does that mean our estimates of $Y$ will be exact? That is rarely the case. Why? Because of error! We'll discuss error in a moment, but first, let's learn about inference.
+## Inference
+Inference refers to situations where we want to understand the relationships between 
+$X$ and $Y$. For example, we might ask which independent variables we measure are associated with the response variable?
+
+
+When motivated by inference, we may or may not be interested in generating predictions for $Y$. Instead, we wish to understand $f$ and how $Y$ is affected by changes in $X$. In our example, inference questions might include:
+
+- How does the distance affect cost?
+- How do traffic levels affect cost?
+- How does the total trip time cost?
+- How does the date affect cost?
+- Does a linear model adequately describe the relationship between the input variable we select and cost?
+- Is distance our best single predictor of total trip cost using the information we have available?
+- How much of an increase in trip cost is associated with an increase of one mile in trip distance?
+
+
+![](https://dq-content.s3.amazonaws.com/454/Inference.png)\
+
+In contrast, a prediction question might be: What is the total cost of traveling 2.5 miles from Sunset Park to Prospect Park?
+
+Modeling can also be performed for some combination of prediction and inference. If accurate prediction is our goal in bivariate linear regression, it is critical to select the best single predictor for our model. In our case, we do not have many variables to choose from. When we analyzed our plots on a previous screen, did we infer that date is probably not a good predictor of cost?
+
+As we progress beyond linear regression to models that our more complicated, inference may become more difficult. There is often a trade-off between prediction accuracy and interpretability. Linear models are widely used today, in part because they are generally more interpretable than more complex models. But more complex models may provide more accurate predictions, especially when the data is not linear.
+
+For each question below, state whether the question is for the purpose of prediction, or inference.
+
+1. Does our data contain any variables that demonstrate a negative relationship with cost (in other words, we observe an increase in cost and a decrease in value for a given variable)?
+- Assign the string value "prediction" or "inference" to the object `question_1`
+2. How much will it cost to travel from the Bushwick neighborhood to Marine Park?
+- Assign the string value "prediction" or "inference" to the object `question_2`
+
+
+```{r}
+question_1 <- 'inference'
+question_2 <- 'prediction'
+```
+
+
+## Error
+
+
+As mentioned briefly when we learned about prediction, it is near impossible for a model to be 100% accurate because of error. Error refers to the deviation of an observed value from the unobservable true value of the quantity of interest. Specifically, the accuracy of our prediction for cost depends on two types of error: reducible error, and irreducible error.
+
+In this example we can minimize reducible error in our linear regression model by choosing the predictor (e.g. distance) that provides the best estimate of cost. With the data available to us here we can't do any better than choosing the distance variable. One way we could potentially reduce error is to use a different statistical model that provides a better estimate of $f$. But first we need to master linear regression, so we'll stick to that approach for now!
+
+
+
+Examples of irreducible error include variables that are not measured but contain useful information for predicting $Y$. In our case these unmeasured variables could be characteristics of driver habits, traffic levels, weather conditions, time of day, surge pricing, or road construction levels. If we don't measure an input useful for predicting $Y$, we can't estimate it! Error is independent of $X$ and cannot be predicted using $X$.
+
+Unmeasurable variation also contributes to error. Another term for this is random noise. In our case examples of this might include the driver's mood on a particular day, or the driver's ability to find a suitable place to stop at dropoff location. So even if we are able to bring our reducible error to zero, the accuracy of any modeling prediction will always be bound by the amount of irreducible error present. Irreducible error is out of our control. To build an accurate model, our goal is to estimate $f$
+ in a manner that minimizes reducible error for the particular statistical technique that we choose.
+
+Which x-axis variable (`date` or `distance`) from the two plots that we generated earlier will likely have the greatest amount of error if we apply a linear regression model to estimate `cost`?
+
+
+![](https://dq-content.s3.amazonaws.com/454/grid.png)\
+
+
+Examine the two plots we generated earlier and select the plot that shows the x-axis variable (`date` or `distance`) that will likely result in the greater amount of error if we perform a linear regression to estimate `cost`.
+- Assign either the value `'scatter_plot'` or `'line_chart'` to the variable `greater_error`.
+
+```{r}
+greater_error <- 'line_chart'
+```
+
+
+##  Estimating f with Parametric Models
+
+
+What steps do we take to estimate $f$ Regardless of the type of modeling approach we choose, there are some common steps we take to estimate the function that uses $X$ to describe $Y$. With any model, we observe $n$ different data points, where $n$ refers to the number of observations we have in the dataset. In our case, we have information about the 50 Uber rides we recorded data for. This dataset is called the training data, because we will use these observations to train our model how to estimate $f$.
+To provide a more specific example, let's explore how we estimate $f$ using linear regression, which is a type of parametric model. The term parametric refers to parameter. In the case of linear regression, we are able to formulate an estimate of $f$ by estimating two parameters: intercept and slope. You may have referred to these paramaters as coefficients. The bivariate linear model is represented mathematically as:
+
+
+$$\hat{y} = \hat{\beta}_0 + \hat{\beta}_1x$$
+Here $\hat{y}$ indicates a prediction of $Y$ assuming $X=x$.
+
+Intercept $\hat{\beta}_0$ refers to the value on the y-axis where $x=0$. Intercept is also the expected mean value of $\hat{y}$ when $x=0$
+
+Slope $\hat{\beta}_1$ is the rate of change in $\hat{y}$ for every single unit change in $x$. We'll visualize an example of this in a moment.
+
+
+We are able to estimate $f$ with linear regression because we have made the assumption that 
+$f$ should take a linear form - a straight line with no curves. But what's important here is that by choosing linear regression, we have simplified the process of estimating 
+$f$ — our model can focus on estimating only two parameters: intercept and slope. The trade-off is that our model may not fit the data well if the true form of 
+$f$ is not linear.
+In the case of linear regression, $f$ is estimated using what is known as the least squares estimate (sometimes abbreviated LSE) to fit the model to the training data. We'll learn how the least squares estimate works in a later lesson, but the main thing to understand here is that the result of "training" the least squares method to our data is a value for intercept and slope that provides the "closest" or "best" fit to the 50 data points using a straight line. We'll examine a measure of fit in the next screen that describes what the "best" fit is, but for now let's think about best fit while we look at the scatterplot we generated:
+
+
+![](https://dq-content.s3.amazonaws.com/454/distance_scatter.png)\
+
+Take a look at the pattern of the points in the scatterplot above. We observe that there is the general pattern: with an increase in distance comes an increase in cost. With this pattern in mind, imagine drawing a straight line through the points in such a way that the line is as close as possible to each of the 50 points at once. With the line that fits best, some points will be above the line, some will fall below the line, and a few points might fall on the line, or very close to it. Maybe something like this?:
+
+![](https://dq-content.s3.amazonaws.com/454/distance_scatter_drawline.png)\
+
+To be clear, the line drawn above is not the true regression line. It's a rough guess based on the spread of the points. If this seems difficult to imagine, don't worry, it is! Fortunately, `ggplot2` can do this for us, and we don't even need to build a linear model first.
+
+Using the `geom_smooth()` function from `ggplot2`, we can visualize a linear model on the scatterplot we previously built. We don't need to be concerned with the details of fitting this linear model at this moment, we'll get to that in a later lesson. For now, let's continue to build our intuition around predictive modeling.
+
+In this exercise, we will add a linear regression fit line to the scatterplot we built earlier in the lesson. To do this, we will add the `geom_smooth()` layer to our plot. Include `distance` on the x-axis and `cost` on the y-axis as before. We've included the code from your original scatterplot in the display code.
+
+1. Generate a scatterplot that visualizes a linear regression model.
+- Add `geom_smooth()` to the scatterplot you built previously.
+- Within `geom_smooth()` enter the arguments: `method = "lm", se = FALSE`.
+The argument `se = FALSE` is used to specify that we do not want to show confidence intervals in our plots. Once you've generated the plot, compare how the fit line compares to what you imagined.
+
+
+```{r}
+ggplot(data = uber_trips, 
+       aes(x = distance, y = cost)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+## Residuals
+
+Below is the scatterplot with the linear regression line that we generated on the last screen with ggplot2. Titles have been added for clarity. In this example, we see that a linear model is a reasonable choice to explain the relationship between distance and cost. How does this compare to the trend line you imagined?
+
+
+![](https://dq-content.s3.amazonaws.com/454/uber_lm.png)\
+
+Recall that intercept refers to the value on the y-axis where $X=0$. Slope is the rate of change in $Y$ for every single unit change in $X$. In this example, the intercept is estimated at 5.85. In other words, if we call an Uber but don't go anywhere with the driver (a distance of 0 miles), we can expect to pay about $5.85. A word of caution here that a trip distance of 0 falls outside the range of our observed data. In general we should refrain from using model coefficients to describe values outside of the observed range.
+
+
+
+The slope is estimated at 1.55, meaning that we can expect our Uber trip cost to increase by about $1.55 for every mile we travel. We have an estimate for these two coefficients that we can share with you here, because we performed a linear regression of cost onto distance.
+
+To build a linear model from our uber_trips dataset, we input the dataset into the linear modeling algorithm in R. The program "trains" itself against the 50 sets of inputs to make predictions about $Y$ for every input of $X$. Our model produced an output (prediction) for every input. We can check the predicted outputs against the actual values we observed for cost. The predicted values represent our model's best estimate of $Y$ using $X$. The difference between the observed value and the model’s prediction is called a residual. We can visualize the residuals like this:
+
+![](https://dq-content.s3.amazonaws.com/454/residuals.png)\
+
+
+In the scatterplot above, the residuals are represented by the blue lines that connect the observations to the fit line. These blue lines represent the distance on the y-axis that the observed value differs from the predicted value. We can calculate the residual for every point in our dataset and use these values to assess the accuracy of our model. If our model does a good job of predicting trip cost for every trip distance traveled, then our residuals will be relatively small. On the other hand, if our model does not predict trip cost well, then our model is a poor estimator and the residuals will be relatively large.
+
+It can be useful to visualize the residuals to see where our model poorly performs or does well. For example, looking at the plot above, we see that our model generally underestimates the true cost of Uber trips that are one mile or less.
+
+But visualizing the residuals does not allow us to quanitify the quality of the fit. We need to use a summary measure to quantify the extent to which the predicted trip cost matches the true trip cost for a given car trip. Fortunately, statisticians have developed various summary measurements that can take the residuals from our model and transform them into a single value that represents the predictive ability of our model. We will work in-depth with a few of these methods later in the course, but for now, let's focus on the simplest regression error metric: Mean absolute error (MAE).
+
+## Comparing Model Predictions to Reality
+
+The mean absolute error (MAE) measures the average amount that the observed outputs vary from the predicted outputs. Using our Uber trip example, MAE represents the average amount of money that our outputs for cost varied from the prediction. To estimate MAE, we begin by calculating the absolute value for each residual in our dataset. We use the absolute value of the residuals here. An absolute value is often used in mathematics to represent distances and, as we've learned, the residual is the distance between the observed and the fitted values. We care only about the magnitude of the residual, and not whether it is positive or negative. Next, we calculate the average of all of the residuals. This value is the MAE. The MAE essentially describes the typical magnitude of the residuals. The equation for MAE looks like this:
+
+$$MAE = \frac{1}{n}\  \sum_{i = 1}^{n}|y_i - \hat{y}_i|$$
+
+where:
+
+- $y_i$ = observed output value
+- $\hat{y}$ = predicted output value
+- $\sum_{i = 1}^{n}$ = the sum of...
+- $|y_i - \hat{y}_i|$ = the absolute value of each residual
+- $\frac{1}{n}$ = divide the above by the total number of observations (to return the average value)
+
+It's okay if the equation looks intimidating. Let's break down how to compute MAE in R:
+
+1. Perform a linear regression
+
+- We'll show you how to do this soon - we promise!
+2. Calculate the absolute value of the residuals
+
+- In R, we do this by calling the `abs()` function on the variable that contains the residuals for our model.
+- Residuals are available as a standard output of a linear regression model in R, so we don't have to calculate the difference between the observed and predicted values.
+Sum the residuals
+
+Divide the sum by n, the number of data points
+
+Notice that summing the residuals and dividing the sum by the number of data points is calculating the average. This can be achieved in R with the `mean()` function. So, assuming we have performed a linear regression on our data, we calculate MAE in R as follows:
+
+
+```{r}
+# MAE <- mean(abs(df$residuals))
+```
+Because MAE is derived from the residuals, a small MAE indicates our model is accurate, whereas a large MAE indicates our model may not fit well in certain areas. If our model perfectly predicts the cost of our upcoming Uber trips, then our MAE would be 0, but this rarely happens.
+
+The MAE is the easiest summary measure to estimate, which is why we covered it briefly here, but using the absolute value of the residual is often less desirable than performing additional operations such as squaring this difference. We'll explore regression error metrics in more detail in later lessons, but if you'd like to read more now check out this Dataquest blog post.
+
+An important note about terminology: Even though the "E" in MAE stands for error, it does not refer to the epsilon error term described in a previous screen! The error described in MAE (and other summary statistics) refers to the residuals. You can read more about these two closely related measures in this Wikipedia post.
+
+Before we begin an exercise, let's quickly recap what we've learned about residuals and MAE. We started by creating a scatterplot of distance and cost. We added a linear regression fit line to the scatterplot with ggplot2. We haven't built a linear model in R yet but we know that the fit line represents the best estimate of using distance to estimate cost. The difference (on the y-axis) between our observed value for cost and the fit line is the residual value. We estimate MAE by averaging the absolute value for all residuals.
+
+
+For this exercise, we will calculate the MAE. If you get stuck, think back to this plot. What we'll estimate is essentially the average length of the blue lines:
+
+Let's practice what we've learned about calculating the MAE. We have performed a linear regression of cost onto distance for you and have provided the predictions as the predictions variable and the residuals as the residuals variable in the file titled `uber_trips_lm.csv`. The required packages were loaded during previous exercises.
+
+1. Load the `uber_trips_lm.csv` into R and assign this dataframe the name `uber_trips_lm`.
+2. Calculate the mean absolute error and save the result to `MAE`.
+3. Evaluate the following statement and assign the best answer `TRUE` or `FALSE` to the variable `MAE_question`: Based on the MAE result we calculated, we can say roughly that, `cost` predicted by `distance` is inaccurate by about $0.72, on average.
+You do not need to use the `predictions` variable to complete this exercise, but we have provided it for you if you would like to go through the MAE equation above step-by-step.
+
+
+```{r}
+uber_trips_lm <- read_csv("uber_trips_lm.csv")
+MAE <- mean(abs(uber_trips_lm$residuals))
+MAE
+MAE_question <- TRUE
+```
+## Simulated Reesiduals and Visualisation
+
+```{r}
+# Sample data
+set.seed(123)
+x <- 1:10
+y <- 2 * x + rnorm(10)
+
+# Create a dataframe
+data <- data.frame(x = x, y = y)
+
+# Fit a linear model
+model <- lm(y ~ x, data = data)
+
+# Calculate residuals
+residuals <- residuals(model)
+
+# Add residuals to the existing dataframe
+data$residuals <- residuals
+
+
+
+# Calculate predicted values
+predicted_values <- predict(model)
+
+# Add predicted values to the existing dataframe
+data$predicted <- predicted_values
+
+
+# Using previously created data with predicted values and residuals
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(color = "blue") +  # Scatter plot of actual values
+  geom_point(aes(y = predicted), color = "red") +  # Scatter plot of predicted values
+  geom_segment(aes(xend = x, yend = predicted), color = "green") +  # Residuals as segments
+  labs(title = "Actual vs Predicted Values with Residuals") +
+  xlab("X") +
+  ylab("Y") +
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal()
+
+```
+
+# 2. Bivariate Relationships- Correlation and Scatterplots
+## Introduction
+In the previous lesson, we learned about some of the concepts that are fundamental to predictive models of all kinds, not just linear models. We imagined a situation where we recorded trip distance and trip cost data for 50 Uber rides. We learned that this data can be used to fit a model that predicts the total cost of a future Uber trip based on trip distance.
+
+![](https://dq-content.s3.amazonaws.com/455/uber_lm.png)\
+We did not learn the details of how to fit a linear model, but we buit our intuition about what a linear fit line can say about our data. Here, we see that the fit line represents the trend that the cost of an Uber trip generally increases with distance. We are able to observe this relationship between cost and distance using the fit line, but we can also observe this relationship with the scatterplot alone.
+
+![](https://dq-content.s3.amazonaws.com/455/distance_scatter.png)\
+In this lesson, we will learn what scatterplots can reveal about a bivariate relationship — the relationship between two variables. We will continue to illustrate examples from the uber_trips data as we learn new concepts and coding approaches. For our hands-on exercises, we will work with publically available property sale data from New York City to explore bivariate relationships between variables with numeric data.
+
+In this lesson we will explore the relationship between pairs of variables to determine whether any variables are suitable to include in a linear regression model to predict the sale price for a property. In addition to visualization of relationships between variables, we will learn how to quantify these relationships using correlation.
+
+## Data Suitable for Linear Regression
+In this lesson, we will explore relationships between pairs of variables to determine if linear regression is suitable to describe the relationship between the variables. Bivariate linear regression can be performed between pairs of quantitative data measured on an interval or ratio scale. Problems with a quantitative response where there exists a dependency relationship are known as regression problems. As we learned in the previous lesson, the cost and distance variables in the `uber_trips` data are examples of quantitative data suitable for linear regression.
+
+On the other hand, problems involving a qualitative or categorical response are known as classification problems. Using our uber_trips data as an example, qualitative data refers to the neighborhood variable. The neighborhood variable is a categorical string variable that describes the name of a neighborhood and does not include quantitative information. Another example of qualitative data we might record is the company, if we use both Lyft and Uber. Logistic regression is a type of modeling that is commonly used with classification problems. We will not build logistic regression models in this course, but it is worth knowing that a form of regression with qualitative information is possible.
+
+This course is focused entirely on bivariate linear regression - a type of model that uses a single quantitative input to explain a single quantitative response. However, it is possible, and often preferred in practice to use more than one input variable to predict the quantitative response of a single variable. This is known as multiple linear regression or multivariate linear regression. Multiple linear regression is a popular machine-learning technique, because it is often preferable to use as many predictors as possible when the goal is to return an accurate prediction.
+
+Multiple linear regression is outside the scope of this course. We will instead focus on building a strong understanding of bivariate linear regression first, because many of the concepts covered and summary metrics used can be applied with multiple linear regression.
+
+Let's deepen our knowledge of understanding bivariate relationships by exploring the New York City property sales data for the Brooklyn borough. This diagram shows the location of Brooklyn, and the other boroughs of New York City:
+
+![](https://dq-content.s3.amazonaws.com/455/Boroughs%20of%20New%20York%20City.png)\
+
+For learning purposes, we will start by using a subset of this data. The dataset we'll use first contains 50 randomly selected sales records for condominiums in the Williamsburg-North neighborhood. We will use this dataset throughout the remainder of this lesson and other lessons in this course. We will provide more information about this subset of data on the next screen. For now, let's load the data and have a look.
+
+1. Load the csv file williamsburg_north.csv and assign this dataframe to an object named williamsburg_north. Be sure to load the readr package to read-in the data.
+
+- Once you have loaded the data, take a look at the type of information available.
+2. Download the Glossary of Terms for Property Sales Files and read through the description for each variable to gain an understanding of the data available to us.
+
+3. Once you have the data loaded, examine it. Do you see any quantitative variables in the dataset? Do you think any of this information can be used to predict property sale price?
+
+Note: We deleted a few variables that do not contain useful infomation for filtering or analysis. We reformatted the variable names and reformatted some of the observations to make the data easier to read. We also deleted duplicate entries from the dataset.
+
+```{r}
+williamsburg_north <- read_csv("williamsburg_north.csv")
+```
+
+## Exploring Bivariate Relationships with Scatterplots
+
+In this lesson and upcoming lessons, our overall goal will be to use bivariate linear regression to predict property sale price. A prediction for sale price is considered a quantitative response to a quantitative input, or predictor variable. In the previous exercise, did you identify any quantitative variables that might be useful to predict sale_price for a property using a linear regression model? There are a few quantitative variables worth considering:
+
+- `gross_square_feet`: The total area of all the floors of a building as measured from the exterior surfaces of the outside walls of the building, including the land area and space within any building or structure on the property.
+- `year_built`: Year the structure on the property was built.
+
+
+If we were analyzing single family home sales then we would also want to consider the `land_square_feet` variable which describes the total size of the land area for each property. But `land_square_feet` data is not relevant to condominium sales.
+
+Even though the dataset does not contain many quantitative variables useful to predict `sale_price`, the information was useful for filtering the data to create this subset of similar properties. We used the following filter parameters to generate the `williamsburg_north` dataset:
+
+- `year_built`: Missing values (presumably recorded as 0) were discarded.
+- `sale_price`: Only values greater than \$10,000 were considered. A \$0 sale indicates that there was a transfer of ownership without a cash consideration.
+- `building_class_category`: Selected only "13 Condos - Elevator Apartments".
+- `building_class_at_time_of_sale`: Selected only "R4", which is a residential unit in a building that has an elevator.
+- `neighborhood`: Selected "Williamsburg-North" because it had the highest number of "R4" unit sales records for all neighborhoods in Broolyn (160 total).
+The `sample_n() `function was used to randomly select 50 unique sales records.
+
+Before selecting variables from a dataset to build a linear model, it's useful to generate scatterplots to visualize the data relationships between pairs of data. If you'd like a refresher on scatterplots, check out this lesson. When we visualize bivariate relationships, the independent variable is plotted on the x-axis, and the dependent variable is plotted on the y-axis. With our uber_trips data, we plotted distance on the x-axis and cost on the y-axis, because cost depends on distance. Trip cost may also depend on other variables. But when exploring the relationship between cost and distance, we can assume that cost is explained by distance, not the other way around.
+
+When we generate a scatterplot to explore bivariate relationships, we can evaluate the relationships between the variables by examining the following characteristics: direction, linearity, and strength. Let's examine each of these in more detail. We will begin with direction.
+
+Direction: With a positive relationship, an increase in value along the x-axis results in an increase in value along the y-axis. A negative relationship is when an increase in one variable is associated with the decrease in value for another variable. We observed with our uber_trips data that, in general, as distance increases, trip cost also increases. This is an example of a positive relationship.
+
+![](https://dq-content.s3.amazonaws.com/455/distance_scatter.png)\
+
+In this exercise let's return our attention to the williamsburg_north dataframe. Is there any relationship between when the condominium was built and how much it sells for? Or what about the size of the property? Do larger properties generally sell for a higher price than smaller properties? Let's generate a couple of scatterplots to find out.
+
+Generate two plots with `ggplot2` to observe directional relationship. In each plot include `sale_price` on the y-axis because we are treating this as the dependent variable. In each case, a simple exploratory plot is fine. There is no need to customize axis labels or chart titles.
+
+```{r}
+ggplot(data = williamsburg_north, 
+       aes(x = year_built, y = sale_price)) +
+       scale_y_continuous(labels = scales::comma) +
+       geom_point()
+
+ggplot(data = williamsburg_north, 
+       aes(x = gross_square_feet, y = sale_price)) +
+       scale_y_continuous(labels = scales::comma) +
+       geom_point()
+```
+## Linearity
+
+In the previous exercise, we generated two scatterplots to see if a positive or negative relationship can be observed between year_built and sale_price, or gross_square_feet and sale_price. The plots are shown below. We've added descriptive labels to the plots, but they are otherwise identical to what we generated on the previous screen. Let's start by discussing what we observed about the relationship bewteen the year that a property was built, and sale price.
+
+
+
+There does not appear to be any obvious positive or negative relationship between `year_built` and `sale_price`. The observations are clustered into two main groups. One group corresponds to property sales for condominiumns built in the early 1900's, and the other group corresponds to properties built in the early 2000's. The values for sale_price are scattered across a similar range of values between the two groups. In other words, there is no indication that a condominium in an older building would sell for less than a condominium a newer building, or the other way around.
+
+Why do these distinct clusters exist in the first place? Answering this question would take some investigation, and this falls outside the scope of this course. But if you are curious, you may find some useful information here and here.
+
+What about the relationship between the size of a property and sale price? Do we observe a positive or negative relationship with `gross_square_feet` and `sale_price`?
+
+Looking at the scatterplot for gross_square_feet and sale_price we are able to observe that there is a positive relationship between these two variables. Generally speaking, the larger the property, the higher the sale price. Now that we've discussed directional relationships, let's consider linearity.
+
+Linearity: A bivariate relationship is linear when the scatter, or spread of data points generally follows a linear pattern. With our uber_trips data we observed that cost generally increased with distance. When we visualized the linear regression fit line, we observed that some points fall below the line, while others are above the line. But in general, the data points did not curve-away from the fit line at any point. We do not need to visualize a regression line to determine, roughly, if a bivariate relationship is linear. Often a scatterplot is all we need. But since we previously visualized the linear fit line for the uber_trips data, it is useful to consider here.
+
+## Strength
+
+Now that we've examined direction and linearity, let's also take a look at Strength. A bivariate relationship is strong when the spread, or dispersion, of the data is narrow. With a strong bivariate relationship, there will not be a lot of scatter, or noise, present. Scatterplots are useful for visualizing bivariate relationships. With a strong relationship, the residuals will be lower. In the previous lesson we visualized the residuals for our uber_trips data and observed that there is a moderately-strong relationship between distance and cost. We don't need the blue lines representing the residuals to assess the strength - a scatterplot will be useful by itself - but it is worth looking at here.
+
+How strong do you think the bivariate relationship is between gross_square_feet versus sale_price from the williamsburg_north dataframe?
+
+
+The 50 points in the scatterplot do not form a perfectly straight line when plotted, so it's safe to say that the relationship is not perfect. And for any given value of gross_square_feet we observe variations in price on the order of hundreds-of-thousands-of-dollars. But there is definitely some level of strength in the data because the points are not randomly spread across the plot. In the previous lesson we learned that we can essentially quantify levels of strength by estimating mean absolute error, for example. But for now we're focused on scatterplots and building our intuition about what scatterplots can tell us about bivariate relationships.
+
+Let's build on our intuition by comparing the spread of data from our scatterplot above to a similar scatterplot that is built using data from the four Williamsburg neighborhoods included in the dataset from Brooklyn:
+
+- Williamsburg-North
+- Williamsburg-East
+- Williamsburg-Central
+- Williamsburg-South
+
+Is it possible that one of these neighborhoods is more expensive than the others? Or is one of these neighborhoods generally more affordable than others? If there is variation among condominium values between neighborhoods, then we may be able to visualize this on a scatterplot. Will our points appear more spread out, and thus have a lower strength, if our data contains records from multiple neighborhoods? Let's check it out.
+
+For this exercise, generate a dataset of 50 condominium sale records from the four Williamsburg neighborhoods. Use this dataset to build a scatterplot to visualize the strength of the relationship between gross_square_feet and sale_price. We've loaded the dplyr package and `brooklyn_sales` dataframe for you, and defined `set.seed()` as 1.
+
+1. Generate a dataframe called williamsburg_all by applying the following filtering conditions to the `brooklyn_sales` dataframe:
+- `year_built` should be greater than 0
+- `sale_price` should be greater than 10,000
+- `building_class_category` must equal "13 Condos - Elevator Apartments"
+- `building_class_at_time_of_sale` must equal "R4"
+- include only values for `neighborhood` that include "Williamsburg"
+- retain only distinct rows (remove duplicate entries) with the `distinct()` function from dplyr
+- take 50 random samples with the `sample_n()` function from dplyr
+2. Generate a scatter plot with sale_price on the y-axis and gross_square_feet on the x-axis.
+- Add the call scale_y_continuous(labels = scales::comma) to the plot so that y-axis labels are not displayed as scientific notation.
+- Color points by `neighborhood` by defining the required argument within the `aes()` call.
+- Add the geom and argument theme(legend.position="bottom") so that this plot displays at a similar aspect ratio to our other scatterplot.
+3. Observe the scatterplot you generated. Is the bivariate relationship stronger for `williamsburg_north` only? Or is the bivariate relationship stronger for this scatterplot generated from `williamsburg_all`?
+- Assign either the string "`williamsburg_north`" or "`williamsburg_all`" to the variable `stronger_relationship`.
+
+```{r}
+brooklyn_sales <- suppressMessages(read_csv("brooklyn_sales.csv"))
+library(dplyr)
+set.seed(1)
+williamsburg_all <- brooklyn_sales %>% 
+  # Remove year-built zero years (assumed to be missing data)
+  filter(year_built > 0) %>% 
+  # Remove transactions assumed to be between family members
+  filter(sale_price > 10000) %>% 
+  # Select condominum category
+  filter(building_class_category == "13 Condos - Elevator Apartments") %>% 
+  # Select building class "CONDO; RESIDENTIAL UNIT IN ELEVATOR BLDG."
+  filter(building_class_at_time_of_sale == "R4") %>% 
+  # Choose all Williamburg neighborhoods
+  filter(stringr::str_detect(neighborhood, "Williamsburg")) %>% 
+  # Include only unique entries
+  distinct() %>% 
+  # Select random sample of 50
+  sample_n(50)
+
+ggplot(data = williamsburg_all, 
+       aes(x = gross_square_feet, y = sale_price, color = neighborhood)) +
+  scale_y_continuous(labels = scales::comma) +
+  geom_point() +
+  theme(legend.position="bottom")
+
+stronger_relationship <- "williamsburg_north"
+```
+##  Outliers
+
+
+When we compare our scatterplot from Williamsburg-North to the plot we generated on the last screen using data from all Williamsburg neighborhoods, we observe a weaker bivariate relationship between gross_square_feet and sale_price for the plot with all four neighboods combined. Qualitatively, we can probably say that there is a moderately-strong relationship between gross_square_feet and sale_price for the Williamsburg-North scatterplot. But the strength of the scatterplot for all Williamsburg falls somewhere between moderately-strong, and weak.
+
+![](https://dq-content.s3.amazonaws.com/455/strength_grid.png)\
+
+The uber_trips scatterplot we generated shows a moderately-strong positive, linear association between distance and cost. There is a moderate amount of spread and perhaps an outlier or two. When we consider the strength of bivatiate relationships, we also consider outliers because outliers can impact model fit. There is no single definition of an outlier, and we will explore why in this screen.
+
+Using this method from a previous lesson we have identified a single outlier in our uber_trips dataset (highlighted in orange) with respect to the inter-quartile range. This single point was isolated as an outlier in the scatterplot above for cost because it is larger than the upper quartile by 1.5 times the difference between the upper quartile and the lower quartile (the interquartile range).
+
+![](https://dq-content.s3.amazonaws.com/455/outlier.png)\
+
+However, in the context of linear regression, an outlier is an observation for which the response value 
+y
+i
+ is far from the value predicted by our model. In our case, an outlier in the uber_trips dataframe is a point that is far from the predicted value for cost. There are methods for determining how large a residual has to be before it can be considered an outlier in the regression context, but that is outside the scope of this lesson. Put simply, an outlier in regression is a data point that does not fit the pattern.
+
+What if a data point is considered an outlier because it is larger than the upper quartile by 1.5 times the interquartile range for sale_price but it falls near the fit line of our linear regression model? In this case, we would probably not consider this data point an outlier in the context of linear regression! Let's illustrate why using our williamsburg_north data.
+
+The image below highlights data points considered outliers for sale_price because they fall outside the upper-quartile by more than 1.5 times the interquartile range. But would these points be considered outliers in the context of linear regression? To built our intuition around outliers and regression, let's add a fit line to this plot to see where the line falls relative to these points.
+
+![](https://dq-content.s3.amazonaws.com/455/wburg_north_outlier.png)\
+
+We've provided code that determines the upper and lower outlier boundaries for sale_price. We saved the results to a new dataframe called outliers that contains all data points that fall above the upper outlier boundary, or below the lower outlier boundary. Highlight the outliers by integrating the outliers dataframe into the williamsburg_north scatterplot we previously generated. A useful feature of ggplot2 is that we can use many datasets within a single plot. Also add a linear model fit line to the plot.
+
+1. Generate a scatterplot using williamsburg_north that includes gross_square_feet on the x-axis and sale_price on the y-axis.
+- Reuse your code from the exercise earlier in this lesson.
+2. Highlight the outliers by adding a second `geom_point()` call that contains parameters for how we want the outliers to be highlighted.
+- Include the following arguments in this `geom_point()` call: data = outliers, aes(gross_square_feet, sale_price), color = "orangered3", size = 4
+- This new `geom_point()` call must come before the other `geom_point()` call.
+- This allows the points to display on top of the orange highlighting.
+3. Add a `scale_y_continuous()` call to the plot with the necessary arguments to display commas in the numbers.
+4. Use the `geom_smooth() `function to add a linear model fit line to the scatterplot code we've provided for you.
+- Include the argument required to prevent the confidence intervals from being displayed.
+
+```{r}
+# sale_price quartiles
+quartiles <- quantile(williamsburg_north$sale_price)
+# 75% minus 25% = interquartile range (iqr)
+iqr <- quartiles[[4]] - quartiles[[2]]
+# Outlier boundaries
+lower_bound <- quartiles[[2]] - (1.5 * iqr)
+upper_bound <- quartiles[[4]] + (1.5 * iqr)
+
+# Isolate outlier(s)
+outliers <- williamsburg_north %>% 
+  filter(sale_price > upper_bound | sale_price < lower_bound)
+ggplot(data = williamsburg_north, 
+       aes(x = gross_square_feet, y = sale_price)) +
+  geom_point(data = outliers, aes(gross_square_feet, sale_price), 
+             color = "orangered3", size = 4) + 
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+## Outliers with Regression
+
+Looking at the scatterplot we generated in the last screen, we see that the two largest and most expensive properties are highlighted as outliers for sale_price. But the outlier on the right is relatively close to the fit line.
+
+It turns out that this outlier on the right is not considered an outlier in a linear regression setting. We know this because we analyzed the studentized residuals of all the data points. We don't need to get into the details of analyzing studentized residuals to detect outliers — for now, we can rely on our visualization. The point on the right is not considered an outlier in the regression setting because its observed value is relatively close to its predicted value (the location of the fit line). It is worth mentioning that these are the data points considered outliers in a regression setting:
+
+![](https://dq-content.s3.amazonaws.com/455/wburg_north_outlier_lm_regression.png)\
+Interestingly, the lowest price property (the point highlighted in orange on the lower left) was not flagged as an outlier using the interquartile range method. But now that we've added a fit line to our scatterplot, it's not surprising that this property is considered an outlier. Based on its size, the property could be expected to sell for around $1,000,000, but it actually sold for less than $200,000.
+
+The important takeaway is there is no set definition of an outlier. An outlier detected using the interquartile range method may not be considered an outlier in a linear regression setting. Outliers can be the result of data recording errors, or they can result from anomalies. For example, the least expensive property could have been sold in poor condition. Or the most expensive property may have been a luxury property with exceptional views of the New York City skyline.
+
+Outliers can impact model fit and summary measures, particularly for smaller datasets. But that does not mean that we should simply remove all outliers from our data. In the case of multiple regression, outliers may indicate deficiencies in our model such as missing predictor values. But with bivariate linear regression we are limited to only a single predictor variable. It is plausible that we will encounter outliers with bivariate linear regression because our focus is so narrow.
+
+Now that we understand how scatterplots can be useful for assessing direction, linearity, strength, and outliers, let's turn our attention to a method for quantifying the strength of a bivatiate relationship, correlation.
+
+## Correlation
+
+Correlation is a statistic that quantifies the strength of the relationship between two variables.
+
+To test for correlation between pairs of variables, we'll calculate the Pearson correlation coefficient, a commonly used measure of the correlation between two variables. Pearson's correlation coefficient is also referred to as "Pearson's r" or "r."
+
+This may sound familiar because we covered correlation in an earlier course. There's no need for us to explain everything again here, but to complete the exercise on this screen, and understand correlation in the context of linear regression, we suggest that you revisit these screens:
+
+325.6 Correlation Analysis: Measuring the Strength of Relationships Between Variables
+325.7 Creating and Interpreting Correlation Matrices
+325.8 Identifying Interesting Relationships
+Correlation is useful in the context of bivariate linear regression because it quantifies the association between two variables. In a later lesson, we will see that with bivariate linear regression the squared value of correlation coefficient is equal to $R^2$, which is a summary measure used to assess the quality of our linear model. In many cases, the predictor with the highest correlation coefficient to the response may be the best choice for our bivariate regression model.
+
+Correlation does not consider the cause-and-effect relationship between two variables, so we do not need to specify a dependent and independent variable. In other words, correlation does not equal causation! Correlation analysis results are identical regardless of which variable is vector_1 or vector_2:
+
+```{r}
+# cor(vector_1, vector_2, use = "pairwise.complete.obs")
+```
+
+
+Correlation analysis is called for when there is no dependence between two variables. Regression analysis can be performed when the magnitude of one variable (dependent variable) is a function of the magnitude of the other variable (independent variable).
+
+To refresh our memory on the process for developing a correlation matrix, let's first do this for the `williamsburg_north` dataframe for the `sale_price` and `gross_square_feet` variables only. We begin by completing the following steps:
+
+1. Select the `sale_price` and `gross_square_feet` variables.
+2. Calculate the correlation using the "pairwise.complete.obs" method from the `cor()` function.
+3. Convert the correlation matrix to a tibble.
+ - Assign the rownames to the column "variable".
+4. Assign the correlation results to a variable called `correlation_wburg_north`.
+
+```{r}
+correlation_wburg_north <- williamsburg_north %>%
+  select(gross_square_feet, sale_price) %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  as_tibble(rownames = "variable")
+correlation_wburg_north
+```
+For this exercise, let's calculate the correlation coefficients between `sale_price` and `gross_square_feet` from the `williambsburg_all` dataframe.
+
+The `williamsburg_all` dataframe, and the `tibble` package have been loaded for you. Complete the following steps:
+
+1. Select the `sale_price` and `gross_square_feet` variables.
+2. Calculate the correlation using the `"pairwise.complete.obs"` method.
+3. Convert the correlation matrix to a `tibble`.
+- Assign the rownames to the column `"variable"`.
+4. Assign the correlation results to a variable called `correlation_wburg_all`.
+5. Hit the "Run Code" button to generate the results.
+6. Compare the correlation coefficient results for all Williamsburg neighborhoods to the results from the Williamsburg-North example above.
+- Assign the name of the dataframe (as a string) that results in the highest correlation coefficient estimates for `sale_price` and `gross_square_feet` to the variable greater_correlation.
+- Assign either the string value "`williamsburg_all`" or "`williamsburg_north`".
+Examine the results for the returned dataframe. How do the correlation results from the four Williamsburg neighborhoods combined compare to Williamsburg-North only? Recall that you can examine the variable in the Variable Inspector after hitting the "Run Code" button.
+
+```{r}
+correlation_wburg_all <- williamsburg_all %>%
+  select(gross_square_feet, sale_price) %>%
+  cor(use = "pairwise.complete.obs") %>% 
+  as_tibble(rownames = "variable")
+correlation_wburg_all
+greater_correlation <- "williamsburg_north"
+```
+
+
+
+# 3. Estimatign the Coefficients and Fitting Liner Models
+## Introduction 
+
+In the first lesson we learned concepts fundamental to predictive modeling. In the previous lesson we focused on bivariate linear regression and learned that we can use scatterplots to explore bivariate relationships. With scatterplots we can evaluate the relationships between the variables by examining direction, linearity, and strength. We also saw examples of how scatterplots, especially plots that include linear fit lines, can be useful for spotting outliers. We know how to add a linear fit line to a ggplot and we have built our intuition around what this fit line represents.
+
+We did not learn the details of how to fit a linear model, but we built our intuition about what a linear fit line can tell us about our data. In this lesson we will learn how to fit a bivariate linear model with R, and we will learn how to interpret model outputs. We will continue to use the uber_trips data for teaching and illustration purposes, and for the coding exercises we'll use the williamsburg_north dataframe that contains 50 condominium sales records from that neighborhood in Brooklyn.
+
+
+Before we learn the R code to build a linear regression model, let’s briefly consider what a typical data science workflow might look like. A lot of the time, we’ll start with a question we want to answer. With our uber_trips our primary question is how well does distance predict cost? In the case of our condominium sale data from the Williamsburg-North dataset we are asking how well does the size of a condominium predict the sale price? When we have one or more questions in mind, then we may do something like the following:
+
+- Collect data relevant to the problem (more is usually better).
+- Clean, augment, and preprocess the data into an analyzable form.
+- Conduct an exploratory analysis of the data to get a better sense of it (we did this in the last lesson!).
+- Construct a model of some aspect of the data.
+- Use the model to answer the question you started with.
+- Validate your results.
+
+**Linear regression is one of the simplest and most common supervised machine learning algorithms that data scientists use for predictive modelling. Bivariate linear regression describes the relationship between a response variable of interest and a predictor variable. This method helps us to separate the signal (what the predictor variable tells us about the response variable) from the noise (what the predictor variable can't tell us about the response variable).**
+Building a linear model in R requires very little code. But interpreting the output takes more effort. Let's get started to see for ourselves!
+
+##  Fitting a Bivariate Linear Regression Model
+
+When we use our uber_trips data to build a linear model that predicts cost as a function of distance, R fits a line to our data that is as close as possible to all 50 of our observations. More specifically, R fits the line in such a way that the sum of the squared difference between the points and the line is minimized. This method is known as the least squares criterion or simply least squares. And as we learned in an earlier lesson, the distances between our observations and their model-predicted values are called residuals. Even when a linear regression model fits data very well, the fit is not perfect.
+
+We'll learn how to calculate least squares and extract the least squares value from model output later in the lesson. Now let's turn our attention to how we build a bivariate linear regression model in R. The built-in `lm()` function is used to build linear models in R. The code to fit a linear model with our uber_trips data looks like this:
+
+
+```{r}
+uber_lm_fit <- lm(cost ~ distance, data = uber_trips)
+```
+
+
+You can think of the ~ (til-deh) meaning "predicted by" or "explained by". So the code above essentially says: "let's fit a linear model to see how well the cost of an UberX ride is explained by trip distance using our Uber trip data." The results, or output, of this analysis are stored to a linear model object we will call uber_lm_fit. The uber_lm_fit object is stored in R as a list type of the class "lm".
+
+When the function $f$ is approximated by a bivariate linear function, the mathematical equation looks like this:
+
+$$Y = {\beta}_0 + {\beta}_1X + \epsilon$$
+where:
+
+- $Y$ indicates the prediction $Y$ based on $X$
+
+- ${\beta}_0$ (the intercept) refers to the value on the y-axis where the value on the x-axis is equal to 0
+- ${\beta}_1$ (the slope) is the change in $Y$ for every single unit change in $X$
+- $X$ is the predictor, or independent variable.
+- $\epsilon$ is the error term that captures everything that is missed by the model.
+
+After we have used our training data to estimate the slope and intercept coefficients, we can predict future values for our response variable on the basis of a particular value of our predictor variable with:
+
+
+$$\hat{y} = \hat{\beta}_0 + \hat{\beta}_1x$$
+where:
+
+- $\hat{y}$ indicates a prediction of $y$ for any given values of $x$
+- $\hat{\beta}_0$ (the intercept) refers to the estimated value on the y-axis where the value on the x-axis is equal to 0
+- $\hat{\beta}_1$  (the slope) is the estimated change in $\hat{y}$ for every single unit change in $x$.
+- $x$ is the value of the predictor variable.
+Every model contains error, which is represented mathematically with epsilon ($\epsilon$), but we can omit the error term for future predictions because the error term averages to zero and is generally assumed to be independent of $x$. In other words, in this case we do not include the error term because we cannot estimate it using $x$.
+
+We are able to view the coefficient estimates and other summary statistics produced by the `lm()` call with the built-in `summary()` function. To do this we provide the name of the linear model object in the `summary()` call, like this:
+
+
+```{r}
+summary(uber_lm_fit)
+```
+There is a lot of useful information here. Throughout this lesson we will learn how to interpret these results, and extract individual components from the linear model list object. For now let's apply what we've learned about fitting a linear model in R to our dataset of condominium sales from the Williamsburg-North neighborhood.
+
+
+
+
+```{r}
+condos_lm_fit <- lm(sale_price ~ gross_square_feet, data = williamsburg_north)
+summary(condos_lm_fit)
+```
+## Estimating the Slope
+
+
+We mentioned earlier that building a linear model in R requires very little code. But interpreting and understanding the output takes more work. To understand why, let's begin by manually calculating the values for the slope and intercept coefficients and then compare these values to the coefficients estimates from our uber_lm_fit model output.
+
+Recall that when fitting a linear model, the algorithm fits the line in such a way that the sum of the squared difference between the points and the line (i.e. the sum of the squared residuals) is minimized. The sum of the squared residuals is known as the residual sum of squares (RSS). The least squares criterion is the most common method for fitting a linear regression model. The lm() algorithm selects values for $\hat{\beta}_0$ and $\hat{\beta}_1$ that minimize $RSS$. The mathematical formulas looks like this:
+
+$$slope = \hat{\beta}_1 = \frac{\sum_{i = 1}^{n}(x_i - \bar{x})(y_i - \bar{y})}{\sum_{i = 1}^{n}(x_i - \bar{x})^2}$$
+
+where:
+
+- $\hat{\beta}_1$  (the slope) is the estimated change in $\hat{y}$ for every single unit change in 
+$x$. 
+- $\sum_{i = 1}^{n}$ is the sum of...
+- $x_i$ is the value of the ith predictor variable.
+- $y_i$ is the value of the ith response variable.
+- $\bar{x}$ is the average value of the predictor variables.
+- $\bar{y}$ is the average value of the response variables.
+
+
+and:
+$$intercept = \hat{\beta}_0 = \bar{y} - \hat{\beta}_1\bar{x}$$
+$\hat{\beta}_0$ (the intercept) refers to the estimated value on the y-axis where the value on the x-axis is equal to 0.
+
+
+If the formulas look intimidating, that's okay. Let's translate each formula to R code to break down what's going on here. Let's begin with estimating the slope $\hat{\beta}_1$ because we need an estimate of slope to estimate the intercept $\hat{\beta}_0$. We manually build a slope estimate for the uber_trips dataframe with the following R code:
+
+```{r}
+# Define the predictor and the response variables
+predictor <- uber_trips$distance
+response <- uber_trips$cost
+# Manually estimate the slope
+mean_predictor <- mean(predictor)
+mean_response <- mean(response)
+numerator <- sum((predictor - mean_predictor) * (response - mean_response))
+denominator <- sum((predictor - mean_predictor)^2)
+beta_1 <- numerator / denominator
+beta_1
+```
+
+This example highlights the power of computation and vectorized operations in R. The uber_trips dataframe contains only 50 observations, but can you imagine performing the estimate of slope by hand?
+
+You may recall that we discussed this particular value for slope in an earlier lesson when learning about residuals. This number essentially means that an increase in the distance of an Uber trip by one mile results in an additional cost of $1.55 on average. When we call the `lm()` function R will provide an estimate of these coefficients. We can reveal the slope (and intercept) estimates for our uber_lm_fit model object with `summary()` function as we have seen already, or with the following code:
+
+```{r}
+coef(uber_lm_fit)
+```
+
+And we can see that the slope estimate generated with the `lm()` function is identical to what we manually calculated above. Or we can use the `dplyr::near()` function to verify:
+
+```{r}
+dplyr::near(beta_1, coef(uber_lm_fit)[[2]])
+```
+
+The `dplyr` function `near()` is safer than using `==` to check equality, because it has a built in tolerance for small rounding errors.
+
+
+Note that an alternate spelling to the `coef()` function is the `coefficients()` function, which is identical. In practice we only need to call the `coef()` or `coefficients()` functions to directly inspect the coefficients estimated for our model. But manually estimating the slope is a good way to build our understanding of what this coefficient estimate represents.
+
+Let's continue to build our understanding of how to estimate the values of the coefficients by developing our own function for estimating the slope and applying it to the `williambsburg_north` dataframe. The `condos_lm_fit` modeling results generated on the previous screen are loaded and available for use.
+
+1. Build a function called slope that takes two arguments in this order: `predictor` and `response`.
+- The function should return a single numeric value of type "double".
+2. Calculate the slope of `gross_square_feet` as the predictor, and `sale_price` as the response using the `williamsburg_north` dataframe.
+- Save the results to a variable called `condos_slope`.
+3. Use `dplyr::near()` to check the equality of `condos_slope` to the slope of the condos_lm_fit model.
+- Save the results to a variable called `slope_equal`.
+Take a look at the estimated value for slope. What does that tell you about the expected increase in price per square foot? Remember that the "Run Code" button is available to use `summary()` or `coef()` to view the slope estimate and check your work.
+```{r}
+slope <- function(predictor, response){
+  mean_predictor <- mean(predictor)
+  mean_response <- mean(response)
+  numerator <- sum((predictor - mean_predictor) * (response - mean_response))
+  denominator <- sum((predictor - mean_predictor)^2)
+  beta_1 <- numerator / denominator
+  beta_1
+}
+
+condos_slope <- slope(predictor = williamsburg_north$gross_square_feet, 
+                      response = williamsburg_north$sale_price)
+
+slope_equal <- dplyr::near(condos_slope, coef(condos_lm_fit)[[2]])
+```
+
+
+## Estimating the Intercept
+
+The slope tells us the change in $y$ for every unit change in $X$. The intercept will provide an estimate for the value of $y$ where $x$ is equal to 0. Once we have calculated an estimate for slope, (beta_1) we can use this R code to estimate the intercept:
+
+```{r}
+# Manually estimate the intercept
+beta_0 <- mean(response) - (beta_1 * mean(predictor))
+beta_0
+```
+
+You may recall that we also encountered this estimated value for intercept in an earlier lesson when learning about residuals. This number roughly means that the y-intercept at an Uber trip distance of 0 is equal to \$5.85. Or, if we call an Uber but don't go anywhere we can expect to pay around \$5.85.
+
+A word of caution about interpreting the y-intercept: Although the example above is useful to illustrate what the y-intercept represents, one must always be cautious about making inferences about points that fall outside the range of the observed data! Also, if $x$ ever equals 0, the intercept is the expected mean value of $y$ at that value. But if $x$ never equals 0 (like in this data set), then the intercept has no intrinsic meaning.
+
+When we call the `lm()` function R will generate an estimate of the intercept. As we learned on the previous screen we can reveal the slope estimate for our `uber_lm_fit` model object with the following code:
+
+```{r}
+coef(uber_lm_fit)
+```
+
+And we can see that the intercept estimate generated with the `lm()` function is identical to what we manually calculated above. Or we can verify equality with `dplyr::near()` function like we did before:
+
+
+```{r}
+dplyr::near(beta_0, coef(uber_lm_fit)[[1]])
+```
+
+
+Now that we have learned how to estimate the intercept of `cost` predicted by `distance` from the `uber_lm` dataframe, let's apply this approach to the `williambsburg_north` dataframe.
+Let's continue to build our understanding of how to estimate the values of the coefficients by developing our own function for estimating the intercept and applying it to the williambsburg_north dataframe. The `condos_lm_fit` modeling results generated earlier are loaded and available for use.
+
+1. Build a function called `intercept` that takes three arguments in this order: predictor, response and slope.
+- The function should return a single numeric value of type "double".
+2. Calculate the intercept of `gross_square_feet` as the predictor, and `sale_price` as the response using the `williamsburg_north` dataframe.
+- Save the results to a variable called condos_intercept.
+3. Use `dplyr::near()` to check the equality of `intercept_slope` to the slope of the `condos_lm_fit` model.
+- Save the results to a variable called `intercept_equal`.
+Take a look at the value returned for the y-intercept. Does it make sense? The smallest property in the `williamsburg_north` dataset is around 500 square feet. Recall that the y-intercept falls far outside of the range of the observed data in this case, so we shouldn't try too hard to extract any meaning from it. Remember that the "Run Code" button is available to use `summary()` or `coef()` to view the slope estimate and check your work.
+
+```{r}
+condos_slope <- slope(predictor = williamsburg_north$gross_square_feet, 
+                      response = williamsburg_north$sale_price)
+intercept <- function(predictor, response, slope){
+  beta_0 <- mean(response) - (slope * mean(predictor))
+  beta_0
+}
+
+condos_intercept <- intercept(predictor = williamsburg_north$gross_square_feet, 
+                              response = williamsburg_north$sale_price, 
+                              slope = condos_slope)
+
+intercept_equal <- dplyr::near(condos_intercept, coef(condos_lm_fit)[[1]])
+```
+
+## Visualizing Model Fit
+
+In earlier lessons we learned how to add a linear model fit line to a ggplot without actually building a linear model with the` lm() `function.
+
+And in our coding exercises we added a fit line to the condominium sales data.
+
+How does ggplot2 add the linear fit lines to these scatterplots? Recall from an earlier lesson that bivariate linear regression is a parametric model. By choosing linear regression, we have simplified the process of estimating $f$ — our model can focus on estimating only two parameters: intercept and slope.
+
+And for this reason we only need these two parameters, estimates of the intercept and the slope, to add a fit line to a ggplot. Fit lines can be added manually in ggplot2 using the `geom_abline()` function. At minimum, we need to provide two parameters within an `aes()` call:
+
+```{r}
+# geom_abline(aes(intercept = intercept, 
+#                   slope = slope))
+```
+
+The `geom_abline()` function can take additional arguments as well, such as linetype, color, and size:
+
+
+```{r}
+# geom_abline(aes(intercept = intercept, 
+#                   slope = slope)),
+#                   color = "red",
+#                   linetype = "dotted",
+#                   size = 2)
+```
+
+How will the fit line that we add manually appear relative to the fit line we added with the `geom_smooth() `function call we used before? Let's plot these two lines on top of each other to find out!
+
+
+```{r}
+ggplot(data = williamsburg_north, 
+       aes(x = gross_square_feet, y = sale_price)) +
+  geom_point() +
+  scale_y_continuous(labels = scales::comma) +
+  geom_smooth(method = "lm", se = FALSE) + 
+  geom_abline(aes(intercept = coef(condos_lm_fit)[[1]], 
+                  slope = coef(condos_lm_fit)[[2]]), 
+              color = "black", 
+              linetype = "dashed",
+              linewidth = 1)
+```
+## Estimating the Predictions
+Now that we have estimated the slope and intercept using the `uber_trips` dataframe and verified that our manual estimations match the `uber_lm_fit` model output we can estimate the predicted values and the residuals. And although we did not manually fit a line to the `uber_trips` data like we did for the condominium sales data the results are the same; we can manually fit a line with the estimates of slope and intercept that matches the line built with `geom_smooth()`.
+
+Recall that when fitting a linear model, the linear regression algorithm fits the line in such a way that the sum of the squared difference between the points and the line (i.e. the sum of the squared residuals) is minimized. The `lm()` algorithm achieves this by selecting values for $\hat{\beta}_0$ and $\hat{\beta}_1$ that minimize the residual sum of squares $RSS$, which is defined by:
+
+$$RSS = e_1^2 + e_2^2 + \text{ }... \text{ }+ e_n^2$$
+where:
+
+- $e_i = y_i - \hat{y}_i$ refers to ith residuals
+
+- $\hat{y}_i = \hat{\beta}_0 + \hat{\beta}_1x_i$ represents the ith prediction for $Y$ based on the ith value of $X$.
+
+We have 50 observations, and thus 50 predictions and 50 residuals to estimate for both our uber_trips dataset. Using the coefficients that we calculated on the previous screens, we can estimate the prediction for each observation in the uber_trips dataframe like this:
+
+- $prediction_i = intercept + slope * predictor_i$
+
+or:
+
+- $prediction_i = 5.846314 + 1.553985 * distance_i$
+
+Recall from the last few screens that we can call the coefficients directly from our `uber_lm_fit` object:
+
+```{r}
+intercept <- coef(uber_lm_fit)[[1]]
+slope <- coef(uber_lm_fit)[[2]]
+```
+
+Using the linear model object indexes above to directly access the coefficient values is best practice compared to manually typing in the numeric values to ensure accuracy in the future if the linear model object changes.
+
+We can add a column to the `uber_trips` dataframe that contains the predictions using a `mutate()` function call from `dplyr`:
+
+```{r}
+uber_trips <- uber_trips %>% 
+  mutate(predictions = coef(uber_lm_fit)[[1]] + coef(uber_lm_fit)[[2]] * distance)
+```
+
+
+Like with the slope and intercept, the predictions are also available in our `uber_lm_fit` object generated with the `lm()` function by entering the `fitted()` function on the `uber_lm_fit` which returns a vector of values:
+
+```{r}
+fitted(uber_lm_fit)
+```
+To make sure our manual equation used above matches the output from the `lm()` output, we can add a second mutate call to visualize and compare the values in each method:
+```{r}
+uber_trips <- uber_trips %>% 
+  mutate(predictions = coef(uber_lm_fit)[[1]] + 
+           coef(uber_lm_fit)[[2]] * distance) %>% 
+  mutate(lm_preds = fitted(uber_lm_fit))
+```
+
+At a glance the two methods appear to match:
+
+```{r}
+head(uber_trips)
+```
+Which is verified by checking equality with `dplyr::near()` by comparing the new variables we created, or by comparing the new predictions variable to the `fitted(uber_lm_fit)` vector:
+
+Either method results in `TRUE` values for all values being compared. Let's apply what we've learned here by manually estimating the predictions for `sale_price` as predicted by `gross_square_feet` for the `williamsburg_north` data.
+
+The `dplyr` package and the `condos_lm_fit` model object have been loaded for you.
+
+1. For practice and repetition, fit a linear model of `sale_price` explained by gross_square_feet using the `williamsburg_north` dataframe.
+- Store the model output to an object called condos_lm_fit like before.
+2. Add a new variable to the `williamsburg_north` dataframe called predictions and assign the results of the operation back to the `williamsburg_north` dataframe.
+- Follow the example provided in the learn section and call the `condos_lm_fit` object directly to access the values of the coefficients.
+- Note that you do not need to add the second `lm_preds` variable like we did in the Learn section above.
+3. Use `dplyr::near()` to compare the new `predictions` variable to the `fitted()` output for the associated linear model.
+- Assign the output to a variable called `near`.
+
+Take a look at the predictions returned for the condominium sales data. Do the values make sense based on the size of the units? Use the "Run Code" button to inspect results.
+
+
+```{r}
+condos_lm_fit <- lm(sale_price ~ gross_square_feet, data = williamsburg_north)
+
+williamsburg_north <- williamsburg_north %>% 
+  mutate(predictions = coef(condos_lm_fit)[[1]] + 
+           coef(condos_lm_fit)[[2]] * gross_square_feet)
+
+near <- dplyr::near(williamsburg_north$predictions, fitted(condos_lm_fit))
+```
+
+
+##  Estimating the Residuals
+
+Now that we have generated the predictions for the uber_lm_fit we can estimate the residuals by calculating the difference between the predictions and the response variable cost. Recall that residuals are the distances between our observations and their model-predicted values. We can visualize the residuals in the scatterplot below as the distance along the y-axis between the observed value for cost and the predicted value, which is the fit line:
+
+![](https://dq-content.s3.amazonaws.com/456/residuals.png)\
+
+Recall that we can calculate the residual for every point in our dataset and use these values to assess the accuracy of our model. If our model does a good job of predicting trip cost for every trip distance traveled, then our residuals will be relatively small. On the other hand, if our model does not predict trip cost well, then our model is a poor estimator and the residuals will be relatively large. We can calculate the residuals with a single `mutate() `call that creates a new variable `residuals` which is the `cost` minus `predictions`:
+
+```{r}
+uber_trips <- uber_trips %>% 
+  mutate(residuals = cost - predictions)
+```
+
+In practice we would not normally manually calculate the residuals because the `lm()` output makes the residuals available to us by calling the `residuals()` or `resid()` functions on our linear model object. For the sake of demonstration we can add the `residuals()` values to the uber_trips dataframe to double-check that our manual calculations are correct:
+
+```{r}
+uber_trips <- uber_trips %>% 
+  mutate(residuals = cost - predictions) %>% 
+  mutate(lm_resid = resid(uber_lm_fit))
+```
+
+And with a quick visual check we see that the two approaches appear to match:
+
+
+```{r}
+head(uber_trips)
+```
+And once again this is confirmed by comparing equality with` dplyr::near()`:
+
+```{r}
+dplyr::near(uber_trips$residuals, resid(uber_lm_fit))
+```
+Which once again results in TRUE values for all 50 comparisons, giving us confidence that we know how to manually estimate the residuals ourselves, without relying entirely on a model output.
+
+Understanding residuals can be difficult at first glance, but we can learn a lot by manually estimating the residuals. After we have used the coefficients estimates to generate predicted values for each observation in our dataset, we then can calculate the difference between the predicted and the observed values.
+
+Let's reinforce what we've learned by manually adding the residuals to the `williamsburg_north` dataframe.
+
+
+The `dplyr` package and the `condos_lm_fit` model object have been loaded for you.
+
+1. Add a new variable to the `williamsburg_north` dataframe called residuals and assign the results of the operation back to the `williamsburg_north` dataframe.
+- Note that you do not need to add the second `lm_resid` variable like we did in the Learn section above.
+2. Use `dplyr::near()` to compare the new residuals variable to the `resid()` output for the associated linear model.
+- Assign the output to a variable called near.
+Take a look at the residuals and think about the scale of the differences as compared to the `uber_trips` data. Use the "Run Code" button to inspect results.
+
+
+```{r}
+williamsburg_north <- williamsburg_north %>%
+  mutate(residuals = sale_price - predictions)
+
+near <- dplyr::near(williamsburg_north$residuals, resid(condos_lm_fit))
+```
+
+## Estimating the Residual Sum of Squares
+
+Now that we know how to manually estimate the residuals, we can expand on this to estimate the residual sum of squares ($RSS$). Recall from an earlier screen that the $RSS$ is defined by this equation:
+
+$$RSS = e_1^2 + e_2^2 + \text{ }... \text{ }+ e_n^2$$
+where:
+
+- $e_i = y_i - \hat{y}_i$ refers to ith residual.
+
+To calculate the $RSS$ we will need to add a new variable to our uber_trips dataframe that is the squared value of each residual:
+
+
+```{r}
+uber_trips <- uber_trips %>% 
+  mutate(resid_squared = residuals^2)
+```
+
+From this, we can use a summarize() call from dplyr to sum the squared residuals for all 50 observations to arrive at an estimate of $RSS$. The `summarize()` function will return a tibble by default. In this case we want to extract the single numeric summary value for $RSS$ which we can do with the `pull()` function from dplyr like this:
+
+```{r}
+RSS <- uber_trips %>% 
+  summarize(RSS = sum(resid_squared)) %>% 
+  pull()
+
+print(RSS)
+```
+
+At this point you may have guessed that next we'll learn method for extracting the $RSS$ directly from the `uber_lm_fit` model output. We do this by calling the `deviance()` function on the linear model object:
+
+```{r}
+deviance(uber_lm_fit)
+```
+We can see above that the two methods yield identical results. The least squares approach for estimating cost as a function of distance from the uber_trips dataframe results in an $RSS$  value of approximately 55.57. Any other values for the coefficients slope and intercept that are used to fit a line to the uber_trips data would result in a higher $RSS$ using the least squares method.
+
+Note that we did not need to calculate the absolute value of the residuals like we did when calculating the mean absolute error because squaring the value of the residuals (before the final summation) results in positive values only.
+
+
+The `dplyr` package and the `condos_lm_fit` model object have been loaded for you.
+
+1. Add a new variable to the `williamsburg_north` dataframe called resid_squared and assign the results of the operation back to the `williamsburg_north` dataframe.
+2. Use a `summarize()` call to calculate the $RSS$ by summing the value of the `resid_squared` and save this output as RSS.
+- Remember to use the `pull()` function to extract the single numeric value from this operation.
+3. Call the `deviance()` function on the linear model object to extract the $RSS$ value directly and save the result of this operation to an object called `RSS_from_lm`.
+
+Take a look at the $RSS$ value returned. Does the size of the number surprise you? Because condominum sales can vary by a few hundred-thousand-dollars for any given size, we can expect to see a large number for $RSS$ returned here. Use the "Run Code" button to inspect results.
+
+
+```{r}
+williamsburg_north <- williamsburg_north %>% 
+  mutate(resid_squared = residuals^2)
+
+RSS <- williamsburg_north %>% 
+  summarise(RSS = sum(resid_squared)) %>% 
+  pull()
+
+RSS_from_lm <- deviance(condos_lm_fit)
+```
+
+## Understanding RSS
+
+The RSS can be difficult to interpret by itself. We know that this number represents the minimum sum of the squared residuals using the least squares method. We can't fit a line that will do any better than this using bivariate linear regression and the least squares method. And like with the residuals, or the mean absolute error, a smaller RSS means a better model fit than a larger number. But how do we know if we have a good fit?
+
+![](https://dq-content.s3.amazonaws.com/456/residuals_wburg.png)\
+
+
+In the next lesson we will learn measures to assess the accuracy of our model. We will learn to calculate and interpret the residual standard error $(RSE)$ which is actually considered a measure of the lack of fit of the model. The RSS is also a measure of the lack of fit of our model! The $RSS$ tells us how much of the variation in $y$ our model did not explain.
+
+We will also learn about $R^2$ (r-squared), which is a measure of the proportion of the variability in our response variable that can be explained by the predictor variable. The $R^2$ value falls between 0 and 1, so it can be easier to interpret than $RSS$ or $RSE$
+
+Our knowledge of $RSS$ will be useful moving forward because we need to have an estimate of $RSS$ to calculate $RSE$ and $R^2$.
+
+
+# 4. Assessing the Accuracy of the Model
+
+## Introduction 
+
+In the previous lesson we learned how to fit a bivariate linear model in R. We explored only some of the model estimates and outputs available including slope, intercept, predictions, residuals, and the sum of the squared residuals, known as the residual sum of squares (RSS).
+
+We explored how fitting a linear model fits the line in such a way that the sum of the squared difference between the points and the line (the RSS) is minimized. We deepened our knowledge of slope and intercept by building functions in R to estimate these parameters "manually". We also learned how to directly access these coefficient estimates in our linear model object. And we used the estimates of slope and intercept to manually add a fit line to our scatterplot that matched the `lm` method in `ggplot`.
+
+
+We also used the estimates of slope and intercept to estimate and add the predictions to the data. Generating the predictions enabled us to calculate the residuals, and from this we were able to estimate the $RSS$. We verified that our manual estimates for the predictions, residuals, and RSS, matched the linear model estimates generated using the `lm()` function in R.
+
+In this lesson we will learn how to understand the accuracy of the coefficient estimates, slope and intercept. We will also learn how to assess the accuracy of our linear model. We will continue to use the Uber trips dataset for learning purposes and then apply and test our knowledge with the Williamsburg condominium sales data. Let's begin by revisiting the residuals.
+
+## Plotting the Residuals
+
+Recall that residuals are the distances between our observations and their model-predicted values. We can visualize the residuals in the `uber_trips` scatterplot below as the distance along the y-axis between the observed value for `cost` and the predicted value, which is the fit line:
+
+![](https://dq-content.s3.amazonaws.com/457/residuals.png)\
+
+When we are trying to assess how well our model fits the data, another useful way to visualize the residuals is with a histogram. If our model fits well, the residuals should be symmetrically and normally distributed around zero, with the shape of a bell-curve. The distribution does not have to be perfectly symmetrical or normal, the important thing is that there is no obvious visual pattern to them. For example, numerous bins on the far-left or far-right of a histogram would indicate that a linear model is not appropriate for the data because the model is consistently over-or-under estimating the actual values.
+
+Here is the distribution of residuals for the `uber_trips` data:
+![](https://dq-content.s3.amazonaws.com/457/residuals_uber.png)\
+
+We observe here that the distribution of residuals is roughly distributed around zero. There is one observation to the far-right that may be considered an outlier, and most likely represents the single observation from the scatterplot above with a total trip cost of $16. But we do not need to be concerned about single outliers here. The main thing we are checking is that the overall shape of the histogram is roughly symmetrical and centered around zero. This histogram gives us further confidence that a bivariate linear regression model is a reasonable choice for explaining trip cost on the basis of distance.
+
+Note that we plotted the residuals by extracting the `residuals` vector from the `uber_lm_fit` model object in R. Because `ggplot2` requires the data input to be a dataframe we converted the vector to a dataframe with the `data.frame` function like this:
+
+```{r}
+residuals_df <- data.frame(residuals = uber_lm_fit$residuals)
+```
+
+
+For this exercise, let's plot the residuals for the `condos_lm_fit` linear model object that we generated in the previous lesson for the `williamsburg_north` dataset. We've loaded the dataset for you.
+
+
+Generate a histogram of the residuals from the condos_lm_fit linear model object.
+
+
+```{r}
+condos_lm_fit <- lm(sale_price ~ gross_square_feet, data = williamsburg_north)
+residuals_df <- data.frame(residuals = condos_lm_fit$residuals)
+
+ggplot(data = residuals_df, aes(x = residuals)) +
+  geom_histogram()
+```
+
+
+## Hypothesis Testing
+
+We observed in our previous exercise that the spread of residuals is roughly distributed around zero for the condominium sales linear model. So like with the uber_trips dataset, bivariate linear regression looks to be a reasonable modeling choice for explaining condominium sale_price on the basis of gross_square_feet.
+
+Now let's formalize our approach with the uber_trips data and form a hypothesis that there is a relationship between distance and cost. We can use information from the uber_lm_fit model object to test our hypothesis. Hypothesis testing is particularly important if we are interested in using our model to make future predictions on unseen data. Before we use our modeling results to predict future outcomes we need to determine that there is a relationship between $X$ and $Y$ (distance and cost).
+
+Recall that when the function $f$  is approximated by a bivariate linear function, the mathematical equation looks like this:
+
+
+$$Y = {\beta}_0 + {\beta}_1X + \epsilon$$
+where:
+
+- $Y$ indicates prediction $Y$ based $X$
+- ${\beta}_1$ (the intercept) refers to the value on the y-axis where the value on the x-axis is equal to 0.
+- ${\beta}_1$ (the slope) is the change in $Y$ for every single unit change in $X$
+- $X$ is the predictor, or independent variable.
+- $\epsilon$ is the error term that captures everything that is missed by the model.
+
+
+A hypothesis is an educated guess about what we think is going on with our data. In this case, we'll hypothesize that distance and cost for Uber trips are related. Every hypothesis we form has an opposite hypothesis called the null hypothesis:
+
+- $H_0$:In this example, our null hypothesis is that there is no relationship between Uber trip distance and cost.
+- When ${\beta}_1=0$ that means that there is no relationship between $X$ and $Y$  because the slope is 0.
+
+
+We call the hypothesis that distance and cost are related the alternative hypothesis:
+
+
+- $H_a$: If we find strong evidence to reject $H_0$ (if we find evidence that there is some relationship between distance and cost) we can use the model to predict cost from distance.
+
+Mathematically this is expressed as:
+
+
+$$H_0 : \beta_1 = 0$$
+
+and:
+
+$$H_a : \beta_1 \neq 0$$
+We test the null hypothesis by determining if $\hat{\beta_1}$, our estimates of $\beta_1$, is far enough from zero that we feel comfortable saying that $\beta_1$ is not 0. How do we know if our estimate $\beta_1$ is accurate? We can start by looking at the standard error (SE) of the slope, $\hat{\beta_1}$, which can be observed by calling the summary() function on the uber_lm_fit object:
+
+```{r}
+summary(uber_lm_fit)
+```
+There is a lot of information here, so we will focus on the information provided in the `Coefficients`: section of the output. The SE for `distance` is 0.1503 (listed under the header "Std. Error". A small SE value means that even a small $\hat{\beta_1}$ estimate for may be sufficient to say that there is a relationship between distance and cost because $\hat{\beta_1}$ does not equal zero. On the other hand, a large value for SE means that $\hat{\beta_1}$ must also be large enough for us to reject $H_0$. 
+
+Is the SE value of 0.1503 sufficiently small enough that we can say with confidence that the $\hat{\beta_1}$ of 1.5540 is sufficiently far from zero? One way to determine this is to estimate the t-statistic, or the number of standard deviations that $\hat{\beta_1}$ is from 0. We can also look at the p-value, which is the probability of observing any value equal-to or larger than $t$ if the null hypothesis $(H_0)$ is true.
+
+We are mainly concerned with the t-statistic and the p-value for slope, because the slope represents the effect of distance on cost. We will explore the t-statistic and the p-value in upcoming screens. For now let's call the `summary()` function on the linear model object for the Williamsburg-North condominium sales data.
+
+
+Before we jump into the exercise let's briefly discuss the `summary()` output above. We can see in the `summary()` output the slope and intercept coefficients we previously accessed with the `coef()` or `coefficients()` functions. We also see above the residual sum of squares (called "Residual standard error" here) that we called in the previous lesson using the `deviance()` function.
+
+
+The `summary()` function is very popular in practice when analyzing the results of a linear regression model, but the output can seem overwhelming at first. As we work through this lesson we will continue to build our understanding of many of the summary statistics included in the `summary()` output for a linear model.
+
+For this exercise, call the `summary` function on the `condos_lm_fit` model object and hit the "Run Code" button. This is an experimentation screen, so there is no answer checking. Take a look at the `summary()` output. Identify the SE of the slope. We will work with this statistic and others on the next screen. Advance to the next screen when you are ready.
+
+Use the code provided in the learn section above for an example of how to call the `summary()` function on a linear model object, if needed. The linear model object `condos_lm_fit` is provided for you.
+
+
+## The t-statistic
+
+As mentioned on the previous screen, one way to determine if $\hat{\beta_1}$  is far enough away from 0 is to estimate the t-statistic, or the number of standard deviations that $\hat{\beta_1}$ is from 0. The t-statistic is provided in the summary() output under the header "t value", but if we want to calculate it manually the equation looks like this:
+
+$$t = \frac{\hat{\beta_1} - 0}{SE(\hat{\beta_1})}$$
+
+
+In the linear model summary for the Uber trips data we observe the t-statistic of 10.34 for $\hat{\beta_1}$, meaning that the estimate for distance is over 10 standard deviations away from 0. Is that far enough from zero that we can reject the null hypothesis and declare that there is a relationship between distance and cost? Yes, it is!
+Using the t-statistic we can feel confident declaring that there is some relationship between distance and cost. How do we know this? We consulted the t-distribution in a statistics textbook to determine that a t-statistic greater than 2.011 is sufficient to reject the null hypothesis at a p-value of 5%. In other words, it is very unlikely the perceived relationship between distance and cost occurred by chance because the observed t-statistic is 10.34 SE's away from 0, well above the threshold of 2.011.
+
+This t-statistic threshold of 2.011 applies to the `uber_trips` dataset and the `williamsburg_north` dataset because each has a total of 50 observations, or 48 degrees of freedom. We won't go into detail on degrees of freedom here, but we'll discuss p-values and how they relate to the t-statistic on the next screen. Recall that we are mainly concerned with the t-statistic and the p-value for slope, because the slope represents the effect of distance on cost.
+
+In the meantime, let's estimate the t-statistic for the condominium sales dataset and see if it matches the `summary()` output.
+
+Note that the value for $\hat{\beta_1}$ can be extracted from a linear model object (called lm_fit here) with:
+
+```{r}
+# lm_fit$coefficients[[2]]
+```
+
+
+And the value for SE ($\hat{\beta_1}$) can be extracted with:
+
+```{r}
+# coef(summary(lm_fit))[, 2][[2]]
+```
+The condos_lm_fit linear model object has been loaded for you.
+
+1. Call the `summary()` function on the linear model object and click the "Run Code" button in the coding interface to view (1) the slope, (2) the SE of the slope estimate, and (3) the t-statistic.
+2. Manually estimate the t-statistic using the `summary()` outputs and the equation provided in the learn section. Save the results to a variable called t_statistic.
+- Input the numeric values from the `summary()` output; do not use indexing to extract the values for SE and $\hat{\beta_1}$.
+3. Does your manual calculation match the `summary()` output "t value"?
+- Assign the value `TRUE` or `FALSE` to a variable called `match`.
+- Consider the manual calculation a "match" if the results are identical to the 3rd decimal place (e.g. 0.000).
+
+```{r}
+t_statistic <- (1926.6 - 0) / 169.5
+```
+
+
+## The p-value
+
+In the previous exercise we calculated a t-statistic of 11.366 for the condos_lm_fit linear linear model. Like with the uber_trips data, this t-statistic is well above the t-distribution threshold of 2.011 meaning that we can reject the null hypothesis and declare that there is a relationship between gross_square_feet and sale_price for the williamsburg_north data.
+
+Related to the t-statistic is the p-value, which is the probability of observing any value equal-to or larger than $t$ if the null hypothesis ($H_0$) is true. The p-value gauges the likelihood that the coefficient is not significant, which means a smaller p-value is better! The p-value is presented in the Coefficients: section of the linear model `summary()` as `Pr(>|t|)`. Returning to the `uber_trips` data, we can observe the p-value with the `summary()` function, or we can extract the p-value with either of the following methods:
+
+
+```{r}
+coef(summary(uber_lm_fit))[, 4][[2]]
+coef(summary(uber_lm_fit))[, "Pr(>|t|)"][[2]]
+```
+
+As a reminder, the e-14 at the end of the number indicates that this number is very small. This is a form of scientific notation called E-notation used by computers and calculators to represent very large and very small numbers. The code below shows the float number that equals the E-notation number we see above:
+
+```{r}
+8.408365e-14 == 0.00000000000008408365
+```
+
+The larger the t-statistic, the smaller the p-value. The p-value we observe above is very small. Generally, we use 0.05 as the cutoff for significance. When p-values are smaller than 0.05, we reject the null hypothesis and declare that there is a relationship between the predictor variable and the response variable.
+
+In the case of the Uber trips data above, we can reject the null hypothesis because the p-value is well-below 0.05. In other words, we can feel confident that there is a relationship between Uber trip `distance` and `cost`.
+
+Remember that we are mainly concerned with the t-statistic and the p-value for slope, because the slope represents the effect of `distance` on `cost`.
+
+You may have noticed the asterisks to the right of `Pr(>|t|)` in the `summary(uber_lm_fit)` output:
+```{r}
+summary(uber_lm_fit)
+```
+This is a useful feature that flags the significance ratings for quick identification
+
+Now let's move on to our exercise where we'll extract the p-value of the slope for the `williamsburg_north` condominium sales data.
+
+
+1. Extract the p-value of the slope from the `condos_lm_fit` model object and assign the results to the variable `p_value`.
+- Hit the "Run Code" button to observe the `p-value`.
+2. Observe the p-value of the slope and determine if the number is small enough that we can reject the null hypothesis and declare that there is a relationship between `gross_square_feet` and `sale_price`.
+- Assign the value `TRUE` or `FALSE` to the variable `reject_null_hypothesis`.
+
+```{r}
+p_value <- coef(summary(condos_lm_fit))[, 4][[2]]
+reject_null_hypothesis <- TRUE
+```
+
+## Confidence Intervals
+
+The standard error (SE) of the slope, $\hat{\beta_1}$, was needed to calculate the t-statistic and the p-value for that parameter. The SE of the coefficients can also be used to estimate confidence intervals for the coefficients. Confidence intervals are useful for giving us an idea of the range of values we can expect to see for each coefficient, $\hat{\beta_0}$ and $\hat{\beta_1}$. A confidence interval of 95% means that there is a 95% probability that the true unknown value of the coefficient will fall within the specified range.
+
+With linear regression, a 95% confidence interval for the intercept is approximately equal to:
+
+
+$$[\hat{\beta_0} - 2 * SE(\hat{\beta_0}), \hat{\beta_0} + 2 * SE(\hat{\beta_0})]$$
+Which can be expressed as:
+
+$$\hat{\beta_0} \pm 2 * SE(\hat{\beta_0})$$
+
+And the 95% confidence interval for the slope approximately equals:
+
+$$\hat{\beta_1} \pm 2 * SE(\hat{\beta_1})$$
+Why approximately? The equations above rely on the assumption that the errors are normally distributed. Also, the factor of 2 in front of SE varies based on the number of observations in the model. In practice when working with R we do not have to concern ourselves with this because R will estimate the confidence intervals for us.
+
+The confidence intervals are not displayed when calling the `summary()` function on a linear model object, but they can be extracted from the model with the `confint()` function. Let's take a look for the `uber_trips` data:
+
+
+```{r}
+confint(uber_lm_fit)
+```
+
+The confidence interval for the intercept can be expressed as [5.112961, 6.579667] which roughly means that if we call an Uber but go a distance of 0 miles, we can expect to pay on average somewhere between \$5.11 and \$6.58. But you may recall from an earlier lesson that we must be careful about making such statements about the intercept when the intercept falls outside the x-axis range of our data. There are no uber_trips observations with a distance of 0 miles in our dataset.
+
+The confidence interval for the slope is [1.251780, 1.856191] which means that, on average, an increase in the distance of an Uber trip by 1 mile will result in an increase in cost of somewhere between \$1.25 and \$1.86.
+
+For this exercise, let's manually calculate the slope confidence intervals for the condos_lm_fit model and compare our results to the confint() output. We will not bother with manually estimating or interpreting the confidence intervals for the intercept because the x-axis value of 0 for the intercept falls well below the range of values observed for gross_square_feet. Also, let's practice our indexing skills for this exercise by using the extracted values in our calculations instead of inputting the numeric values.
+
+Recall that the value for $\hat{\beta_1}$ can be extracted from a linear model object (called `lm_fit` here) with:
+
+```{r}
+# lm_fit$coefficients[[2]]
+
+# coef(summary(lm_fit))[, 2][[2]]
+
+```
+
+
+And the value for SE ($\hat{\beta_1}$) can be extracted with:
+
+Indexing is a better choice than manually inputting the numeric parameters when there is a chance that our model inputs could change in the future. If we use indexing we won't need to worry about updating our calculations if we need to re-run the model!
+
+Utilize the `condos_lm_fit` model object for all steps in this exercise. Remember to use indexing to extract the $\hat{\beta_1}$ and SE($\hat{\beta_1}$) values from the model object.
+
+1. Use the formula provided in the Learn section above to manually calculate the lower bound of the confidence interval for slope.
+- Assign the results to a variable named slope_CI_lower.
+2. Use the formula provided in the Learn section above to manually calculate the upper bound of the confidence interval for slope.
+- Assign the results to a variable named slope_CI_upper.
+3. Extract the confidence interval for slope parameter only using the `confint()` function and assign the results to a variable named slope_CI.
+- Use indexing to select all contents of the `confint()` row that corresponds with slope.
+You may manually calculate the confidence intervals by extracting the values from the `lm()`  object directly, or by entering the float number for each parameter.
+
+```{r}
+slope_CI_lower <- condos_lm_fit$coefficients[[2]] - 2 * 
+  coef(summary(condos_lm_fit))[, 2][[2]]
+
+slope_CI_upper <- condos_lm_fit$coefficients[[2]] + 2 * 
+  coef(summary(condos_lm_fit))[, 2][[2]]
+
+slope_CI <- confint(condos_lm_fit)[2,]
+```
+
+## Residual Standard Error
+
+So far in this lesson we have rejected the null hypothesis for the uber_trips data because the t-statistic was high-enough and the p-value was low enough that we can declare, with confidence, that there is a relationship between $x$ and $Y$, distance and cost. Similarly, we can also declare for the williamsburg_north data that there is a relationship between gross_square_feet and `sale_price`. The next step in the process is to analyze the extent to which the model does or does not fit the data.
+
+
+In the previous lesson we learned how to calculate the residual sum of squares (RSS) - the sum of the squared residuals. Recall that the RSS can be difficult to interpret by itself. We know that this number represents the minimum sum of the squared residuals using the least squares method. And like with the residuals, or the mean absolute error, a smaller RSS means a better model fit than a larger number. But how do we know if we have a good fit?
+
+
+![](https://dq-content.s3.amazonaws.com/456/residuals_wburg.png)\
+
+
+The accuracy (i.e. quality) of a model is generally assessed with two quantities that are related: the residual standard error ($RSE$) and and the r-squared ($R^2$)statistic.
+
+The $RSE$ represents the average amount that our response variable measurements deviate from the true regression line. In other words, the $RSE$ is an estimate of the standard deviation of $\epsilon$. The true value of $\epsilon$ is unknown, but $RSE$ provides and estimate of this value.
+
+In this screen we will learn to calculate and interpret the $RSE$, which is actually considered a measure of the lack of fit of the model. Our knowledge of $RSS$ will be useful here because we need to have an estimate of $RSS$ to calculate $RSE$(and $R^2$, which we will get to on the next screen). Like $RSS$, the $RSE$ tells us how much of the variation in $Y$ our our model did not explain. 
+
+Recall that the $RSS$ is defined by this equation:
+
+
+$$RSS = e_1^2 + e_2^2 + \text{ }... \text{ }+ e_n^2$$
+where:
+
+
+$e_i = y_i - \hat{y}_i$ refers to ith residual.
+
+Or, equivalently:
+
+$$RSS = \sum_{i = 1}^{n}(y_i - \hat{y_i})^2$$
+
+And the formula for $RSE$ is:
+
+
+$$RSE  =  \sqrt{\frac{1}{n - 2}\sum_{i = 1}^{n}(y_i - \hat{y_i})^2}  =  \sqrt{\frac{1}{n - 2}RSS}$$
+
+The $RSE$ for the uber_lm_fit linear regression model is about 1.066. This means that the actual cost of an Uber trip deviates from the true regression line by about \$1.07, on average. Even if our model was correct, and $\beta_0$ and $\beta_1$ were known exactly, we can expect that any prediction of cost as a function of distance would be off by about $1.07 on average.
+
+The $RSE$ is estimated by R when running the `lm()` function and can be extracted from the linear model ouput by calling the `sigma()` function on the model object like this:
+
+
+```{r}
+sigma(uber_lm_fit)
+```
+
+And as a refresher, the code to compute $RSS$ for the uber_trips data is:
+
+```{r}
+# Compute the residual sum of squares (RSS)
+RSS <- uber_trips %>% 
+  summarise(RSS = sum(resid_squared)) %>% 
+  pull()
+# Extract RSS from model output
+RSS_from_lm <- deviance(uber_lm_fit)
+# Check equality
+near(RSS, deviance(uber_lm_fit))
+```
+
+
+Once the $RSS$has been computed, we can compute $RSE$ with a single line of code. But rather than providing example code to manually calculate the $RSE$, we'll work on figuring this out in the exercise.
+
+
+```{r}
+# Compute the residual sum of squares (RSS)
+RSS <- williamsburg_north %>% 
+  summarise(RSS = sum(resid_squared)) %>% 
+  pull()
+# Extract RSS from model output
+RSS_from_lm <- deviance(condos_lm_fit)
+# Optional: check RSS equality
+near(RSS, deviance(condos_lm_fit))
+# Manual RSE
+RSE <- sqrt(RSS / (nrow(williamsburg_north) - 2))
+# Alternate method for RSE
+# RSE <- sqrt(1 / (nrow(williamsburg_north) - 2) * RSS)
+lm_fit_sigma <- sigma(condos_lm_fit)
+are_equal <- near(RSE, lm_fit_sigma)
+```
+
+## The R-squared Statistic
+
+The $RSE$ statistic we estimated on the previous screen is an absolute measure of the lack of fit of the model. But because $RSE$ is measured in the units of $Y$ it can be difficult to interpret. For example, we calculated an $RSE$ of $308,446$ in our analysis of sale_price on the basis of gross_square_feet. Is that a high level of lack of fit, or is that an acceptable error level? We may need to consider another quality statistic to decide.
+
+
+Another statistic that is used to assess the quality of linear model fit is $R^2$. The $R^2$ statistic is a measure of the proportion of the variability in our response variable that can be explained by the predictor variable. The $R^2$ value falls between 0 and 1, so it can be easier to interpret than $RSS$ or $RSE$. Unlike $RSE$, the $R^2$ statistic is independent of the scale of the response variable $Y$. 
+
+A larger value for $R^2$ generally indicates a better fit. In contrast, an $R^2$ close to 0 indicates that little-to-no variability in the response variable is explained by the regression.
+
+Once again, knowledge of $RSS$will be useful because we need to have an estimate of $RSS$ to calculate $R^2$. Mathematically, $R^2$ is expressed as the fraction of the variance of the dependent variable $Y$  that is explained by the regression model:
+
+
+
+$$R^2 = \frac{\text{Variance explained by the model}}{\text{Total variance}} = \frac{TSS - RSS}{TSS} = 1 - \frac{RSS}{TSS}$$
+
+where TSS (the total sum of squares) is:
+
+$$TSS = \sum_{i = 1}^{n}(y_i - \bar{y})^2$$
+The $R^2$ statistic can be extracted from the uber_lm_fit model object like this:
+
+
+```{r}
+summary(uber_lm_fit)$r.squared
+```
+This result means that our bivariate linear model predicting cost on the basis of distance explains 0.69, or 69% of the variability in $Y$. Generally it is better to look at $adjusted-R^2$ rather than $R^2$. The $adjusted-R^2$ is an unbiased estimator that corrects for the number of variables in our model. Fortunately, the $adjusted-R^2$ value is readily accessible in R:
+
+```{r}
+summary(uber_lm_fit)$adj.r.squared
+```
+So what is considered a good, or a high $R^2$ value? Unfortunately, the unsatisfying answer is it depends!. Interpreting $R^2$ values is beyond the scope of this course, but here are a few important takeaways about $R^2$:
+
+
+- A high $R^2$ is not always a good thing - it is possible to have a high $R^2$ value with a model that systematically over and/or under-estimates the predictions. Always remember to plot the residuals because doing so can reveal obvious patterns such as systematic over or under-estimations!
+- A low $R^2$ is not always a bad thing - certain fields of study contain higher amounts of unmeasurable or unexplainable variation in which case a low $R^2$ value is to be expected. Examples include fields like sociology, marketing and psychology that deal with human behavior.
+- $R^2$ always increases as more variables are included in the model $adjusted-R^2$ accounts for the number of independent variables used to make the model. This is not as relevant to bivariate linear regression, but it is worth keeping in mind when performing multivariate regressions. A high $R^2$  value can indicate an overfit model, which is a model that follows the noise (i.e. error) too closely.
+
+
+The $RSS$ calculated on the previous screen for the condominium sales dataset has been loaded for you.
+
+
+1. Manually estimate the total sum of squares (TSS) using the formula provided in the Learn section above and save the results to an object called TSS.
+
+
+
+2. Manually estimate the $R^2$  value using the formula provided in the Learn section above and save your results to a variable called `r_squared`.
+
+3. Extract the $R^2$ value from the linear model object and save the results to a variable called `lm_r_squared`.
+
+4. Use the `near()` function from dplyr to check equality the of your manual calculation of $R^2$ with the `lm()` output. Save the results to a variable called are_equal.
+5. Extract the $adjusted-R^2$ value from the linear model output and save the results as `adj_r_squared`.
+
+Take a look at the $R^2$ value that you calculated manually and verify that it matches the $R^2$ value extracted from the linear model object.
+
+```{r}
+# Compute the residual sum of squares (RSS)
+RSS <- williamsburg_north %>% 
+  summarise(RSS = sum(resid_squared)) %>% 
+  pull()
+TSS <- sum((williamsburg_north$sale_price - 
+              mean(williamsburg_north$sale_price))^2)
+
+r_squared <- 1 - RSS/TSS
+
+lm_r_squared <- summary(condos_lm_fit)$r.squared
+
+are_equal <- near(r_squared, lm_r_squared)
+
+adj_r_squared <- summary(condos_lm_fit)$adj.r.squared
+```
+
+## R-squared and Correlation
+ 
+In the exercise on the last screen we calculated an $R^2$ value of 0.7291057 for sale_price on the basis of gross_square_feet for the williamsburg_north data. This 
+$R^2$value means that nearly 73% of the variability in sale_price can be explained by the regression model. This value for $R^2$ suggests that for the Williamsburg-North neighborhood of Brooklyn, gross_square_feet does a reasonable job predicting sale_price for the type of condominiums we are evaluating. But this may not come as too much of a surprise if we recall the correlation coefficient of 0.8538769 we observed between gross_square_feet and sale_price in an earlier lesson.
+
+Recall that correlation is useful in the context of bivariate linear regression because it quantifies the association between two variables. Correlation is one way to measure the linear relationship between two variables. In this screen we will see that with bivariate linear regression the squared value of correlation coefficient is equal to $R^2$.
+In many cases, the predictor with the highest correlation coefficient to the response may be the best choice for our bivariate regression model. However, in the case of the uber_trips dataset we did not have another quantitative variable available to consider. And with the williamsburg_north dataset we observed with a line chart and a scatterplot there was no obvious relationship between year_built and sale_price.
+
+![](https://dq-content.s3.amazonaws.com/457/year_built_scatter.png)\
+
+We learned earlier that correlation does not consider the cause-and-effect relationship between two variables, so we do not need to specify a dependent and independent variable. Correlation analysis results are identical regardless of which variable is input to the `cor()` function as `vector_1` or `vector_2`:
+
+```{r}
+# cor(vector_1, vector_2, use = "pairwise.complete.obs")
+```
+Let's calculate the correlation coefficient for the sale_price and gross_square_feet variables, square the result, and see how it compares to $R^2$ from the `lm(condos_lm_fit)` output:
+
+```{r}
+correlation <- cor(williamsburg_north$sale_price, williamsburg_north$gross_square_feet)
+correlation
+
+r_squared <- summary(condos_lm_fit)$r.squared
+r_squared
+
+
+# Square the correlation coefficient and check equality 
+near(correlation^2, r_squared)
+```
+
+
+Correlation analysis is called for when there is no dependence between two variables. Regression analysis can be performed when the magnitude of the dependent variable is a function of the magnitude of the independent variable.
+
+
+
+# 5. Fitting Many Linear Models
+
+## Intro
+
+Congratulations for making it to this lesson of the course! So far we've learned the fundamentals of predictive modeling, explored bivariate relationships with scatterplots and correlation, built linear regression models, and we've evaluated the summary statistics and the model quality. We now have a solid understanding of bivariate linear regression that will provide us with a solid foundation for progressing into more complex modeling and machine learning techniques.
+
+We've seen that the `lm()` function in R provides a wealth of information about our linear models, but the output is cumbersome to work with:
+
+
+```{r}
+summary(condos_lm_fit)
+```
+
+
+Summary statistics and error metrics can be extracted from the model object output with indexing or helper functions like `coefficients()`, but this interrupts our workflow. What if we need to develop numerous linear models, and compare their results? And what if, for example, we want to perform linear regressions of sale_price on the basis of gross_square_feet for condominiums in each Brooklyn neighborhood individually? Let's learn how to do this with powerful tidyverse tools!
+
+In this lesson we will learn how to scale-up our linear regression modeling skills by fitting many linear models at once using tidyverse tools. Up to this point in our Dataquest learning journey we've spent a lot of time working with tidyverse tools and tidy data, but the `lm()` output is definitely not tidy! Fortunately the broom package in R was developed to make working with many tidy models possible. Let's get started.
+
+
+## Tidy model outputs with broom::tidy()
+
+
+As discussed on the previous screen, the lm() output is not tidy data. The broom package takes the messy output of built-in modeling functions in R, such as `lm()` and returns a tidy dataframe. With the data in a tidy format we are able to leverage the tidyverse tools that we know, and some tidyverse tools that we don't yet know to build and compare many linear models.
+
+The broom package tidies the outputs of more than one hundred models, so the knowledge gained in this lesson applies broadly to modeling in R, not just to `lm()` output. The broom package includes three functions, which are:
+
+- `tidy()`: summarizes information about model components such as coefficients and p-values.
+
+- `glance()`: reports summary information about the entire model such as the coefficient of determination ($R^2$), and  residual standard error ($RSE$)
+
+- `augment()`: adds information about observations to a dataset such as predictions and residuals.
+
+These functions are detailed in this vignette. The broom package works well with tidyverse tools, namely with functions from the dplyr, tidyr and purrr packages. In fact, broom becomes a much more powerful analysis tool because of its compatibility with tidyverse tools as described in this vignette.
+
+In this lesson we will start by exploring a single function from the broom package, `tidy()` function, and then we will combine the function with tidyverse tools to generate many linear models.
+
+The `tidy()` function returns the summarized information about the components of a model. The `tidy()` function requires x, a model object, as input and includes an optional argument for confidence intervals. In the example below, lm_fit refers to any lm object created by `lm()`:
+
+```{r}
+tidy(x = uber_lm_fit)
+```
+The output from tidy() is much easier to digest than the standard lm object summary()output, which we will see in this exercise. And because the format is a tidy dataframe where each row is an observation and each column is a variable, we can combine this output with other models. In other words, we can stack many model outputs together in a single dataframe. We'll get to that later in the lesson.
+
+The following statistics are returned by default with the tidy() function when a model is generated by the `lm()` function:
+
+
+
+
+- `estimate`: slope and intercept
+- `std.error`: the standard error (SE) of the coefficients
+- `statistic`: the t-statistic
+- `p.value`: the p-value of the t-statistic
+
+There is an optional `conf.int` argument that is set to `FALSE` by default. When the optional `conf.int` argument is set to `TRUE` the following variables are returned as well:
+
+- `conf.low`: lower bound of 95% confidence interval
+- `conf.high`: upper bound of 95% confidence interval
+
+
+Note that the confidence interval is set to 0.95 or 95% by default, but this can be changed with the optional `conf.level` function argument.
+
+Recall that the `lm()` output is stored as a list. It takes considerable work to convert `lm()` output to a dataframe. We learned in the previous lesson that to obtain the information bulleted above, we can view the same information with the `summary()` function:
+
+```{r}
+summary(condos_lm_fit)
+```
+And with the `confint() `function:
+
+```{r}
+confint(condos_lm_fit)
+```
+
+
+Note we've only included a portion of the `summary()` output! The tidy dataframe returned by the broom function `tidy()` contains much of the same information above in a more usable format. For example, here is a look at the tidy dataframe we will generate in this exercise:
+
+```{r}
+
+condos_lm_fit <- lm(sale_price ~ gross_square_feet, data = williamsburg_north)
+
+condos_lm_tidied <- tidy(x = condos_lm_fit, conf.int = TRUE)
+
+print(condos_lm_tidied)
+```
+## Introducing the datasets
+
+
+Now that we've covered the basics of the `tidy()` function from the broom package, we will learn how to combine the functions with tidyverse tools to scale-up the functionality. But first let's take a quick look at the results from our previous exercise where we tidied the `williamsburg_north` dataframe with statistics resulting from modeling `sale_price` as explained by `gross_square_feet`. When we view the structure of the dataframe, we can see that there is one row for statistics associated with the intercept estimate, and one row for statistics associated with the slope estimate:
+
+When the goal is to generate many linear models, the `tidy()` process (or `broom::augment()` and `broom::glance()`) can be applied to each model/data combination individually. In the example above, the model is a linear regression of sale_price explained by gross_square_feet and the data is the `williamsburg_north` dataframe only. In the exercises for this lesson we will perform linear regressions of sale_price explained by gross_square_feet for 10 Brooklyn neighborhoods at once! It's okay if this sounds intimidating. We'll break down the process step-by-step.
+
+We will work with two datasets in this lesson. For teaching purposes, we provide examples using a dataset called williamsburg_condos that contains all sale records for condominiums in the four Williamsburg neighborhoods. This teaching dataset will allow us to explore the process of generating linear models for the four distinct Williamsburg neighborhoods.
+
+In the exercises, we will use a larger dataset called `brooklyn_top_ten` that contains condominium sale records for the 10 Brooklyn neighborhoods with the highest number of condominium sale records. To improve your understanding of these two datasets, here is the code we used to generate the `brooklyn_top_ten` dataframe:
+
+
+
+```{r}
+brooklyn_top_ten <- brooklyn_sales %>% 
+  # Select only distinct observations (no duplicates)
+  distinct() %>% 
+  # Remove transactions assumed to be between family members
+  filter(sale_price > 10000) %>% 
+  # Choose only condominiums in a building with an elevator
+  filter(building_class_at_time_of_sale == "R4") %>% 
+  # Group data by neighborhood
+  group_by(neighborhood) %>% 
+  # Drop NA values in predictor or response variables
+  drop_na(c(gross_square_feet, sale_price)) %>%
+  # Top 10 neighborhoods have 54 or more sales
+  filter(n() >= 54) %>% 
+  # Return dataframe to ungrouped structure
+  ungroup()
+```
+
+The filters applied to generate the smaller williamsburg_condos dataset are similar. The number of sale records for the four Williamsburg neighborhoods range between 50 and 175. Here is a scatterplot that visualizes the relationship between sale_price and gross_square_feet for each of the four neighborhoods:
+
+
+![](https://dq-content.s3.amazonaws.com/458/williamsburg_scatter.png)\
+
+For this exercise let's familiarize ourselves with the brooklyn_top_ten data by generating a scatterplot similar to the one shown above. But the plot we generate in this exercise will include the top 10 Brooklyn neighborhoods. This is an experimentation screen, so you are free to generate the plot however you prefer.
+
+
+## Nested data
+
+Now that we've familiarized ourselves with our teaching dataset and the dataset we'll be working with in the exercises, let's learn how to generate many linear models with broom. The broom package offers three functions, but to start we will focus our attention on using the `tidy()` function. And more specifically our aim will be to extract the slope estimate, $\hat{\beta}_1$, for the model we generate for each neighborhood.
+
+The R code that we are about to learn is elegant and concise. But to comprehend what is going on requires an understanding of data structures, modeling, and iteration. We are about to learn advanced computational techniques, so it's okay if this material seems challenging to grasp at first.
+
+The next step to learn how to generate many linear models with broom is to learn about nested data. Nested data is central to the workflow with broom. As described in the documentation, nesting is performed with the function `nest()` from the tidyverse tidyr package. Nesting uses a categorical variable to partition a single dataframe into a "list-column" of many dataframes. What this means is that nesting creates a dataframe that has one row per group, or category (neighborhood in our case), and the dataframe contains a special list-column data where each observation is itself a dataframe! This animation illustrates the data transformation:
+
+
+![](https://dq-content.s3.amazonaws.com/458/unnest_animate_neighborhood.gif)\
+
+Let's look at an example to make sense of this. Using the williamsburg_condos dataframe as an example, nesting the dataframe by neighborhood creates a new dataframe with one row per neighborhood (williamsburg_condos contains four distinct neighborhoods). And this new dataframe contains a list-column called data where each observation is itself a dataframe. Here is the code to generate this nested dataframe that we will call williamsburg_nested:
+
+
+
+
+```{r}
+williamsburg_condos <- read_csv("williamsburg_condos.csv")
+williamsburg_nested <- williamsburg_condos %>% 
+  group_by(neighborhood) %>% 
+  nest()
+print(williamsburg_nested)
+```
+
+As described in the code above, we group the data by neighborhood, and then nest, or create a list-column, that contains one dataframe in each row. Each row represents a distinct neighborhood. Let's have a look at what is returned when we print `wiliamsburg_nested`:
+
+As we can see in the output, williamsburg_nested is a dataframe, specifically a tibble, with four observations and two variables. Each observation represents a neighborhood in Williamsburg, Brooklyn. The data variable is a list-column where each observation is itself a dataframe. The numbers in brackets (`[]`) indicate the dimensions of each dataframe "nested" in the list-column. For example the nested dataframe for Williamsburg-North is 175 observations and 18 variables. And because this is a dataframe, we can extract the contents with indexing. For example, here's the code to examine the nested dataframe for the Williamsburg-North neighborhood, the third observation in the data list-column:
+
+
+```{r}
+print(williamsburg_nested$data[[3]])
+```
+
+
+Note that the tibble print output above is limited to native R environments such as working with R Studio or with R at a command-line interface. We encourage you to download the datasets available for this lesson and replicate the code on your own machine so that you can experiment with exploring nested data.
+
+Nesting is a summarizing operation. We get one row for each categorical variable that we nest by. This is particularly useful with models because models work with whole datasets. For example, to perform a linear regression of sale_price explained by gross_square_feet for Williamsburg-North, we need to work with all sale records available for that neighborhood and only that neighborhood.
+
+In the case of the various Brooklyn real estate datasets we are working with, nesting facilitates generating many models because it enables us to repeat a modeling action (e.g. sale_price explained by gross_square_feet) for each neighborhood individually. And in this case, each neighborhood contains a different subset of rows.
+
+The opposite action unnesting, which is executed with the `unnest()` function flattens the data back out into regular columns. In other words, unnesting reverses the nesting process. We will work with unnesting later in the lesson.
+
+In the meantime, let's practice working with this powerful data structure, nested dataframes.
+
+
+
+```{r}
+brooklyn_nested <- brooklyn_top_ten %>% 
+  group_by(neighborhood) %>% 
+  nest()
+
+# Return neighborhood name with:
+brooklyn_nested$neighborhood[[6]]
+
+# Return dataframe for Madison
+Madison <- brooklyn_nested$data[[6]]
+```
+
+## Generate many linear models
+
+The next step in the process is to apply a linear regression model to each row in the dataframes we are working with. But first let's reflect on the structure of the `brooklyn_nested` dataframe we generated in the previous exercise. If we print `brooklyn_nested` in R Studio, the results look like this:
+
+```{r}
+print(brooklyn_nested)
+```
+
+Here we can see that the sixth element in the list is the neighborhood of Madison and the associated dataframe stored in the data variable is 85 observations and 18 variables. The variable Madison we created in the previous exercise is similar to using `filter(neighborhood == "Madison")` to subset these rows from the original dataframe (the only difference is the nested dataframe does not contain the neighborhood variable).
+
+With the data in a nested format like this we are now able to apply a linear model with the `lm()` function to each nested dataframe in the data column. But first let's see how this fits into the typical 4-step process with broom.
+
+The general workflow using broom and tidyverse tools to generate many models involves 4 steps:
+
+1. Nest a dataframe by a categorical variable - in our examples we nested by neighborhood.
+2. Fit models to nested dataframes with the `map()` function - we'll do that next!
+3. Apply the `broom` function `tidy()`, `augment()`, and/or `glance()` using each nested model - we'll work with `tidy()` first.
+4. `unnest()` to a tidy dataframe - this allows us to see the results.
+
+Now that we've completed step 1, we're ready for step 2. Recall that comprehending what is going on when using broom and tidyverse tools requires an understanding of data structures, modeling, and iteration. In this next step, we discuss all three of those items. Specifically, we are about to iterate over each nested dataframe to model sale_price as explained by gross_square_feet for each neighborhood individually, and store the results in a list-column data structure of model outputs.
+
+Stated in more familiar terms, we are going to use the `map()` function from purrr to iterate over each row in the data column and generate a linear model with the `lm()` function. We'll use the `mutate()` function from dplyr to add a new column called `linear_model` where we store the results of each linear model performed for each neighborhood. Because we are using `mutate()` to add a variable the dataframe we are working with, we can build-on our previous code using the pipe operator (%>%) like this:
+
+```{r}
+williamsburg_nested <- williamsburg_condos %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, 
+                            data = .)))
+```
+
+With the `mutate()` call we have added the new column linear_model to our dataframe. Recall that the `map()` function takes the following arguments:
+
+```{r}
+# map(.x, .f, ...)
+```
+
+
+where:
+
+- `.x` is a list or atomic vector.
+- `.f` is a function, formula, or vector.
+- `...` refers to additional arguments passed on to the mapped function.
+
+The `~` symbol before the `lm()` call indicates that we are providing a formula to `map()`. So what is going on with the `lm()` function argument `data = .`? Essentially the data to be used in each `lm()` call has already been provided to the `map()` call with the argument `.x = data`, so the dot accessor (`.`) is essentially a placeholder for the data variable that has already been passed in. The dot (`.`) represents each item in the `data` list.
+
+This graphic illustrates the process of fitting a linear model to each nested dataframe:
+
+![](https://dq-content.s3.amazonaws.com/458/lm_map_neighborhoods.svg)\
+
+Now when we print the `williamsburg_nested` dataframe we see the new column `linear_model`:
+
+```{r}
+print(williamsburg_nested)
+```
+We now have linear regression results for all four Williamsburg neighborhoods! The new linear_model column is also a list-column like the data column. This linear_model variable is a list of lists, where each observation represents an `lm()` output. We can access the linear model lists in the same way that we looked at the nested dataframe on the previous screen:
+
+```{r}
+print(williamsburg_nested$linear_model[[3]])
+```
+
+Doing so provides us with a summary of the model inputs and the estimated coefficients. If we want to view the full `lm()` summary for the Williamsburg-North neighborhood we can do that too, like this:
+
+```{r}
+summary(williamsburg_nested$linear_model[[3]])
+```
+
+But as we already know, the output from `summary()` is quite long, so we'll avoid showing that here! Instead, let's apply what we've learned here with the `brooklyn_nested` dataframe.
+
+```{r}
+brooklyn_nested <- brooklyn_top_ten %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, data = .)))
+```
+
+
+## Returning tidy model outputs
+
+Nice work making it this far in the lesson! This is challenging content to learn, but these coding techniques will allow us to rapidly scale-up our modeling output. Remember that we can always check our results along the way with indexing to see what is contained in the list-column.
+
+Now that we have a list of lists that contains our linear model results for each neighborhood, let's use the tidy() function from broom to output the results as a single tidy dataframe. Here's how the structure of the brooklyn_nested dataframe we generated in the previous exercise looks:
+
+```{r}
+print(brooklyn_nested)
+```
+In the previous screen we learned that we can access each of the `linear_model` list-column outputs individually to inspect linear regression statistics. But the current format does not allow us to quickly compare the results from the many models. We can access the linear model output for the Madison neighborhood with:
+
+
+```{r}
+summary(brooklyn_nested$linear_model[[6]])
+```
+
+
+But this process only allows us to look at results for one model at a time. Fortunately, with the `tidy()` function we can generate a tidy dataframe for each model that includes statistical summaries. This tidy data structure will allow us to `unnest()` the tidy data summaries to a single dataframe. We'll work with the `unnest()` function in the next exercise, for now let's learn how we use the `tidy()` function to generate tidy data summaries. We'll continue using our `williamsburg_nested` dataframe for the teaching examples.
+
+Here's where we left off on the previous screen:
+
+Let's continue to build on this work by adding a new column to the `williamsburg_nested` dataframe that contains tidied regression model outputs. The `tidy()` function returns the summarized information about the components of a model. The `tidy()` function requires x, a model object as input and includes an optional argument for confidence intervals. In the example below lm_fit refers to any lm object created by `lm()`.
+
+We've specified `conf.int = TRUE` above to return 95% confidence intervals, but recall that `conf.int = FALSE` is the default. To apply the `tidy()` function to the `williamsburg_nested` dataframe, we use the `mutate()` and `map()` combination like we did to add the `linear_model` variable. But in this case `.x`, the list to input to `map()`, is `linear_model`, and `.f`, the function to input is `tidy()`. Also, we want to return confidence intervals in our output so we need to specify the optional function argument `conf.int = TRUE` to the right of the `.f` function, like this:
+
+```{r}
+williamsburg_nested <- williamsburg_condos %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, 
+                            data = .))) %>% 
+  mutate(tidy_coefficients = map(.x = linear_model, 
+                              .f = tidy, 
+                              conf.int = TRUE))
+```
+
+Now the williamsburg_nested dataframe contains yet another new list-column tidy_coefficients where each observation is a tibble that contains summary statistics associated with the coefficients:
+
+```{r}
+print(williamsburg_nested)
+```
+Once again, let's examine the list-column results for the Williamsburg-North dataframe:
+
+
+
+```{r}
+print(williamsburg_nested$tidy_coefficients[[3]])
+```
+
+This graphic illustrates the process of generating a tidy dataframe of coefficients estimates for each linear model object:
+
+
+![](https://dq-content.s3.amazonaws.com/458/tidy_map_neighborhoods.svg)\
+
+
+This tidy data structure will allow us to combine the results of many models into a single dataframe. We'll learn that process in the next exercise, but for now let's practice applying the `tidy()` function to the brooklyn_nested dataframe.
+
+```{r}
+brooklyn_nested <- brooklyn_top_ten %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, 
+                                     data = .))) %>%
+  mutate(tidy_coefficients = map(.x = linear_model, 
+                              .f = tidy, 
+                              conf.int = TRUE))
+```
+
+## Unnesting to return tidy data summaries
+
+As we have seen, list-columns are useful data structures because they enable us to iterate over each observation in a dataframe with `map()` and to apply a function like `lm()` or `tidy()`. But now that we have the list-column `tidy_coefficients` of tidied model summaries how do we access the data? Once again let's check out our results for the Madison neighborhood:
+
+```{r}
+print(brooklyn_nested$tidy_coefficients[[6]])
+```
+
+There is a lot of useful information above, and the output is more concise than if we had used `summary()` and `confint()` to view the same information. So how do we return the tidy summary information for all models into one place? We use the `unnest()` function from the tidyr package on the `tidy_coefficients` variable. The `unnest()` function flattens a list-column variable in to a regular dataframe. This animation illustrates the data transformation:
+
+
+![](https://dq-content.s3.amazonaws.com/458/unnest_animate_neighborhood.gif)\
+
+For our purposes, we need to provide two inputs to the `unnest()` function:
+
+```{r}
+# unnest(data, cols)
+```
+
+Where data is the dataframe with the data to unnest, and cols refers to the name of the columns to unnest. And as with other tidyverse functions, if we pass the dataframe in through a pipe operation (%>%), there is no need to specify the data argument.
+
+Let's learn how to unnest our tidy model summaries for the `williamsburg_nested` dataframe. Here is the code to generate a new dataframe called `williamsburg_coefficients`:
+
+
+```{r}
+williamsburg_coefficients <- williamsburg_nested %>% 
+  select(neighborhood, tidy_coefficients) %>% 
+  unnest(cols = tidy_coefficients)
+print(williamsburg_coefficients)
+```
+
+We've produced a single, tidy dataframe of coefficients and associated summary statistics for all four Williamsburg neighborhoods! Note that we use the `select()` function to select only the variables we want data from, which are neighborhood and `tidy_coefficients`. This drops the data and `linear_model` list-columns. Equivalently, we can use this code to produce the same result.
+
+Now that this model summary information is in a tidy format we can use standard dplyr wrangling methods, such as this approach for returning only the slope coefficients arranged in ascending order:
+
+
+```{r}
+williamsburg_slope <- williamsburg_coefficients %>% 
+  filter(term == "gross_square_feet") %>% 
+  arrange(estimate)
+print(williamsburg_slope)
+```
+
+Wow, there is a lot of information here! Using the knowledge we've gained in this course we can make the following statements about the data above:
+
+
+- We can reject the null hypothesis ($H_0$)  for each of the four Williamsburg neighborhoods and declare that there is a relationship between `gross_square_feet` and `sale_price` in each case. We can reach this conclusion by looking at either the t-statistic (statistic) or the p.value variable.
+- With regards to the t-statistic, we can reject the null hypothesis if the statistic value is greater than approximately 2.0. This number varies for each neighborhood based on $n$, the number of observations in each dataframe, as determined using the t-distribution.
+- Fortunately, the p-value threshold does not vary between neighborhood, so a p-value below 0.05 means we can reject the null hypothesis.
+- The slope estimate ($\hat{\beta}_1$) varies greatly between the four Williamsburg neighborhoods. For example, in Williamsburg-Central we can expect an increase in sale_price of about $185$, on average, for every 1-square-foot increase in size. Whereas the increase per square foot is estimated at around $1,367$ in Williamsburg_north!
+
+We can also view the confidence intervals because we specified the optional argument to return the 95% confidence intervals. How do the slopes compare between the 10 neighborhoods in our brooklyn_nested dataframe? Let's find out.
+
+
+```{r}
+brooklyn_coefficients <- brooklyn_nested %>% 
+  select(neighborhood, tidy_coefficients) %>% 
+  unnest(cols = tidy_coefficients)
+
+brooklyn_slope <- brooklyn_coefficients %>%   
+  filter(term == "gross_square_feet") %>% 
+  arrange(estimate)
+```
+
+
+## Tidy summary statistics with broom::glance()
+
+Before we move on to generating tidy summary statistics with another broom function, let's reflect on the results of the previous exercise where we generated a tidy summary of coefficients and associated values. Here are the results:
+
+```{r}
+print(brooklyn_slope)
+```
+
+Like with the williamsburg_condos data, we see a wide range in slope estimates across the neighborhoods. Also, the large t-statistic values, and small p-values mean that there is a relationship between gross_square_feet and sale_price for each neighborhood.
+
+Now let's check out the `glance()` function from broom. The `glance()` function reports summary information about the entire model such as $R^2$, $adjusted-R^2$, and residual standard error ($RSE$). The glance() function returns exactly 1 row for each model and each variable (column) represents a model summary statistic. The glance() function takes a single input, x, which is a lm object:
+
+```{r}
+# glance(x = lm_fit)
+```
+
+Calling the `glance()` function on an lm object returns the following summary statistics that we've learned about in this course:
+
+- `r.squared`: $R^2$ statistic, or the percent of variation explained by the model. Also known as the coefficient of determination.
+- `adj.r.squared`: $Adjusted-R^2$ statistic, which is like the $R^2$ statistic except taking degrees of freedom into account.
+- `sigma`: Estimated standard error ($RSE$) of the residuals.
+- `statistic`: Test statistic.
+- `p.value`: P-value corresponding to the test statistic.
+- `deviance`: Residual sum of squares ($RSS$) of the model.
+
+
+This function also returns a few other summary statistics that we will not cover in this course that are mentioned in the function documentation. To view the summary statistics bulleted above we would have to call `summary()` and `deviance()` on the lm object:
+
+```{r}
+summary(condos_lm_fit)
+```
+
+Once again we have to visually scan through a lot of information to obtain the value for each summary statistic and the information is difficult to access. Fortunately, the `glance()` function can help us in this situation by returning a single-row dataframe of key linear model summary statistics. Let's practice using this function by generating a new list-column of tidy summary statistics for each model, and then unnesting the results to a tidy dataframe of summary statistics.
+
+This graphic illustrates the process of generating a tidy dataframe of regression summary statistics for each linear model object:
+
+![](https://dq-content.s3.amazonaws.com/458/glance_map_neighborhoods.svg)\
+
+We won't review the coding steps required to generate the new list-column and then unnest the column to a tidy dataframe because the general approach is the same as what we completed in the previous exercises with the `tidy()` function from broom.
+
+```{r}
+
+brooklyn_nested <- brooklyn_top_ten %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, 
+                                     data = .))) %>%
+  mutate(tidy_coefficients = map(.x = linear_model, 
+                                 .f = tidy, 
+                                 conf.int = TRUE)) %>% 
+  mutate(tidy_summary_stats = map(.x = linear_model,
+                                  .f = glance))
+
+brooklyn_summary_stats <- brooklyn_nested %>% 
+  select(neighborhood, tidy_summary_stats) %>% 
+  unnest(cols = tidy_summary_stats)
+```
+
+## Augment dataframes with broom::augment()
+
+In this screen we will learn how to add regression statistics to each row in a dataframe, but first let's take a look at the results from the previous exercise where we used the `glance()` function from broom to return a single row of summary statistics for our linear models. Here's the code and the output:
+
+```{r}
+print(brooklyn_summary_stats) 
+```
+Looking at the results above we observe a wide range in `r.squared` and `adj.r.squared` values across neighborhoods. The $R^2$  statistic is a measure of the proportion of the variability in our response variable that can be explained by the predictor variable. A larger value for $R^2$ generally indicates a better fit. In contrast, an $R^2$ close to 0 indicates that little-to-no variability in the response variable is explained by the regression.
+
+The $R^2$ statistic does not tell the whole story about model fit. But looking at the results above we can say that gross_square_feet explains a greater proportion of the variability in sale_price for the Prospect Heights neighborhood, $(R^2 = 0.858)$, as compared to the Gravesend neighborhood,$(R^2 = 0.410)$.  Investigating the difference in observed $R^2$ values between neighborhoods is a good example of an inference question.
+
+Now let's check out the third and final function from the broom package, the `augment()` function.
+
+Unlike `tidy()` and `glance()` that return a new dataframe generated from an lm object, the `augment()` function adds-to, or augments whichever dataframe we input to our linear model. The `augment()` function requires a model object `x = `and a dataframe `data =` as input. In the example below `lm_fit` refers to any lm object created by `lm()` and `df` refers to a dataframe:
+
+
+
+```{r}
+# augment(x = lm_fit, data = df)
+```
+
+This function adds variables to a dataframe, and for each variable information is added about each observation (row) in the dataset. The new variables and their descriptions are:
+
+- `.fitted`: Fitted or predicted value, on the same scale as the data.
+- `.resid`: The difference between fitted and observed values.
+- `.se.fit`: Standard errors of fitted values.
+- `.sigma`: Estimated residual standard deviation when corresponding observation is dropped from model.
+- `.std.resid`: Standardised residuals.
+- `.cooksd`: Cooks distance.
+- `.hat`: Diagonal of the hat matrix.
+
+Some of the variables above describe information that we haven't learned about and that is beyond the scope of this course. Most relevant to us at this point in our learning journey is the predictions (`.fitted`) and the residuals (`.resid`) variables.
+
+Notice that the `augment()` function requires two arguments, a `lm` object and a dataframe. For this reason we need to use the `map2()` function from `purrr`.
+
+```{r}
+# map2(.x, .y, .f, ...)
+```
+
+where:
+
+- `.x` and .y are vectors of the same length.
+- `.f` is a function, formula, or vector.
+- `...` refers to additional arguments passed on to the mapped function.
+
+In this case `.x` is a `lm` object for each neighborhood and `.y` is the list-column object data for each neighborhood. We need to supply these two arguments because we want to augment the data for each neighborhood individually based on the linear model results for that neighborhood only. In other words, the augmented data is generated based on the estimated model coefficients, slope and intercept, specific to that neighborhood.
+
+Let's see how this works. It's been a long lesson packed with a lot of information, so we'll show you here how to generate the new list-column of augmented dataframes. But we'll leave it up to you to unnest this new list column into a single dataframe. The code below shows how we can use `mutate()` and `map2()` to add yet another list column to the `brooklyn_nested` dataframe:
+
+
+```{r}
+brooklyn_nested <- brooklyn_top_ten %>% 
+  group_by(neighborhood) %>% 
+  nest() %>% 
+  mutate(linear_model = map(.x = data, 
+                            .f = ~lm(sale_price ~ gross_square_feet, 
+                                     data = .))) %>%
+  mutate(tidy_coefficients = map(.x = linear_model, 
+                                 .f = tidy, 
+                                 conf.int = TRUE)) %>% 
+  mutate(tidy_summary_stats = map(.x = linear_model,
+                                  .f = glance)) %>% 
+  mutate(data_augmented = map2(.x = linear_model, 
+                          .y = data, 
+                          .f = augment))
+```
+
+
+We find it's easier to keep building on the `brooklyn_nested` dataframe because we require the data variable from the nesting operation and the linear_model variable from the regression operation. Now we're ready to unnest the new `data_augmented` variable into a dataframe that contains the original `brooklyn_top_ten` data plus the new regression statistics.
+
+This graphic illustrates the process augmenting dataframes with regression information from a linear model object:
+
+![](https://dq-content.s3.amazonaws.com/458/augment_neighborhoods.svg)\
+
+```{r}
+brooklyn_augmented <- brooklyn_nested %>%
+  select(neighborhood, data_augmented) %>% 
+  unnest(data_augmented)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,2713 @@
+---
+title: "2. Intermediate Statistics"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: "--lua-filter=color-text.lua"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(tinytex)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. The Mean
+
+## Introduction
+
+In the last course, we completed the workflow illustrated below. We learned to use frequency distribution tables to bring the data to a comprehensible form to find patterns.
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_last_course.svg)\
+
+Frequency tables, however, are not the only way of bringing data to a comprehensible form.
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_intro.svg)\
+
+Throughout this course, we'll learn to summarize the distribution of a variable with a single value. Depending on the particular characteristics of a distribution, we'll see that we can summarize it using the mean, the weighted mean, the median, or the mode.
+
+We'll also learn to measure the variability in a distribution. If we have a distribution A with the values
+
+$[3,3,3,3]$, and a distribution B with $[30, 1, 15, 43]$, we can see that there's more variability (diversity) in B. We'll learn to quantify variability using measures like variance and standard deviation.
+
+Once we understand the measures of variability, we can then learn how to locate a value in a distribution, and determine how it compares to other values. For instance, when we analyze salaries, we might want to find out whether a salary of \$75,000 is common or extreme inside a company. We'll learn to answer this question with precision using a z-score.
+
+In this first lesson, we'll have a detailed discussion about the mean. We already learned briefly about the mean in the previous courses of the data science path, but here we discuss the concept again to give the explanations more depth.
+
+## Mean
+
+On this first screen, we will learn more about the mean.
+
+Let's say we want to summarize the distribution below with a single value that is representative of the distribution as a whole.
+
+$$[0, 1, 4, 7, 8, 10]$$ Intuitively, we need to take into account equally every single value in the distribution if we want to find a good summary value that's representative of the entire distribution. We could try to sum all the values in the distribution, and then divide the total by the number of values we added --- this way we'll manage to take into account equally every value in the distribution:
+
+$$\begin{equation} \frac{0 + 1 + 4 + 7 + 8 + 10}{6} = \frac{30}{6} = 5 \end{equation}$$
+
+When we compute the summary value of a distribution in this way, we call the value the arithmetic mean, or the mean. For our distribution above, the mean is 5.
+
+We have good reasons to consider `5` a representative value for the distribution above. First, notice that 5 is right at the center of the distribution's range, which is 0 - 10 (0 is the minimum value in the distribution, and 10 is the maximum value):
+<center>
+![](https://dq-content.s3.amazonaws.com/444/s2m1_mean_center.svg)\
+</center>
+Also, each value is fairly close to the mean. The nearest value to the mean is 4, which is just one unit away from the mean, while the farthest values are 0 and 10, located five units away from the mean.
+<center>
+![](https://dq-content.s3.amazonaws.com/444/s2m1_deviations.svg)\
+</center>
+Although the distance for each individual value varies, the sum of the distances of the values that are below the mean is equal to the sum of the distances of the values that are above the mean:
+<center>
+![](https://dq-content.s3.amazonaws.com/444/s2m1_equal_distances.svg)\
+</center>
+Let's now compute, as an exercise, the mean of a given demo distribution and check whether the sum of the distances of the values that are below the mean is equal to the sum of the distances of the values that are above the mean.
+
+```{r}
+distribution  <-  c(0,2,3,3,3,4,13)
+mean  <-  sum(distribution) / length(distribution)
+mean
+values_above  <-  distribution[distribution > mean]
+values_above
+values_below  <-  distribution[distribution < mean]
+values_below
+distances_above <- values_above - mean
+distances_above
+distances_below <- mean - values_below
+distances_below
+equal_distances  <-  sum(distances_above) == sum(distances_below)
+equal_distances
+```
+
+## Generating a distribution
+
+From the next screen, we will learn more about the average. In this screen, let's make an interlude to talk about how we can generate random samples that will be useful to us in the latter part of the lesson.
+
+In Statistics Fundamentals in R course, we learned how to sample from existing data. For example, if we have a vector `x` which represents the population, we can randomly select a sub-vector of size `n` by using the `sample()` function.
+
+```{r}
+# sample(x, size=n)
+```
+
+We can randomly generate integer values with the desired size with the function `sample.int()`. The syntax of this function is as follows;
+
+```{r}
+# sample.int(v, size=n)
+```
+
+This function requires two parameters:
+
+-   `v` : the maximum possible value in the sample.
+-   `n`: the sample size.
+
+If we want to generate a distribution containing seven values that are less or equal to 15, we can do:
+
+```{r}
+set.seed(1)
+sample.int(15, size=7)
+```
+
+Note the use of the `set.seed()` function which makes our random sample results reproducible.
+
+As we learned in the previous statistics course, if we want to repeat this sampling five times we will use the `replicate()` function.
+
+```{r}
+replicate(n=5, expr=sample.int(15, size=10))
+```
+
+```{r}
+set.seed(1)
+distribution <- sample.int(100, size=10)
+ndistribution <- replicate(n=50, expr=sample.int(25, size=5))
+```
+
+## The Mean as a Balance Point
+
+One way to obtain the same result without computing the vectors of distances above and below the mean is to subtract the mean directly from the distribution. Negative values are below the mean, and positive values are above. Hence, we can verify whether the mean is equidistant from below and above values by checking if the sum of the distances gives 0.
+
+```{r}
+distribution  <-  c(0, 2, 3, 3, 3, 4, 13)
+
+mean  <-  sum(distribution) / length(distribution)
+
+distances <- distribution - mean
+
+equal_distances  <- sum(distances) == 0
+```
+
+From this exercise, we observed from the distribution [0,2,3,3,3,4,13] that the mean `4` is not in the center of the 0 - 13 range interval:
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_mean_not_center.svg)\
+
+As a consequence, we should avoid thinking of the mean as being the center of a distribution's range. In some cases, the mean will be equivalent to the center of the distribution's range, but we've just seen that this doesn't hold true for all distributions.
+
+We should think of the mean as being the value located at that particular point in the distribution where the total distance of the values below the mean is the same as the total distance of the values that are above the mean. In our last exercise, we saw that this holds true for the distribution [0,2,3,3,3,4,13].
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_equal_distances_always.svg)\
+
+In fact, this is true for the distribution of any variable measured on an interval or ratio scale.
+
+To give students a better intuition for this property of the mean, it's common in the literature to describe the mean as the balance point of a lever.
+
+If the total distances above and below the mean were equivalent to the forces exerted by the weights on the rod of the lever, then there would be the same amount of force exerted on each side of the mean. This will make the rod stay in perfect equilibrium:
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_mean_balance_point.svg)\
+
+Now that we've seen that the total distances below the mean equal the total distances above the mean, we'll check this rule by measuring the distances for 5,000 different distributions in the exercise below.
+
+```{r}
+set.seed(1)
+checkDist <- function(){
+    distribution <- sample.int(1000, size=10)
+    mean  <-  sum(distribution) / length(distribution)
+    round(sum(distribution - mean)) == 0
+}
+
+equal_distances <- sum(replicate(n=5000, expr=checkDist()))
+
+
+equal_distances
+```
+
+## Defining the Mean Algebraically
+
+A very useful property of the mean is that it can be defined algebraically in a simple way. This is how we can define the mean for any population of $N$ values ($N$ is the number of values in the population)
+
+$$\begin{equation}
+population \ mean = \frac{x_1 + x_2 + ... + x_N}{N}
+\end{equation}$$
+
+By convention, the mean of a population is denoted with the Greek letter $\mu$(pronounced "mew"). So we rewrite the formula above:
+
+$$\begin{equation}
+\mu = \frac{x_1 + x_2 + ... + x_N}{N}
+\end{equation}$$
+
+Let's say the distribution [0,2,3,3,3,4,13] represents a population. The distribution has 7 values, so $N = 7$. Let's plug the values into the formula above
+
+<center>![](https://dq-content.s3.amazonaws.com/444/s2m1_mean_pop.svg)\
+</center>
+
+Above, we computed the mean for a population. When we compute the mean for a sample, we need to use a slightly different notation to indicate that we're computing the mean for a sample and not for a population. Instead of $\mu$, we denote the sample mean using$\bar{x}$ (pronounced "x-bar"), and we use $n$ instead of $N$ to denote the number of values in the sample. This is how we could define the sample mean algebraically.
+
+$$\begin{equation}
+\bar{x} = \frac{x_1 + x_2 + ... x_n}{n}
+\end{equation}$$
+
+<center>![](https://dq-content.s3.amazonaws.com/444/s2m1_sample_mean.svg)\
+</center>
+
+Alternative notation exists for the sample mean. Besides $\bar{x}$, , the sample mean is denoted in other statistics resources with $M$, $\bar{X}$ (uppercase X-bar), or $\bar{x}_n$. Throughout our statistics courses, we use the symbol $\bar{x}$ to refer to the sample mean.
+
+<center>![](https://dq-content.s3.amazonaws.com/444/s2m1_notation.svg)\
+</center>
+
+Previously, we defined the population mean as:
+
+$$
+\mu = \frac{x_1 + x_2 + ... + x_N}{N}
+$$
+
+The $x_1 + x_2 + ... + x_N$ part if often rewritten as $\displaystyle\sum_{i = 1}^{N} x_i$:
+
+$$
+\mu = \frac{x_1 + x_2 + ... + x_N}{N} = \frac{\displaystyle\sum_{i = 1}^{N} x_i}{N}
+$$ The $\displaystyle\sum$ is a Greek letter, and it's pronounced "sigma" or "capital sigma." In mathematics, $\displaystyle\sum$indicates the addition of a series of numbers. Let's say we have this distribution $D$:
+
+$$D = [2,4,6]$$
+
+The sum of the distribution $D$ is $2+4+6=12$. In mathematics, we usually don't use words from the natural language, so the "the sum of the distribution D" part becomes $\displaystyle\sum D$:
+
+$$\sum D = 2 + 4 + 6 = 12$$
+
+Now let's say we have the following distribution $X$, which is a population and is composed of three unknown values:
+
+$$\begin{equation}
+X = [x_1, x_2, x_3]
+\end{equation}$$
+
+The sum of the values is $\displaystyle\sum X = x_1 + x_2 + x_3$.When dealing with unknown values it is customary (but not necessary) to rewrite $\sum X$ as $\displaystyle\sum_{i = 1}^{N} x_i$
+
+$$\sum X = \displaystyle\sum_{i = 1}^{N} x_i = x_1 + x_2 + x_3$$
+
+We should think of$\sum_{i = 1}^{N}x_i$ in terms of a `for` loop, where the iteration variable is $i$
+
+This means that $i$ will take a different values for each iteration. `i=1` deines the starting value of the loop, which is $1$. For every new iteration, the previous value of $i$ is incremented by 1. The iteration stops when $i=N$. For our distribution $X$ above, $N=3$, so we will have three iteratios of the loop.
+
+-   For the first iteration, $i = 1$. The $i$ in $x_i$ will become $1$, so we will have $x_1$.
+-   For the first iteration, $i = 2$. The $i$ in $x_i$ will become $2$, so we will have $x_2$.
+-   For the first iteration, $i = 3$. The $i$ in $x_i$ will become $3$, so we will have $x_3$.
+
+This is one way we could code in R a similar logic:
+
+```{r}
+distribution <- c(10, 5, 12)
+N <- length(distribution)
+sum_of_the_distribution = 0
+for ( i in 1:N) {
+    sum_of_the_distribution <- sum_of_the_distribution + distribution[i]
+}
+
+mean <- sum_of_the_distribution / N
+
+mean
+```
+
+While this is merely notation, it's important to understand it because we'll use it repeatedly as we move forward, and it'll also help you understand other statistics resources. To sum up, these are the ways we can define the population mean algebraically:
+
+$$
+\mu = \frac{x_1 + x_2 + ... + x_N}{N} = \frac{\displaystyle\sum X}{N} = \frac{\displaystyle\sum_{i = 1}^{N} x_i}{N}
+$$
+
+For the sample mean, there's just a slight change in notation. $\mu$ becomes$\bar{x}$, and$N$ becomes $n$:
+
+$$
+\bar{x} = \frac{x_1 + x_2 + ... + x_n}{n} = \frac{\displaystyle\sum X}{n} = \frac{\displaystyle\sum_{i = 1}^{n} x_i}{n}
+$$ Algebra is very flexibile, and you'll also see in other statistics resources $\frac{\displaystyle\sum_{i = 1}^{n} x_i}{n}$ changed to $\frac{1}{n}\  (\displaystyle\sum_{i = 1}^{n}x_i$- these two mathematical expressions are equivalent.
+
+```{r}
+distribution_1  <-  c(42, 24, 32, 11)
+distribution_2  <-  c(102, 32, 74, 15, 38, 45, 22)
+distribution_3  <-  c(3, 12, 7, 2, 15, 1, 21)
+compute_mean <- function(distribution) {
+    N <- length(distribution) # calculate the number of elements
+    sum_of_the_distribution = 0
+    for ( numbers in 1:N) {
+        sum_of_the_distribution <- sum_of_the_distribution + distribution[numbers] # adding up the elements in the set
+    }
+
+    sum_of_the_distribution / N
+}
+
+mean_1  <-  compute_mean(distribution_1)
+mean_2  <-  compute_mean(distribution_2)
+mean_3  <-  compute_mean(distribution_3)
+
+mean_1
+mean_2
+mean_3
+```
+
+## Introducing the Data
+
+So far, we've discussed a few theoretical aspects about the mean and used a few simple distributions (like [2,4,6]) to make the explanations easier to grasp. At this point, we're introducing a real-world dataset to discuss the mean in the context of large and real-world distributions.
+
+We'll work with a dataset that describes characteristics of houses sold between 2006 and 2010 in the city of Ames (located in the American state of Iowa). There are 2,930 rows in the dataset, and each row describes a house. For each house there are 82 characteristics described, which means there are 82 columns in the dataset. Here's a brief extract from the dataset:
+
+The dataset was collected by professor Dean DeCock. He described in great detail the data collection process in this paper published in the Journal of Statistics Education. The documentation of the dataset can be found [here](https://s3.amazonaws.com/dq-content/446/data_description.txt).
+
+We slightly modified the original dataset for teaching purposes. You can download the original dataset from here and the modified version from our interface. The documentation is the same for both datasets.
+
+This dataset is a TSV (tab-separated value) file. It is different from a CSV (comma-separated values) file, where the values are separated by commas, not by tab (a tab character).
+
+The good news is that to read this kind of dataset, there is a ready-to-use function in the `readr` package that we are well familiar with thanks to the `read_csv()` function that allows reading CSV files. Similarly, the `read_tsv()` function allows reading TSV file.
+
+```{r}
+houses  <-  read_tsv('AmesHousing_1.txt')
+```
+
+-   Every column that describes years is measured on an interval scale
+-   `SalePrice` is measured on a ratio scale
+-   The data set has less values than the initial one with 3970 rows which we don't know either whether it represents a population
+
+## Mean House Price
+
+Let's say we're interested in analyzing the distribution of the sale prices of the houses. We can get a good overview of this distribution using the `summary()` function:
+
+```{r}
+summary(houses$SalePrice, digits=8 )
+```
+
+We have used the `digits` parameter here to avoid rounding errors because the `summary()` function does not support numbers of more than three digits by default.
+
+We can see that the distribution has a large range: the minimum sale price is \$12,789 while the maximum is \$755,000. Among this diversity of prices, we can see that the mean (or the "balance point") of this distribution is approximately \$180,796. The mean gives us a sense about the typical sale price in this distribution of 2,930 prices.
+
+If we want to compute only the mean, it's more convenient to use the built-in R function`mean()`:
+
+```{r}
+mean(houses$SalePrice)
+```
+
+```{r}
+compute_mean <- function(distribution) {
+    N <- length(distribution)
+    sum_of_the_distribution = 0
+    for ( i in 1:N) {
+        sum_of_the_distribution <- sum_of_the_distribution + distribution[i]
+    }
+
+    sum_of_the_distribution / N
+}
+computed_mean  <-  round(compute_mean(houses$SalePrice), digit = 1 )
+computed_mean
+r_mean  <-  round(mean(houses$SalePrice), digit = 1)
+r_mean
+means_are_equal  <-  (computed_mean == r_mean)
+means_are_equal
+```
+
+## Challenge: Estimating the Population Mean
+
+In practice, we almost always work with samples. But most of the time, we're not interested in answering questions about samples --- we want to answer questions about populations. A lot of the questions we want to answer in practice can be reduced to finding the mean of a population:
+
+-   What is the mean amount of money our customers spent last year on our website?
+
+-   What is the mean number of customers we had the first week after the promotion we ran? How does that compare to the mean number of customers we had the week before the promotion?
+
+-   What is the mean sale price of a house in Ames, Iowa for the period 2006-2010? When we only have a sample but want to find the mean in the population, the best we can do is to compute the sample mean $\bar{x}$ and hope it's a good estimate for the population mean $\mu$. When estimating the population mean $\mu$ using the sample mean $\bar{x}$, there are three possible scenarios:
+
+-   The sample mean $\bar{x}$ overestimates the population mean $\mu$. This means that $\bar{x} > \mu$.
+
+-   The sample mean $\bar{x}$ overestimates the population mean $\mu$. This means that $\bar{x} < \mu$.
+
+-   The sample mean $\bar{x}$ is equal to the population mean $\mu$. This means that $\bar{x} = \mu$.
+
+When $\bar{x} > \mu$ and $\bar{x} < \mu$, sampling error occurs. Remember that sampling error is given by the difference between a population's parameter and a sample's statistic. $\mu$is a parameter, and$\bar{x}$is a statistic, so the sampling error is given by: $$
+sampling\ error = \mu - \bar{x}
+$$ Our aim is to reduce the sampling error. Two important factors that influence the sampling error are:
+
+-   Sample representativity --- the more representative a sample is, the closer $\bar{x}$ will be to $\mu$.
+
+-   Sample size --- the larger the sample, the more chances we have to get a representative sample. Hence, as we just mentioned, if the sample is more representative, then the sampling error decreases.
+
+This emphasizes once more the importance of the sampling process, where we should try our best to get a representative sample.
+
+In the exercise below, we'll try to visualize on a scatter plot how the sampling error changes as we increase the sample size. For teaching purposes, we'll assume that our dataset describes all the houses sold in Ames, Iowa between 2006 and 2010.
+
+Don't be afraid of the number of questions. If this section is long, it's merely to provide you with enough details to succeed in this challenge at the first try.
+
+```{r}
+set.seed(1)
+
+parameter  <-  mean(houses$SalePrice)
+
+sample_sizes  <-  seq(5, by=29, length.out=100)
+
+sampling_errors <- map_dbl(sample_sizes, 
+                           function(x) parameter - mean(sample(houses$SalePrice, 
+                                                               size=x)) )
+
+df <- tibble(x = sample_sizes, y = sampling_errors)
+
+ggplot(data = df, aes(x = sample_sizes, y = sampling_errors)) +
+    geom_point(size=2) +
+    geom_hline(yintercept = 0) +
+    geom_vline(xintercept = 2930) + 
+    labs(x = "Sample size", 
+         y = "Sampling error")
+```
+
+## Estimates from Low-Sized Samples
+
+Notice that the general tendency for the sampling error is to decrease as the sample size increases. This tendency, however, has exceptions. For instance, there are cases where small sample sizes (100-500 sample points) gave us better estimates for the population mean $\mu$ than large sample sizes (2,500 sample points or more) did.
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_smaller_samples_better.png)\
+
+For any given sample size, we can have many combinations of values. For instance, for a sample size of 3, we can have many possible combinations of sale prices: [220,000, 143,000, 281,000], [123,600, 209,500, 202,665], [287,000, 142,500, 440,000], etc. Most of the samples of size 3 will give a good estimate of the population mean $\mu$. To prove this point, in the code below we will:
+
+-   Measure the mean for 10,000 samples of size 3.
+-   Use a histogram to visualize the distribution of the sample means.
+-   Draw a vertical line corresponding to the population mean $\mu$
+
+```{r}
+
+set.seed(1)
+mean_points <- replicate(n = 10000, 
+                         expr = mean(sample(houses$SalePrice, size = 3)))
+
+ggplot(data = tibble(mean_points), aes(x = mean_points)) +
+    geom_histogram(bins = 10, position = "identity", alpha = 0.5) +
+    geom_vline(aes(xintercept = mean(houses$SalePrice))) +
+    scale_x_continuous(labels = comma, lim = c(0,500000)) +
+    scale_y_continuous(labels = comma, lim = c(0,5500)) +
+    xlab("Mean") + 
+    ylab("")
+```
+
+In the code above, notice the use of the functions `scale_x_continuous` and `scale_y_continuous`, and the package `scales` (probably new for you!). These scale functions allow displaying the axes labels in decimal notation (versus scientific notation). These functions have the `lim` parameter to modify the axis boundaries instead of using `xlim()` or `ylim()` functions. If we try to use them while we also use the scale functions we will get this kind of warning:
+
+We can see that most sample means cluster around the population mean. This means that when we take a sample of size 3 and compute $\bar{x}$, we have fairly good chances to get a good estimate for the population mean $\mu$. This explains what we've seen in the scatter plot above, where we got good estimates from low-sized samples.
+
+It's also worth noting that the mean of the 10,000 sample means is very close to the population mean $\mu$
+
+```{r}
+mean(mean_points)
+mean(houses$SalePrice)
+```
+
+```{r}
+set.seed(1)
+mean_points <- replicate(n = 10000, 
+                         expr = mean(sample(houses$SalePrice, 
+                                            size = 100)))
+
+ggplot(data = tibble(mean_points), aes(x = mean_points)) +
+    geom_histogram(bins = 100,
+                   position = "identity", 
+                   alpha = 0.5) +
+    geom_vline(aes(xintercept = mean(houses$SalePrice))) +
+    xlab("Sample mean") + 
+    ylab("Frequency") +
+    xlim(0, 500000)
+mean(mean_points)
+```
+
+## Variability Around the Population Mean
+
+In the previous exercise, we observed that the sample means vary less around the population mean when the sample size is 100 --- compared to the cases where the sample size is 3.
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_sampling_distros_3_100.png)\
+
+Generally, as we increase the sample size, there will be less and less variability around the population mean. If there's less variability, there are less chances to get a poor estimate for the population mean --- the worst sample means we can get are fairly close to the population mean, which is good.
+
+We can see that sample means vary less and less and less as we increase the sample size:
+
+![](https://dq-content.s3.amazonaws.com/444/s2m1_sampling_distros.png)\
+
+## The Sample Mean as an Unbiased Estimator
+
+If we took all the possible samples for a given sample size, we'd observe that the mean of the sample means will be equal to the population mean. Consider this small population of values:
+
+$$
+X = [0,\ 3,\ 6]
+$$
+
+The mean $\mu$ of this population is $\frac{0 + 3 + 6}{3} = 3$. Now let's take every possible sample of size 2, and compute the mean for each sample:
+
+<center>![](https://dq-content.s3.amazonaws.com/444/s2m1_samples_no_replacement.svg)\
+</center>
+
+Now let's find the mean of the sample means. We add up the means we got for each of the six samples above and divide by the number of samples:
+
+$$
+\frac{1.5 + 3 + 1.5 + 4.5 + 3 + 4.5}{6} = \frac{18}{6} = 3
+$$
+
+The value we got is the same as the population mean $\mu$. So on average the sample mean is equal to the population mean. This is true for the distribution above and for any other distribution of real numbers.
+
+When a statistic is on average equal to the parameter it estimates, we call that statistic an unbiased estimator. In our case, the sample mean $\bar{x}$ is an unbiased estimator for the population mean $\mu$.
+
+This also holds true if we sample with replacement. When we do sampling with replacement, we sample one value, and then we put it back in the population, which means we can sample that value again. For instance, if we want a sample of size 2 from the population above, and we sample with replacement, this could happen:
+
+-   We extract one value randomly and get a 3.
+-   Because we sample with replacement, we put the value back in the population.
+-   We extract one more value and get a 3 again. We end up with this sample: $[3,3]$
+
+Below, we can see the samples of size 2 we can get when we sample with replacement from the population above. We also show the mean for each sample:
+
+<center>![](https://dq-content.s3.amazonaws.com/444/s2m1_samples_replacement.svg)\
+</center>
+
+The mean of the sample means amounts is 3 again, and this confirms that $\bar{x}$ is an unbiased estimator for the population mean $\mu$ when we sample with replacement:
+
+$$\begin{equation}
+\frac{1.5 + 3 + 0 + 1.5 + 4.5 + 3 + 3 + 4.5 + 6}{9} = \frac{27}{9} = 3 
+\end{equation}$$
+
+It is important to remember the implementation of the `map_dbl()` function function and it's usage in sampling as used in a previous screen and in the code below:
+
+```{r}
+# sample_means <- map_dbl(samples, function(x) mean(x))
+```
+
+`map_dbl()` is a function from the purrr package in R that applies a function to each element of a list or vector and returns the results in a new list or vector of the same length. In this case,`map_dbl()` is being used to apply the `mean()` function to each element (i.e., each sample) of the samples list.
+
+The second argument to `map_dbl()` is an anonymous function that takes a single argument `x` (representing each sample), and returns the mean of that sample. The syntax `function(x)` is a way to define an anonymous function in R. The function is defined using the function keyword, followed by the input arguments in parentheses (in this case, just `x`), and then the body of the function in curly braces `{}`.
+
+So in `function(x) mean(x)`, the input argument is `x`, which represents each sample in the samples list. The body of the function is simply `mean(x)`, which calculates the mean of `x`.
+
+Overall, the line sample_means \<- `map_dbl(samples, function(x) mean(x))` is taking the samples list, applying the `mean()` function to each sample using `map_dbl()` and the anonymous function `function(x) mean(x)`, and returning a new vector sample_means with the mean of each sample.
+
+```{r}
+population  <-  c(3, 7, 2)
+library(purrr)
+
+samples  <-  list(c(3, 7), 
+                  c(3, 2),
+                  c(7, 2), 
+                  c(7, 3),
+                  c(2, 3),
+                  c(2, 7))
+
+sample_means <- map_dbl(samples, function(x) mean(x))
+
+sample_means
+
+population_mean  <-  mean(population)
+
+mean_of_sample_means  <-  mean(sample_means)
+
+unbiased  <-  (population_mean == mean_of_sample_means)
+```
+
+# 2. The Weighted Mean and the Median
+
+## Introduction
+
+In the previous lesson, we learned about the mean and worked with a dataset on house sale prices:
+
+In one of the steps, we computed the mean sale price and found it to be approximately \$180,796
+
+Let's say that instead of the above dataset, we only have the following summary table based on it:
+
+|     | **Year** | **Mean Price** | **Houses Sold** |
+|-----|----------|----------------|-----------------|
+| 0   | 2006     | 181,761.648000 | 625             |
+| 1   | 2007     | 185,138.207493 | 694             |
+| 2   | 2008     | 178,841.750804 | 622             |
+| 3   | 2009     | 181,404.567901 | 648             |
+| 4   | 2010     | 172,597.598240 | 341             |
+
+Once again, our task is to find the mean house sale price across all years. Intuitively, we just need to find the mean of the `MeanPrice` column. Let's do that and see if the result matches what we got first from computing the mean of the `SalePrice` column in the original dataset.
+
+We've already read in the table above and stored it in a variable named `houses_per_year`. We've also read in the original dataset in a variable named `houses`.
+
+```{r}
+# Heads up that the following instruction can generate a column specification warnings, you can ignore that.
+# These warnings are related to that `readr` has misguidedly guessed the type of values in the column `Pool QC`. 
+# To avoid this warning we can manually specify the type of this column the `col_types` parameter.
+houses  <-  read_tsv('AmesHousing_1.txt', col_types = cols(`Pool QC` = col_character())) 
+houses_per_year  <-  houses %>%
+    mutate(Year = `Yr Sold`) %>%
+    group_by(Year) %>%
+    summarize(MeanPrice = mean(SalePrice), 
+              HousesSold = n() ) %>%
+    arrange(HousesSold)
+houses_per_year
+mean_new  <-  mean(houses_per_year$MeanPrice)
+mean_new
+mean_original  <-  mean(houses$SalePrice)
+mean_original
+difference  <-  mean_original - mean_new
+difference
+```
+
+## Different Weights
+
+Rather counterintuitively, we noticed in the first exercise that the mean of the `MeanPrice` column is not equal to that of the `SalePrice` column. The root of the problem is related to the fact that we have a different number of houses sold each year (notice the `Houses Sold` column):
+
+Because each year has a different number of sold houses, the mean of sale prices for each individual year weighs differently in the overall mean. But when we computed the mean of the `MeanPrice` column, we gave each year the same weight because we added all the five mean prices and then divided by 5.
+
+To understand why it's wrong to give each year an equal weight, let's begin thinking of the problem on a smaller scale. Consider these two samples of $n = 5$ and $n = 2$ (remember that n gives the number of sample points) which contain sale prices for year 2009 and 2010:
+
+$$
+\begin{array}\
+2009\ & \longmapsto & \ [28\ 700, 142\ 500, 440\ 000, 336\ 860, 207\ 500] \
+\\
+2010\ & \longmapsto & \ [135\ 000, 139\ 000]
+\end{array}
+$$ To find the mean across years 2009 and 2010, we can add the five prices for 2009 with the two prices for 2010, and then divide by 7 (because we have 7 prices in total):
+
+$$
+\begin{equation}
+\bar{x} = \frac{\overbrace{(28\ 700 + 142\ 500 + 440\ 000 + 336\ 860 + 207\ 500)}^{2009} + \overbrace{(135\ 000 + 139\ 000)}^{2010}}{7}
+\end{equation}
+$$ $$
+\begin{equation}
+\bar{x} = \frac{\overbrace{1\ 413\ 860}^{2009} + \overbrace{\ 274\ 000\ }^{2010}}{7} = 241122.86
+\end{equation}
+$$
+
+Notice in the numerator that the year 2009 has a greater contribution 1,413,860 than the year 2010, 274,000. If we instead took the mean for each year individually, added the two means and divided their sum by 2, then we'd give each year the same weight. [This is wrong, and it leads to a wrong result for the overall mean:]{color="red"}
+
+$$
+\begin{array}
+\
+2009\ & \longmapsto & \ \bar{x} = \frac{28\ 700 + 142\ 500 + 440\ 000 + 336\ 860 + 207\ 500}{5} = 282\ 772 \
+\\
+2010\ & \longmapsto & \ \bar{x} = \frac{135\ 000 + 139\ 000}{2} = 137\ 000 \
+\\
+overall\ mean\ & \longmapsto & \ \bar{x} = \frac{282\ 772 + 137\ 000}{2} = 209\ 886
+\end{array}
+$$
+
+This is the same mistake we made in the previous exercise: we gave each year the same weight. To compute the correct overall mean, we need to:
+
+-   Find the sum of prices for each year individually. For instance, 341 houses were sold in 2010 and each house had an average price of approximately 172,598. The sum of prices for the year 2010: 341 \* 172,598 = 58,855, 918.
+-   Add all the sums together.
+-   Divide the final sum by the number of houses sold (not by the number of years) to find the mean sale price per house.
+
+```{r}
+houses_per_year  <- houses_per_year %>%
+    mutate(sum_per_year = MeanPrice * HousesSold)
+
+all_sums_together  <-  sum(houses_per_year$sum_per_year)
+total_n_houses  <-  sum(houses_per_year$HousesSold)
+weighted_mean  <-  all_sums_together / total_n_houses
+weighted_mean
+mean_original  <-  mean(houses$SalePrice)
+mean_original
+difference  <-  round(mean_original, digits = 10) - round(weighted_mean, digits = 10)
+
+difference
+```
+
+## The Weighted Mean
+
+When we take into account the different weights and compute the mean like we did in the previous exercise, we call it the weighted mean.
+
+Basically, here are some cases that can guide the choice between the weighted mean and mean.
+
+-   If we have a distribution and all the values are present (i.e., also repeated values, no aggregation), we can compute the mean, which is a weighted mean where the weights are equal to 1.
+
+-   If we have a distribution with only distinct values, and we are sure that repetitions are not possible, the mean is also enough.
+
+-   If we have an aggregated distribution, i.e., only the distinct values are present, and each of them has an extra value (number of times, the probability of that value) associated with it, we have to use weighted mean because the additional information has to be considered to get the right results.
+
+Just as the arithmetic mean we learned about in the previous lesson, the weighted mean can be defined algebraically.
+
+In the previous exercise, we compute the weighted mean for this distribution of sample means:
+
+$$\begin{equation}
+[ 181\ 761.648, 185\ 138.2074928, 178\ 841.75080386, 181\ 404.56790123, 172\ 597.59824047]
+\end{equation}$$
+
+We multiplied each value by the number of houses sold in that year to take into account the different weights, then we summed up the products and divided by the total number of houses. This is the distribution of weights we used:
+
+$$\begin{equation}
+[625,\  694,\  622,\  648,\  341]
+\end{equation}$$
+
+Now imagine that instead of the actual values, we have six unknown prices, which we'll abbreviate with $x$ and six unknown corresponding weights, which we'll abbreviate with $w$.
+
+$$\begin{equation}
+[x_1, x_2, x_3, x_4, x_5, x_6]
+\end{equation}$$
+
+$$\begin{equation}
+[w_1, w_2, w_3, w_4, w_5, w_6]
+\end{equation}$$
+
+To find the weighted mean, we need to:
+
+-   Multiply each $x$ value (mean house price) by its corresponding weight value $w$ (total number of housed sold): $x_1 \times w_1$, $x_2 \times w_2$, $x_3 \times w_3$,$x_4 \times w_4$, $x_5 \times w_5$, $x_6 \times w_6$.
+
+-   Add the products together (for convenience we drop the multiplication sign $\times$): $x_1w_1 + x_2w_2 + x_3w_3 + x_4w_4 + x_5w_5 + x_6w_6$
+
+-   Divide the sum of the products by the sum of the weights (that is, the total number of houses sold) to get the weighted mean:
+
+$$\begin{equation}
+weighted\ mean = \frac{x_1w_1 + x_2w_2 + x_3w_3 + x_4w_4 + x_5w_5 + x_6w_6}{w_1 + w_2 + w_3 + w_4 + w_5 + w_6}
+\end{equation}$$
+
+The equation above only works if we have six mean values and six weights. We can extend the equation, however, to account for any number of mean values and weights:
+
+$$\begin{equation}
+[x_1, x_2,\ ...\ , x_n]
+\end{equation}$$
+
+$$\begin{equation}
+[w_1, w_2,\ ...\ , w_n]
+\end{equation}$$ $$\begin{equation}
+weighted\ mean = \frac{x_1w_1 + x_2w_2 +\ ...\ + x_nw_n}{w_1 + w_2 +\ ...\ + w_n}
+\end{equation}$$
+
+This is how the formula above would work if we had three mean values and three weights:
+
+<center>![](https://dq-content.s3.amazonaws.com/445/s2m2_weighted_mean.svg)\
+</center>
+
+\
+We previously learned to simplify notations for sums using $\displaystyle\sum_{i = 1}^{n}$, formula above becomes: $$\begin{equation}
+weighted\ mean = \frac{\displaystyle\sum_{i = 1}^{n}x_iw_i}{\displaystyle\sum_{i = 1}^{n}w_i}
+\end{equation}$$
+
+The weighted mean can be abbreviated just like the arithemtic mean: $\bar{x}$for samples, and $\mu$ for populations. Strictly speaking, the formula above gives the weighted mean for a sample because we used $n$, not $N$. To get the formula for a population, we simply have to change $n$ to $N$:
+
+$$\begin{equation}
+\mu = \frac{\displaystyle\sum_{i = 1}^{N}x_iw_i}{\displaystyle\sum_{i = 1}^{N}w_i}
+\end{equation}$$
+
+```{r}
+compute_weighted_mean <- function(distribution, weights) {
+    weighted_distribution  <-  distribution * weights    
+    sum(weighted_distribution) / sum(weights)
+}
+
+computed_weighted_mean  <-  compute_weighted_mean(houses_per_year$MeanPrice, houses_per_year$HousesSold)
+weighted_mean_r  <-  weighted.mean(houses_per_year$MeanPrice, houses_per_year$HousesSold)
+
+equal  <-  round(computed_weighted_mean, 10) == round(weighted_mean_r, 10)
+equal
+```
+
+## The Median for Open-ended Distributions
+
+While learning about the weighted mean, we saw that there are distributions where it's possible to compute the mean, although that wouldn't be correct. However, there are distributions where it's impossible to compute the mean. Consider the frequency distribution of the `TotRms AbvGrd` variable, which describes the number of rooms above ground:
+
+```{r}
+table(houses$`TotRms AbvGrd`)
+```
+
+The lowest boundary of the distribution is well-defined --- the lowest value is 2 and no value in the distribution can be lower than that. But the upper boundary is not defined as precisely --- the highest value is "10 or more," which means that houses can actually have 10, 11, 15, or even more rooms. The upper boundary ("10 or more") is thus open, and for this reason we say that the `TotRms AbvGrd` variable has an open-ended distribution.
+
+It's still reasonable to want to find an average value (a single representative value) for this distribution, but "10 or more" is not numerical, which makes it impossible to compute the mean. Remember that the definition of the mean is $\frac{\displaystyle\sum_{i = 1}^{n}x_i}{n}$, so we can't compute the $\displaystyle\sum_{i = 1}^{n}x_i$ part because of the "10 or more" value.
+
+A common workaround is to sort all the values in the distribution in an ascending order and then select the middle value as the most representative value of the distribution. Consider this sample of five values from the `TomRms AbvGrd` column:
+
+$$\begin{equation}
+[\text{10 or more},\ 5,\ 7,\ 7,\ 6]
+\end{equation}$$
+
+First, we need to order the values in an ascending order:
+
+$$\begin{equation}
+[5,\ 6,\ 7,\ 7,\ \text{10 or more}]
+\end{equation}$$
+
+This distribution has five values and the middle one is the third one because it divides the distribution in two halves of equal length. The third value is $7$, and the two resulting halves are $[5,6]$ and $[7, 10\ or\ more]$
+
+We call this middle value the median, so for this case the median is 7.
+
+<center>![](https://dq-content.s3.amazonaws.com/445/s2m2_median.svg)\
+</center>
+
+Let's practice computing medians for a few distributions before finding the median of the `TotRms AbvGrd` above.
+
+```{r}
+distribution1  <-  c(23, 24, 22, '20 years or lower,', 23, 42, 35)
+distribution2  <-  c(55, 38, 123, 40, 71)
+distribution3  <-  c(45, 22, 7, '5 books or lower', 32, 65, '100 books or more')
+median1  <-  23
+median2  <-  55
+median3  <-  32
+```
+
+## Distributions with Even Number of Values
+
+When a distribution has an even number of values, it's not clear which is the middle one. Consider this sorted distribution with six values:
+
+$$\begin{equation}
+[5,\ 6,\ 7,\ 7,\ 8,\ \text{10 or more}]
+\end{equation}$$
+
+It's impossible to choose a value from this distribution that divides it into two halves of equal length. The workaround is to take the two middle values and compute their mean. The two middle values are $[7,7]$, and the two resulting halves are: $[5,6]$ and $[8,\ \text{10 or more}]$
+
+<center>![](https://dq-content.s3.amazonaws.com/445/s2m2_median_even.svg)\
+</center>
+
+The median is the mean of the two middle values, that is $\frac{7 + 7}{2} = 7$.
+
+This value of 7 is the average value of the distribution above. In statistics, the term "average" refers to the most representative value of a distribution. Although it's common to use "average" and "mean" interchangeably, "average" is not restricted to refer only to the mean. Depending on the context, it can also refer to the median or the mode (we'll learn about the mode in the next lesson).
+
+For the mean, we learned that there are special symbols like $\bar{x}$ or $\mu$. For the median, there's no widely accepted standard notation --- most commonly, both the sample and the population median are simply denoted with the word $\median$. Unlike the mean, the median doesn't have a neat way to be defined algebraically. This is because sorting a distribution in an ascending order and then choosing a middle value or two doesn't involve any arithmetic. The different treatment for odd and even-numbered distributions also poses some theoretical challenges for constructing a single definition.
+
+```{r}
+# Sort the values
+rooms  <-  houses$`TotRms AbvGrd`
+rooms  <-  as.numeric(stringr::str_replace(rooms, '10 or more', '10'))
+rooms_sorted  <-  sort(rooms)
+
+# Find the median 
+middle_indices  <-  c(length(rooms_sorted) / 2,
+                      (length(rooms_sorted) / 2) + 1
+                 ) # 2930 is even so we need two indices.
+middle_values  <-  rooms_sorted[middle_indices]
+median  <-  mean(middle_values)
+median
+```
+
+## The Median as a Resistant Statistic
+
+When we compute the mean, we account equally for each value in the distribution --- we sum up all the values in the distribution and then divide the total by the number of values we added. When we compute the median, however, we don't consider equally each value in the distribution. In fact, we only consider the middle value (or the middle two values).
+
+This property makes the median more resistant to changes in the data compared to the mean. Let's consider this simple distribution:
+
+$$\begin{equation}
+[2,\  3,\  5,\  5,\  10]
+\end{equation}$$ Both the median and the mean of this distribution are 5. Let's change the last value in the distribution from 10 to 1,000: $$\begin{equation}
+[2,\  3,\  5,\  5,\  1000]
+\end{equation}$$
+
+The median is still 5, but the mean is now 203. This is because the mean takes into account every value in the distribution, while the median considers only the middle value. Because the median is so resistant to changes in the data, it's classified as a resistant or robust statistic.
+
+This property makes the median ideal for finding reasonable averages for distributions containing outliers. Consider this distribution of annual salaries for five people in a company:
+
+$$\begin{equation}
+[20\ 000,\ 34\ 000,\ 40\ 000,\ 45\ 000,\ 800\ 000]
+\end{equation}$$
+
+The mean is heavily influenced by the person earning \$800,000, and it amounts to a value of \$187,000, which is not representative for anyone --- the first four people earn much less that \$187,000, and the last person earns much more. It makes more sense to compute a median value for this distribution, and report that the average salary in the company is \$40,000, accompanied by an outlier of \$800,000.
+
+These observations can be confirmed by viewing the data using a barplot.
+
+```{r}
+df <- tibble::tibble( employee = purrr::map_chr(1:5, function(x) stringr::str_c("Employee ", x)), salary = c(20000,34000,40000,45000, 800000) )
+
+
+ggplot(data = df,
+    aes(x = employee, y = salary)) +
+    geom_bar(stat = "identity", 
+             fill = "blue") +
+    geom_hline(aes(yintercept = mean(df$salary),
+                   color = "black"), 
+               linewidth = 1) +
+    geom_hline(aes(yintercept = median(df$salary), 
+                    color = "red"), 
+               linewidth = 1) +
+    scale_y_continuous(labels = scales::comma) +
+    scale_colour_manual(values = c("black", "red"), 
+                        name = "", 
+                        labels = c("Mean", "Median")) +
+    theme_bw() + theme(axis.text.x = element_text(angle = 90)) + 
+    xlab("") + 
+    ylab("Salaries")
+```
+
+You can generate this plot by yourself. However, pay attention to the following points.
+
+-   The option `stat = "identity"` in the `geom_bar()` function allows creating barplots when the frequency values are available.
+-   Remember that the `scale_y_continuous(labels = scales::comma)` piece of code avoids the scientific notation of `ggplot2`.
+-   The function `scale_colour_manual()` allows renaming the elements of the legend.
+
+## Finding outliers using Boxplots
+
+On the previous screen, we have showed how to use barplots to identify/confirm outliers. On this screen, we will use a boxplot for the same purpose.
+
+From the analysis made in the previous screen on the distribution of annual salaries for five people in a company, we have come to the conclusion that \$800,000 is an outlier. Let's check this out using a boxplot. Consider this distribution of annual salaries for five people in a company:
+
+$$\begin{equation}
+[20\ 000,\ 34\ 000,\ 40\ 000,\ 45\ 000,\ 800\ 000]
+\end{equation}$$ The mean is heavily influenced by the person earning \$800,000, and it amounts to a value of \$187,000, which is not representative for anyone --- the first four people earn much less that \$187,000, and the last person earns much more. It makes more sense to compute a median value for this distribution, and report that the average salary in the company is \$40,000, accompanied by an outlier of \$800,000.
+
+These observations can be confirmed by viewing the data: either by using a barplot or a boxplot.
+
+```{r}
+df <- tibble::tibble( employee = purrr::map_chr(1:5, function(x) stringr::str_c("Employee ", x)), salary = c(20000,34000,40000,45000, 800000) )
+
+ggplot(data = df,
+    aes(x = "", y = salary)) +
+    geom_boxplot() +
+    theme_bw() +
+    scale_y_continuous(labels = scales::comma) +
+    xlab("Salaries") + ylab("")
+```
+
+We use `x=""` to draw a boxplot of only one column. For some refresher information on how to create a boxplot you can look at our previous statistics course.
+
+Let's visualize the data of `Lot Area` and `SalePrice` variables in our dataset to confirm they have outliers.
+
+```{r}
+
+ggplot(data = houses,
+    aes(x = "", y = `Lot Area`)) +
+    geom_boxplot() +
+    xlab("Lot Area") + 
+    ylab("")
+
+ggplot(data = houses,
+    aes(x = "", y = SalePrice)) +
+    geom_boxplot() +
+    xlab("Sale Price") + 
+    ylab("")
+
+lotarea_difference  <-  mean(houses$`Lot Area`) - median(houses$`Lot Area`)
+saleprice_difference  <-  mean(houses$`SalePrice`) - median(houses$`SalePrice`)
+```
+
+## The Median for Ordinal Scales
+
+Data points belonging to ordinal variables are often coded using numbers. Consider the frequency distribution of the `Overall Cond` variable, which rates the overall condition of a house:
+
+```{r}
+table(houses$`Overall Cond`)
+```
+
+In the documentation, we can find that each numerical value corresponds to a specific quality level:
+
+| Code | Quality        |
+|------|----------------|
+| 1    | Very poor      |
+| 2    | Poor           |
+| 3    | Fair           |
+| 4    | Below average  |
+| 5    | Average        |
+| 6    | Above average  |
+| 7    | Good           |
+| 8    | Very good      |
+| 9    | Excellent      |
+| 10   | Very excellent |
+
+Because words like "fair" or "average" are coded with numbers, it becomes mathematically possible to compute the mean. But whether or not it's theoretically sound to compute the mean for ordinal variables is contentious. Below we explore one argument against computing the mean, and in the next screen we'll explore an argument that supports the idea of using the mean.
+
+Remember from the previous course that if two data points are measured on an ordinal scale and there's a difference between them, we can tell the direction of the difference, but we don't know the size of the difference.
+
+![](https://dq-content.s3.amazonaws.com/445/s2m2_scales.svg)
+
+Suppose the house's overall condition is rated with an 8 (Very good), and another house gets a 4 (Below average). In that case, we can't say that the former's conditions are twice as better as the latter. The most we can say is that the house which got an 8 has better conditions (we can't quantify how much better --- it could be twice as better, three times as better, 1.5 times as better, we simply don't know).
+
+This is clearer if we consider the fact that the numbers used to encode the quality levels ("Poor," "Fair," "Good," etc.) are chosen arbitrarily. Instead of numbers from 1 to 10, we could have numbers from 30 to 40, or from 50 to 70 in steps of 2, or from 0 to 9:
+
+| Code | Quality        |
+|------|----------------|
+| 0    | Very poor      |
+| 1    | Poor           |
+| 2    | Fair           |
+| 3    | Below average  |
+| 4    | Average        |
+| 5    | Above average  |
+| 6    | Good           |
+| 7    | Very good      |
+| 8    | Excellent      |
+| 9    | Very excellent |
+
+Inside the framework of a 0-9 system, a "Very good" label would be encoded as a 7, and a "Below average" as a 3. If we took ratios, we'd reach different conclusions for different encoding systems:
+
+-   For a 1-10 encoding system, the conditions of an "Very good" (8) house would be twice as better than those of a "Below average" (4) house ($\frac{8}{4} = 2$).
+
+For a 0-9 encoding system, the same "Very good" (7) house would have conditions that are $2.\bar{3}$ times as better as the conditions of a "Below average" (3) house ($\frac{7}{3} = 2.\bar{3}$).
+
+It can be argued thus that the numerical values of an ordinal variable are not subject to meaningful arithmetical operations. But computing the mean involves meaningful arithmetical operations, so it's not theoretically sound to use the mean for ordinal variables.
+
+Because the median doesn't involve arithmetical operations, it's considered a better alternative to the mean. This doesn't fully apply, however, to even-numbered distributions, where we need to take the mean of the middle two values to find the median. This poses some theoretical problems, and we'll see in the next lesson that the mode might be a better choice in this case as a measure of average
+
+```{r}
+mean  <-  mean(houses$`Overall Cond`)
+median  <-  median(houses$`Overall Cond`)
+
+ggplot(data = houses, aes(x = `Overall Cond`)) +
+    geom_histogram(bins = 9, 
+                   position = "identity", 
+                   alpha = 0.6, 
+                   fill='blue') + 
+    #geom_vline(xintercept = mean, color = 'red', size=1) +
+    #geom_vline(xintercept = median, color = 'green', size=1) +
+    xlab("Overall Cond") + 
+    ylab("Frequency")
+
+more_representative  <-  'mean' 
+
+#Extra comment:
+#The mean seems more representative and more informative because it captures the
+#fact that there are more houses rated above 5 than rated under 5. Because of this,
+#the mean is slightly shifted above 5.
+```
+
+## Sensitivity to Changes
+
+Although it can be argued that it's theoretically unsound to compute the mean for ordinal variables, in the last exercise we found the mean more informative and representative than the median. This is because it captures the fact that there are more houses rated above 5 than rated under 5. That's why the mean is slightly shifted above 5.
+
+The truth is that, in practice, many people get past the theoretical hurdles and use the mean because, in many cases, it's richer in information than the median.
+
+Let's consider a situation where the mean is arguably a much better choice to measure the average of an ordinal variable. Let's say we're working for a real estate company that has a website which allows customers to rent, buy, and sell houses. The speed on our website is important for all of them, and we want to measure how they perceive the speed on the website.
+
+We randomly sample ten customers and have them assess the following sentence: "The website is very fast, usually a new page loads in less than a second." The customers can choose between the following answers, which we plan to code under the hood with numbers between 1 and 5:
+
+| Code | Answer                     |
+|------|----------------------------|
+| 1    | Strongly disagree          |
+| 2    | Disagree                   |
+| 3    | Neither agree nor disagree |
+| 4    | Agree                      |
+| 5    | Strongly agree             |
+
+The survey yielded the distribution below, whose mean and median have both a value of 2:
+
+$$\begin{equation}
+[1, 1, 1, 2, 2, 2, 2, 3, 3, 3]
+\end{equation}$$
+
+After being presented with the results, the engineering team implemented a few changes meant to improve speed, and now we repeat the survey on another random sample of 10 customers and get these results:
+
+$$\begin{equation}
+[1, 2, 2, 2, 2, 2, 4, 5, 5, 5]
+\end{equation}$$
+
+The median is still 2, and it suggests that nothing changed. The mean, however, went up to 3, suggesting that the changes our engineers made have had a positive effect. Unlike the median, the mean is sensitive to small changes in the data, and this property is what makes it more useful in this case.
+
+It is clear by now that whether we use the mean for ordinal data is contentious. In practice, we would have to be flexible and make our choice on a case by case basis. Also, we are not required to choose one metric or the other --- we can choose both the mean and median to describe a distribution.
+
+# 3. The Mode
+
+## Introduction
+
+Previously, we learned the mean takes into account each value in the distribution, and we saw that we can define the mean algebraically. These two properties make the mean far superior to the median. The median comes in handy, however, when it's not possible or appropriate to compute the mean.
+
+In this lesson, we'll explore a couple of cases where neither the mean nor the median are suitable for finding an average value, and we'll learn an alternative summary metric.
+
+We'll work with the same dataset on house sale prices that we used in the last two lessons
+
+```{r}
+scale_land  <-  'ordinal'
+scale_roof  <-  'nominal'
+kitchen_variable  <-  'discrete'
+```
+
+## The Mode for Ordinal Variables
+
+In the last exercise, we found that the `Land Slope` variable is ordinal. You may have also found from your exploration that the values of this variable are represented using words:
+
+```{r}
+unique(houses$`Land Slope`)
+```
+
+As you may have already found in the documentation, `'Gtl'` means gentle slope, `'Mod'` means moderate slope, and `'Sev'` stands for 'Severe slope'.
+
+We cannot compute the mean for this variable because its values are words, not numbers. Remember that the definition of the mean is $\frac{\displaystyle\sum_{i = 1}^{n}x_i}{n}$ so we cannot compute the $\displaystyle\sum_{i = 1}^{n}x_i$ part if the values are words. We learned previously that the median is a good workaround for ordinal data, but the values of this ordinal variable are not numbers. Can we still compute the median?
+
+If we sort the values of the `Land Slope` variable, we can find that the middle two values are `['Gtl', 'Gtl']` (the variable has an even number of values). Although we cannot take their mean, it's intuitively clear that the average of two identical values is one of those values, so the median value should be `'Gtl'`.
+
+However, if the two middle values were `['Gtl', 'Mod']`, then it wouldn't be clear at all what to choose for the median. In cases like this, one workaround for finding an average value is to measure the most frequent value in the distribution. For the `Land Slope`variable, we can see that the value `'Gtl'` has the greatest frequency using the `table()` function:
+
+```{r}
+table(houses$`Land Slope`)
+```
+
+We call the most frequent value in the distribution the mode. So the mode of the`Land Slope` variable is `'Gtl'`. In other words, the typical house has a gentle slope. Very importantly, notice that the mode is the most frequent value in the distribution, not the frequency of that value --- so the mode is `'Gtl'`, not 2,789.
+
+Just like for the median, there's no standard notation for the mode. It's also worth noting that the mode is not defined algebraically and R does not have a built-in function for mode.
+
+With this in mind, in this exercise, let's create a function that we can use later to compute the mode. The pseudo-code of our function is:
+
+1.  Compute the frequency table.
+2.  Arrange the frequency table in the descending order.
+3.  Take the first value corresponding to the value with the highest frequency.
+
+```{r}
+compute_mode <- function(vector) {
+    counts_df  <-  tibble(vector) %>% 
+        group_by(vector) %>% 
+        summarise(frequency=n()) %>% 
+        arrange(desc(frequency)) 
+
+    counts_df$vector[1]
+}
+
+computed_mode  <-  compute_mode(houses$`Land Slope`)
+
+computed_mode
+```
+
+## The Mode for Nominal Variables
+
+On the previous screen, we learned that the mode is ideal for ordinal data represented using words. The mode is also a good choice for nominal data. Let's consider the `Roof Style` variable, which is measured on a nominal scale and describes the roof type of a house:
+
+```{r}
+houses %>% 
+    group_by(`Roof Style`) %>% 
+    summarise(frequency = n())%>% 
+    arrange(desc(frequency))
+```
+
+We cannot compute the mean for this variable because the values are words. Even if they were coded as numbers, it'd be completely wrong to compute the mean because in the case of nominal variables the numbers describe qualities, not quantities.
+
+In the previous lesson, we made the case that we could compute the mean for ordinal variables if the values are numbers. This reasoning doesn't extend to nominal variables, because they don't describe quantities like ordinal variables do.
+
+![](https://dq-content.s3.amazonaws.com/446/s1m2_ordinal.svg)\
+
+Because the `Roof Style` variable is nominal, there's also no inherent order of the values in the distribution. This means that we cannot sort the values in an ascending or descending order. The first step in computing the median is to sort the values in ascending order, which means we cannot compute the median for the `Roof Style` variable.
+
+```{r}
+compute_mode_table <- function(vector) {
+    counts_df  <-  tibble(vector) %>% 
+        group_by(vector) %>% 
+        summarise(frequency = n()) %>% 
+        arrange(desc(frequency)) 
+    
+    list('mode' = counts_df$vector[1], 'values' = counts_df$frequency)
+}
+
+mode <- compute_mode_table(houses$`Roof Style`)$mode
+mode
+value_counts  <-  compute_mode_table(houses$`Roof Style`)$values
+value_counts
+```
+
+## The Mode for Discrete Variables
+
+There are some cases where computing the mean and the median is possible and correct, but the mode is preferred nonetheless. This is sometimes the case for discrete variables.
+
+To remind us from the first course, variables measured on interval or ratio scales can also be classified as discrete or continuous. A variable is discrete if there's no possible intermediate value between any two adjacent values. Let's take the Kitchen AbvGr variable, which describes the number of kitchens in a house:
+
+```{r}
+houses %>% 
+    group_by(`Kitchen AbvGr`) %>% 
+    summarise(frequency = n())
+```
+
+Let's show why the mean and the median are not suitable for discrete variables. To do so, let's say we need to write an article about the house market in Ames, Iowa, and our main target audience is regular adult citizens from Ames. Among other aspects, we want to describe how many kitchens the typical house has.
+
+If we take the weighted mean(due to the weight of the frequencies), `weighted.mean(houses$Kitchen AbvGr, w = houses$frequency)`, we'd need to write that the typical house has about 1.04 kitchens. This wouldn't make sense for the regular reader, who expects the number of kitchens to be a whole number, not a decimal.
+
+If we take the median, `median(houses$Kitchen AbvGr)`, we'd write that the typical house has 1 kitchen. The median is 1 --- a value easier to grasp by non-technical people compared to the decimal number 1.04 (the mean). But this is a lucky case, because of the risk of decimal numbers when the size of distribution is odd. For example, if the middle two values in the sorted distribution was [1, 2], then the median would have been 1.5.
+
+In conclusion, the mode is a safer choice for cases like this because it guarantees a number from the distribution.
+
+The mode of the `Kitchen AbvGr` variable is 1. When we report this result, we would have to avoid technical jargon (like "mode" or "variable") and simply say that the typical house on the market has one kitchen.
+
+![](https://dq-content.s3.amazonaws.com/446/s2m3_reporting.svg)\
+
+Note that the mode is also guaranteed to be a value from the distribution (this holds true for any kind of variable). This doesn't apply to the mean or the median, which can return values that are not present in the actual distribution. For instance, the mean of the Kitchen AbvGr is 1.04, but the value 1.04 is not present in the distribution.
+
+The mean and the median generally summarize the distribution of a discrete variable better than the mode, and we would have to use the mode only if we need to communicate our results to a non-technical audience.
+
+```{r}
+
+bedroom_variable  <-  'discrete'
+bedroom_mode  <-  compute_mode(houses$`Bedroom AbvGr`)
+
+bedroom_mode
+
+price_variable  <-  'continuous'
+```
+
+## Special Cases
+
+There are distributions that can have more than one mode. Let's say we sampled the `Kitchen AbvGr` column and got this distribution of seven sample points:
+
+$$\begin{equation}
+[0,1,1,1,2,2,2,3]
+\end{equation}$$
+
+The two most frequent values are 1 and 2 (both occur in the distribution three times), which means that this distribution has two modes (1 and 2). For this reason, we call this distribution bimodal (the prefix "bi-" means "twice"). If the distribution had only one mode, we'd call it unimodal (the prefix "uni-" means "only one").
+
+There's nothing wrong with having two modes. For our case above, the two modes tell us that the typical house on the market has either one or two kitchens.
+
+It's possible to have a distribution with more than two modes as well. Let's say we sampled from another column, `Bedroom AbvGr`, and got this distribution of 10 sample points:
+
+$$\begin{equation}
+[0,1,1,2,2,3,3,4,4,8]
+\end{equation}$$
+
+Note that this distribution has four modes: 1, 2, 3, and 4 (each occurs twice in the distribution). When a distribution has more than two modes, we say that the distribution is multimodal (the prefix "multi-" means many).
+
+We can also have cases when there is no mode at all. Let's say we sample again from the `Bedroom AbvGr` column and get this distribution of eight sample points:
+
+Each unique value occurs twice in the distribution above, so there's no value (or values) that occurs more often than others. For this reason, this distribution doesn't have a mode. Contextually, we could say that there's no typical house on the market with respect to the number of bedrooms.
+
+Distributions without a mode are often specific to continuous variables. It's quite rare to find two identical values in a continuous distribution (especially if we have decimal numbers), so the frequency of each unique value is usually 1. Even if we find identical values, their frequency is very likely to be too low to produce a meaningful mode value.
+
+The workaround is to organize the continuous variable in a grouped frequency table, and select for the mode the midpoint of the class interval (the bin) with the highest frequency. This method has its limitations, but it generally gives reasonable answers. Let's try to get a better grasp of how this works in the following exercise.
+
+```{r}
+houses %>% 
+    mutate(intervals_group = cut(SalePrice, 
+                                 breaks = seq(0,800000,100000))) %>%
+    group_by(intervals_group) %>% 
+    summarize(frequency = n())
+mode  <-  150000
+mean  <-  mean(houses$SalePrice)
+median  <-  median(houses$SalePrice)
+
+sentence_1  <-  TRUE
+sentence_2  <-  TRUE
+```
+
+## Skewed Distributions
+
+When we plot a histogram or a kernel density plot to visualize the shape of a distribution, the mode will always be the peak of the distribution. In the code below, we plot a kernel density plot to visualize the shape of the `SalePrice` variable and:
+
+-   We use `geom_density()` function to plot a kernel density plot.
+-   We plot a vertical line to indicate the position of our estimated mode of 150,000 from the last exercise (it is quite close to the peak of the distribution).
+-   We use the functions `scale_x_continuous()` and `scale_y_continuous()` to avoid the scientific notation of `ggplot2` (In this case, we can use the parameter `lim` to directly set the axis boundaries rather than use `xlim()` function.).
+-   We use the function `scale_colour_manual()` to rename the elements of the legend.
+-   We use the function `theme()` with the parameter `legend.position` to move the legend on top of the plot.
+
+```{r}
+ggplot(data = houses,
+    aes(x = SalePrice)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    geom_vline(aes(xintercept = 150000, 
+                   color = 'Mode'), 
+               size = 1.2 ) +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$SalePrice), 
+                       max(houses$SalePrice))) +
+    scale_colour_manual(values = c("Mode" = "green"), 
+                        name = "") +
+
+    theme_bw() + 
+    theme(legend.position='top') +
+    xlab("Sale Price") +
+    ylab("Density")
+```
+
+We can notice that the color in the `geom_vline()` function is not a name of color but just a label. This is due to the use of function `scale_colour_manual()`. Actually, when we use this function, we indicate to R that the color will be defined manually. Hence, we assign the real color name to the label in the `scale_colour_manual()` function. This becomes useful when we have more than one vertical line with different colors, as in the example below.
+
+This distribution is clearly right skewed. Generally, the location of the mode, median and mean is predictable for a right-skewed distribution:
+
+-   Most values are concentrated in the left body of the distribution where they will form a peak --- this is where the mode will be.
+-   Remember that the median divides a distribution in two halves of equal length. For this reason, the median is usually positioned slightly right from the peak (the mode) for a right-skewed distribution.
+-   The mean takes into account each value in the distribution, and it will be affected by the outliers in the right tail. This will generally pull the mean to the right of the median.
+
+So in a right-skewed distribution, the mean will usually be to the right of the median, and the median will be to the right of the mode. This holds true for the distribution of the `SalePrice` variable:
+
+```{r}
+ggplot(data = houses,
+    aes(x = SalePrice)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    geom_vline(aes(xintercept = 150000, 
+                   color = 'Mode'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = median(SalePrice), 
+                   color = 'Median'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = mean(SalePrice), 
+                   color = 'Mean'), 
+               size = 1.2 ) +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$SalePrice), 
+                       max(houses$SalePrice))) +
+    scale_colour_manual(values = c("Mode" = "green", 
+                                   "Median" = "black", 
+                                   "Mean" = "orange"), 
+                        name = "") +
+    theme_bw() + 
+    theme(legend.position='top') +
+    xlab("Sale Price") + 
+    ylab("Density")
+```
+
+For a left-skewed distribution, the direction is simply reversed: the mean is positioned to the left of the median, and the median to the left of the mode. This is obvious on the distribution of the `Year Built` variable:
+
+```{r}
+ggplot(data = houses,
+    aes(x = houses$`Year Built`)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    geom_vline(aes(xintercept = 2005, 
+                   color = 'Mode'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = median(houses$`Year Built`), 
+                   color = 'Median'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = mean(houses$`Year Built`), 
+                   color = 'Mean'), 
+               size = 1.2 ) +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$`Year Built`), 
+                       max(houses$`Year Built`))) +
+    scale_colour_manual(values = c("Mode" = "green", 
+                                   "Median" = "black", 
+                                   "Mean" = "orange"), 
+                        name = "") +
+    theme_bw() + 
+    theme(legend.position='top') +
+    xlab("Year Built") + 
+    ylab("Density")
+
+```
+
+These patterns generally hold true for most skewed distributions, but Paul von Hippel showed in a relatively recent paper that this rule of thumb has a few exceptions.
+
+```{r}
+distribution_1  <-  c('mean' = 3021 , 'median' = 3001, 'mode' = 2947)
+distribution_2  <-  c('median' = 924 , 'mode' = 832, 'mean' = 962)
+distribution_3  <-  c('mode' =  202, 'mean' =  143, 'median' = 199)
+shape_1  <-  'right skew'
+shape_2  <-  'right skew'
+shape_3  <-  'left skew'
+```
+
+## Challenge: Symmetrical Distributions
+
+The location of the mean, median, and mode are also predictable for symmetrical distributions. Remember that if the shape of a distribution is symmetrical, we can divide the distribution in two halves that are mirror images of one another:
+
+![](https://dq-content.s3.amazonaws.com/446/s1m4_symmetry.svg)\
+
+The median divides the distribution in two equal halves. As a consequence, the median will always be at the center of a perfectly symmetrical distribution, because only a line drawn at the center can divide the distribution in two equal halves.
+
+For a perfectly symmetrical distribution, the two equal halves will bear the same weight when computing the mean, because the mean takes each value equally into account in the distribution. The mean is not pulled neither to the left, nor to the right, and stays instead in the center, at the same location as the median. The mean and the median are always equal for any perfectly symmetrical distribution.
+
+Although the mean and the median have a constant location for every symmetrical distribution (no matter the shape), the location of the mode can change. The mode is where the peak is, so for a normal distribution the mode will be at the center, right where the mean and the median are.
+
+![](https://dq-content.s3.amazonaws.com/446/s2m3_normal.svg)\
+
+It's possible to have a symmetrical distribution with more than one peak, which means that the mode won't be at the center:
+
+![](https://dq-content.s3.amazonaws.com/446/s2m3_two_modes.svg)\
+
+A uniform distribution doesn't have any peaks, which means it doesn't have any mode:
+
+![](https://dq-content.s3.amazonaws.com/446/s2m3_uniform.svg)\
+
+In practice, we almost never work with perfectly symmetrical distributions, but many distributions are approximately symmetrical nonetheless. This means that the patterns outlined above are still relevant for practical purposes.
+
+```{r}
+compute_mode <- function(vector) {
+    counts_df  <-  tibble(vector) %>% 
+        group_by(vector) %>% 
+        summarise(frequency = n()) %>% 
+        arrange(desc(frequency)) 
+
+    counts_df$vector[1]
+}
+
+ggplot(data = houses,
+    aes(x = `Mo Sold`)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    geom_vline(aes(xintercept = compute_mode(`Mo Sold`), 
+                   color = 'Mode'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = median(`Mo Sold`), 
+                   color = 'Median'), 
+               size = 1.2 ) +
+    geom_vline(aes(xintercept = mean(`Mo Sold`), 
+                   color = 'Mean'), 
+               size = 1.2 ) +
+    scale_y_continuous(labels = scales::comma) +
+    xlim(1,12)+
+    scale_colour_manual(values = c("Mode" = "green", 
+                                   "Median" = "black", 
+                                   "Mean" = "orange"), 
+                        name = "") +
+    theme_bw() + 
+    theme(legend.position='top') +
+    xlab("Monthly Sold") + 
+    ylab("Density")
+```
+
+![](https://dq-content.s3.amazonaws.com/446/s2m3_summary.svg)\
+
+# 4. Measures of Variability
+
+## The Range
+
+So far, we've only focused on summarizing distributions using the mean, the weighted mean, the median, and the mode. An interesting distribution property we haven't yet discussed is variability. Consider, for instance, these two distributions of numerical values:
+
+$$\begin{equation}
+A = [4,\ 4,\ 4,\ 4,\ 4]
+\end{equation}$$
+
+$$\begin{equation}
+B = [0,\ 8,\ 0,\ 8]
+\end{equation}$$
+
+The values of the distribution A don't vary --- each value is 4. The values in distribution B show some variability --- they are not all identical, and the values can be either 8 or 0. If we were to quantify variability, we could assign a value of 0 to A to indicate that it has no variability. But what variability value should we assign to distribution B?
+
+We need a measure to summarize the variability of these two distributions. The summary metrics we've learned so far don't tell us anything about variability.
+
+-   The mean, the median, and the mode of the distribution A are all 4. The mode of A is 4 because the value on top in A is 4 occuring five times.
+
+-   The mean and the median of the distribution B are all 4 as well, and no mode. B has no mode because 0 and 8 occur an equal number of times, so we cannot decide which one is the top value.
+
+If we were to judge variability based on these values, we'd probably have to conclude that the variabilities of the two distributions are equal, which is wrong.
+
+One intuitive way to measure the variability of a distribution is to find the difference between the maximum and the minimum value. Both the maximum and the minimum of distribution A is 4, so the variability of distribution A is 0: $$\begin{equation}
+max(A) - min(A) = 4 - 4 = 0
+\end{equation}$$ We call this measure of variability the range. So the range of distribution A is 0. The range of distribution B is 8: $$\begin{equation}
+max(B) - min(B) = 8 - 0 = 8
+\end{equation}$$ In more general terms, the range of distribution X, where X can be any distribution of real numbers, is: $$\begin{equation}
+range(X) = max(X) - min(X)
+\end{equation}$$ We'll continue working in this lesson with the dataset on house prices we used for the last three lessons. Here's a short extract from the dataset to remind us of its structure:
+
+```{r}
+sale_price_range <- houses %>%
+    group_by(`Yr Sold`) %>%
+    summarize(range_by_year = max(SalePrice) - min(SalePrice))
+```
+
+## The Average Distance
+
+The problem with the range is that it considers only two values in the distribution --- the minimum and the maximum value. Consider this distribution C: $$\begin{equation}
+C = [1,1,1,1,1,1,1,1,1,21]
+\end{equation}$$ we have nine values of 1, and a single value of 21. Intuitively, we'd expect the variability of distribution C to be greater than 0, because there is some variability after all, but not much greater than 0 (remember from the last screen that a distribution whose values don't vary should ideally have a variability of 0). We can see there's not much variability in distribution C-
+
+Despite our expectations, the range indicates that the variability of distribution C is 20. $$\begin{equation}
+max(C) - min(C) = 21 - 1 = 20
+\end{equation}$$
+
+This is significantly greater than 0 and doesn't seem like a reasonable measure of variability for distribution C. The root of the problem is that the range considers only the two extreme values, and this makes it extremely sensitive to outliers. To get a more balanced measure of variability for distribution C, we need to take into account each value in the distribution.
+
+To take into account each value when measuring variability, we could:
+
+1.  Take a reference value and measure the distance of each value in the distribution from that reference value.
+
+-   We can take the mean of the distribution as a reference value.
+-   Then, we measure the distance between each value in the distribution and the mean.
+
+2.  Find the mean of the distances.
+
+-   We first need to add up all the distances.
+
+-   Then we need to divide the total by the number of distances.
+
+    <center>![](https://dq-content.s3.amazonaws.com/447/s2m4_variabilities.svg)\
+    </center>
+
+    By measuring the distance of each value relative to a reference point and then taking the mean of the distances, we practically measure how much the values of a distribution vary on average with respect to that reference point.
+
+It's also possible to algebraically define this method for any population of values $[x_1, x_2, ..., x_N]$ with mean $\mu$:
+
+$$\begin{equation}
+average\ distance = \frac{
+\overbrace{(x_1 -\ \mu)}^{distance} +
+\overbrace{(x_2 -\ \mu)}^{distance} + ... +
+\overbrace{(x_N - \mu)}^{distance}
+}
+{N} = \frac{
+\overbrace{
+\displaystyle\sum_{i = 1}^{n}
+\overbrace{(x_i - \mu)}^{distance}
+}^{total\ distance}
+}
+{N}
+\end{equation}$$
+
+We'll continue discussing this method on the next screen. For now, let's use the formula above to measure the variability of distribution C.
+
+```{r}
+C  <-  c(1,1,1,1,1,1,1,1,1,21)
+average_distance <- function(vector) {
+    distances  <-  vector - mean(vector)
+    sum(distances) / length(distances)
+}
+
+avg_distance  <-  average_distance(C)
+avg_distance
+```
+
+## Mean Absolute Deviation
+
+In the last exercise, the average distance was 0. This is because the mean is the balance point of the distribution, and, as we've learned, the total distance of the values that are above the mean is the same as the total distance of the values below the mean. The mean μ of the distribution C is 3, so we have:
+
+<center>![](https://dq-content.s3.amazonaws.com/447/s2m4_distances.svg)\
+</center>
+
+Plugging the distances into the formula we used in the previous screen will make the numerator amount to 0, which, in turn, will make the average distance 0:
+
+$$\begin{equation}
+average\ distance = \frac{-18 + 18}{10} = \frac{0}{10} = 0
+\end{equation}$$
+
+To solve this problem, we can take the absolute value of each distance, and then add up the absolute values. The absolute value (also called modulus) of a number is the positive version of that number, regardless of its sign. For instance, the absolute value of -7 is +7, and the absolute value of +7 is +7. In mathematical notation, we write:
+
+$$\begin{equation}
+\left|-7\right| = +7\
+\end{equation}$$
+
+We'll update the formula previously used to reflect the fact the we're adding up the absolute distances instead:
+
+$$\begin{equation}
+mean\ absolute \ distance = \frac{
+\left|x_1 - \mu\right| +
+\left|x_2 - \mu\right| +
+... +
+\left|x_N - \mu\right|
+}{N} = \frac{
+\displaystyle\sum_{i = 1}^{N}
+\left|x_i - \mu\right|
+}
+{N}
+\end{equation}$$
+
+We call this measure of variability mean absolute distance. In statistical jargon, however, the distance of a value from the mean is called deviation. So the mean absolute distance is more commonly known as mean absolute deviation or average absolute deviation.
+
+Let's take the mean absolute deviation of distribution C and see whether this metric provides more useful information about variability than the range. Remember that the range is 20, but we expect a smaller value (which is greater than 0 at the same time).
+
+```{r}
+C  <-  c(1,1,1,1,1,1,1,1,1,21)
+
+#average_distance <- function(vector) {
+#    distances  <-  vector - mean(vector)
+#    sum(distances) / length(distances)
+#}
+mean_absolute_deviation <- function(vector) {
+    distances  <-  abs(vector - mean(vector)) #we only add abs function here
+    sum(distances) / length(distances)
+}
+
+mad  <-  mean_absolute_deviation(C)
+mad
+```
+
+## Variance
+
+On the previous screen, we transformed the distances to absolute values to avoid having the sum of distances amount to 0 in the numerator. Another way to solve this problem is to square each distance and then find the mean of all the squared distances:
+
+$$\begin{equation}
+mean\ squared \ distance = \frac{
+(x_1 - \mu)^2 +
+(x_2 - \mu)^2 +
+... +
+(x_N - \mu)^2
+}{N} = \frac{
+\displaystyle\sum_{i = 1}^{N}
+(x_i - \mu)^2
+}
+{N}
+\end{equation}$$
+
+This measure of variability is sometimes called mean squared distance or mean squared deviation (remember that "distance" and "deviation" are synonymous in this context). However, it's more commonly known as variance.
+
+Squaring the distances or taking their absolute values ensure we get a variability value greater than 0 for all distributions that show some variability. Notice, however, that variance and mean absolute deviation will still be 0 for distributions that show no variability.
+
+Consider distribution $D = [2, 2, 2]$, which has a variance and a mean absolute deviation of 0:
+
+$$\begin{equation}
+variance = \frac{
+(2-2)^2 +
+(2-2)^2 +
+(2-2)^2
+}
+{3} = \frac
+{0^2 + 0^2 + 0^2}
+{3} = 0
+\end{equation}$$
+
+$$\begin{equation}
+mean\ absolute\ deviation = \frac{
+\left|2-2\right| +
+\left|2-2\right| +
+\left|2-2\right|
+}
+{3} = \frac
+{0 + 0 + 0}
+{3} = 0
+\end{equation}$$ In the previous exercise, we got a mean absolute deviation of 3.6 for our distribution $C = [1,1,1,1,1,1,1,1,1,21]$. A value of 3.6 fit well our expectations because we expected a variability value greater than 0, but significantly less than 20. Let's see how well variance does with measuring the variability of distribution C.
+
+```{r}
+C  <-  c(1,1,1,1,1,1,1,1,1,21)
+
+#mean_absolute_deviation <- function(vector) {
+#    distances  <-  abs(vector - mean(vector))
+#    sum(distances) / length(distances)
+#}
+variance <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sum(distances) / length(distances)
+}
+
+variance_C  <-  variance(C)
+variance_C
+```
+
+## Standard Deviation
+
+In the previous exercise, we got a variance of 36 for distribution $C = [1,1,1,1,1,1,1,1,1,21]$, which was more than we expected. This high variability value is the direct result of the squaring process, which makes most distances bigger than they actually are.
+
+Squaring the distances also has the drawback of squaring the units of measurement. Let's consider this small sample from the Bedroom AbvGr variable in the houses dataset (which describes the number of bedrooms in a house):
+
+$$\begin{equation}
+[0,\ 7,\ 8]
+\end{equation}$$
+
+For computational purposes (and sometimes for simplicity), we tend to leave out the units of measurement in practice, but theoretically, we should write out the units of measurement:
+
+$$\begin{equation}
+[0\ \text{bedrooms}, 7\ \text{bedrooms},8\ \text{bedrooms}]
+\end{equation}$$ The units of measurement are subject to algebraic operations, so the variance of the sample above will be (for formatting purposes, we'll abbreviate "bedrooms" with "b"): $$\begin{equation}
+variance = \frac{
+(0\ b - 5\ b)^2 +
+(7\ b - 5\ b)^2 +
+(8 b - 5\ b)^2
+}
+{3}
+\end{equation}$$ $$\begin{equation}
+variance = \frac{
+25b^2 + 4b^2 + 9b^2
+}
+{3} = \frac{38b^2}{3} = 12.\bar{6}b^2
+\end{equation}$$
+
+The variance of this distribution is $12.\bar{6}\ bedrooms^2$, which is very counterintuitive. To solve this problem and also reduce the variability value, we can take the square root of variance.
+
+$$\begin{equation}
+\sqrt{variance} = \sqrt{12.\bar{6}\ bedrooms^2} = 3.6\ bedrooms
+\end{equation}$$ The square root of variance is called standard deviation (remember that "deviation" is synonymous with "distance"), and it can be expressed like this in an algebraic definition:
+
+$$\begin{equation}
+standard\ deviation = \sqrt{
+\frac{
+(x_1 - \mu)^2 +
+(x_2 - \mu)^2 +
+... +
+(x_N - \mu)^2
+}{N}
+}
+= \sqrt{
+\frac{
+\displaystyle\sum_{i = 1}^{N}
+(x_i - \mu)^2
+}
+{N}
+}
+\end{equation}$$
+
+Notice that the standard deviation is simply the square root of variance: $$\begin{equation}
+standard\ deviation = \sqrt{variance}
+\end{equation}$$
+
+Let's return to our distribution $C = [1,1,1,1,1,1,1,1,1,21]$ and see how well standard deviation does on measuring its variability.
+
+```{r}
+C  <-  c(1,1,1,1,1,1,1,1,1,21)
+
+#variance <- function(vector) {
+#    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+#    sum(distances) / length(distances)
+#}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / length(distances)) #adding sqrt at this line
+}
+
+standard_deviation_C  <-  standard_deviation(C)
+standard_deviation_C
+```
+
+## Average Variability Around the Mean
+
+
+In practice, standard deviation is perhaps the most used measure of variability. Let's try to get a better understanding of it by measuring the variability of the `SalePrice` variable in our dataset. We'll use the `standard_deviation()` function we wrote for the previous exercise:
+
+
+```{r}
+standard_deviation(houses$SalePrice)
+sd(houses$SalePrice)
+```
+
+
+
+Standard deviation tells us how much the values in a distribution vary (on average) around the mean of that distribution. The mean of the `SalePrice` variable is approximately $180,796:
+
+
+```{r}
+mean(houses$SalePrice)
+```
+
+The mean tells us that the average price of a house is roughly \$180,796, but this doesn't mean that each house (or most of them) costs exactly \$180,796. One house could cost \$120,000, another \$240,000, and it could be that no house actually costs exactly \$180,796.
+
+The standard deviation gives us a picture about this variability around the mean sale price. The standard deviation value is \$79,873.06, and this means sale prices vary on average by roughly \$79,873 above and below a mean of \$180,796.
+
+
+
+Below, we'll try to visualize this variability around the mean by:
+- Generating a histogram for the distribution of the `SalePrice` variable.
+- Using vertical lines to mark the mean and the average deviations above and below the mean.
+
+
+```{r}
+mean_var <- mean(houses$SalePrice)
+sd_var <- standard_deviation(houses$SalePrice)
+
+ggplot(data = houses, aes(x = SalePrice)) +
+    geom_histogram(bins = 10, 
+        position = "identity", 
+        alpha = 0.5, 
+        fill='blue') +
+    geom_vline(aes(xintercept = mean_var, 
+                    color = 'black'), 
+                size = 1.2 ) +
+    geom_vline(aes(xintercept = mean_var - sd_var, 
+                    color = 'red'), 
+                size = 1.2 ) +
+    geom_vline(aes(xintercept = mean_var + sd_var, 
+                    color = 'violet'), 
+                size = 1.2 ) +
+    scale_x_continuous(labels = scales::comma) +
+    scale_colour_manual(values = c("black", "red", "violet"), 
+                        name = "", 
+                        labels = c("Mean", "Below", "Above")) +
+    theme_bw() + 
+    theme(legend.position='top') +
+    xlab("Sale Price") + 
+    ylab("Frequency")
+```
+
+Notice in the histogram above that prices can vary around the mean much more or much less than \$79,873 (recall the value of the standard deviation is \$79,873.06). Some outliers around \$700,000 are more than \$500,000 above the mean and a couple of houses around \$30,000 are more than \$150,000 below the mean. The standard deviation doesn't set boundaries for the values in a distribution: The prices can go above and below the mean more than \$79,873.
+
+
+```{r}
+
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / length(distances))
+}
+# Measure first the variability for each year
+houses_years_std <- houses %>%
+    group_by(`Yr Sold`) %>%
+    summarize(st_dev = standard_deviation(SalePrice)) %>%
+    arrange(st_dev)
+houses_years_std
+# Get years of max and min variability
+greatest_variability  <-  houses_years_std %>%
+  filter(st_dev == max(st_dev)) %>% 
+  pull(`Yr Sold`)
+
+greatest_variability
+
+lowest_variability  <-  houses_years_std %>%
+  filter(st_dev == min(st_dev)) %>% 
+  pull(`Yr Sold`)
+lowest_variability
+
+```
+
+## A Measure of Spread
+
+Another way to understand standard deviation is as a measure of spread in a distribution — values in a distribution can be more or less spread. We took four random samples of 50 sample points each from the `SalePrice` distribution, and plotted their histograms to visualize the spread for each sample:
+
+
+![](https://dq-content.s3.amazonaws.com/447/s2m4_spreads.png)\
+
+
+According to our visual estimates, sample 1 has the biggest spread, followed by sample 4, then sample 3, and finally, sample 2 with the lowest spread. The standard deviations of these four distributions fit our visual estimates fairly well:
+
+```{r}
+set.seed(2)
+samples  <-  purrr::map(1:4, function(x) sample(x = houses$SalePrice, size = 50))
+sd_samples <- purrr::map(1:4, function(i) standard_deviation(samples[[i]]) )
+sd_samples
+```
+```{r}
+set.seed(10)
+
+sample1  <-  sample(x = houses$`Year Built`, size = 50)
+sample2  <-  sample(x = houses$`Year Built`, size = 50)
+
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / length(distances))
+}
+bigger_spread  <-  'sample 2'
+st_dev1  <-  standard_deviation(sample1)
+st_dev1
+st_dev2  <-  standard_deviation(sample2)
+st_dev2
+```
+
+## The Sample Standard Deviation
+
+In practice, we generally work with samples, but most of the time we're not actually interested in describing the samples. Rather, we want to use the samples to make inferences about their corresponding populations. Let's find out whether the standard deviation of a sample is a good estimate for the standard deviation in the corresponding population.
+
+Remember that we defined the standard deviation $SD$ as:
+$$\begin{equation}
+SD = \sqrt{
+\frac{
+(x_1 - \mu)^2 +
+(x_2 - \mu)^2 +
+... +
+(x_N - \mu)^2
+}{N}
+}
+= \sqrt{
+\frac{
+\displaystyle\sum_{i = 1}^{N}
+(x_i - \mu)^2
+}
+{N}
+}
+\end{equation}$$
+
+Notice that in the formula we used the population mean μ, so if we wanted to compute the standard deviation of a sample, we'd have to know μ. In practice, μ is almost never known; we can't find it from our sample either, but we can estimate μ using the sample mean $\bar{x}$.
+We update slightly the formula for the sample standard deviation by changing $\mu$ to  $\bar{x}$ and $N$ to $n$ (remember that $N$ describes the number of data points in a population, while 
+$n$ describes the number of data points in a sample):
+
+$$
+\begin{equation}
+SD_{sample} = \sqrt{
+\frac{
+(x_1 - \bar{x})^2 +
+(x_2 - \bar{x})^2 +
+... +
+(x_n - \bar{x})^2
+}{n}
+}
+= \sqrt{
+\frac{
+\displaystyle\sum_{i = 1}^{n}
+(x_i - \bar{x})^2
+}
+{n}
+}
+\end{equation}
+$$
+```{r}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / length(distances))
+}
+
+library(ggplot2)
+set.seed(1)
+std_points  <-  replicate(n = 5000, expr = standard_deviation(sample(x = houses$SalePrice, size = 10)))
+
+std_points_tibble <- tibble::tibble(std_points)
+
+ggplot(data = std_points_tibble, aes(x = std_points)) +
+    geom_histogram(bins = 10, position = "identity") +
+    geom_vline(aes(xintercept = standard_deviation(houses$SalePrice))) +
+    xlab("Sample standard deviation") + 
+    ylab("Frequency")
+```
+
+## Quality of sample standard deviation
+
+In the last exercise, we plotted the histogram of 5,000 sample standard deviations and compared them against the population standard deviation. Notice that most sample standard deviations are clustered below the population standard deviation:
+
+
+![](https://dq-content.s3.amazonaws.com/447/s2m4_cluster.png)\
+
+
+This suggests that the sample standard deviation usually underestimates the population standard deviation. We can also see that the mean of the 5,000 sample standard deviations is below the population standard deviation:
+
+
+```{r}
+mean(std_points) #std_points - a list with all the 5,000 st. deviations
+standard_deviation(houses$SalePrice)
+```
+
+So we can say that the sample standard deviation underestimates on average the population standard deviation. Some sample standard deviations are lower than the population standard deviation, some are greater, some may even be equal to the population standard deviation, but on average the sample standard deviation is lower than the population standard deviation.
+
+Please note that due to the nature of random sampling, working locally may yield slightly different results.
+
+On the next screen, we will see why the sample standard deviation underestimates and how we can correct it.
+
+## Bessel's Correction
+
+We can get a good intuition as to why the sample standard deviation underestimates if we think in terms of distribution spread. When we sample a population, it's generally more likely to get a sample with a spread that's lower than the population's spread. This generally translates to a lower standard deviation than in the population.
+
+![](https://dq-content.s3.amazonaws.com/447/s2m4_less_var.svg)\
+
+Getting a sample with a higher standard deviation than in the population is possible, but this is less likely. This is mostly specific to samples with a high spread and no clusters.
+
+
+![](https://dq-content.s3.amazonaws.com/447/s2m4_more_var.svg)\
+
+
+To correct the underestimation problem, we can try to slightly modify the sample standard deviation formula to return higher values. One way to do that is to decrease the value of the denominator. For instance, in $\frac{12}{6} = 2$, the denominator is 6. If we decrease the value of the denominator, we get a greater result: $\frac{12}{4} = 3$
+
+
+We'll decrease by 1 the denominator in the sample standard deviation formula, which now becomes:
+
+This small correction we added to the sample standard deviation (dividing by n−1) instead of n) is called Bessel's correction. Let's implement Bessel's correction to our `standard_deviation()` function and repeat the steps in the last exercise to see if Bessel's correction adds any improvements.
+
+
+```{r}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / length(distances))
+}
+
+set.seed(1)
+
+std_points  <-  replicate(n = 5000, expr = standard_deviation(sample(x = houses$SalePrice, size = 10)))
+
+#ggplot(data = tibble::tibble(std_points), aes(x = std_points)) +
+#    geom_histogram(bins = 10, position = "identity") +
+#    geom_vline(aes(xintercept = standard_deviation(houses$SalePrice))) +
+#    xlab("Sample standard deviation") + 
+#    ylab("Frequency")
+
+population_stdev  <-  standard_deviation(houses$SalePrice)
+standard_deviation_bessel_correction <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / (length(distances) - 1) ) #Only this line has to change
+}
+
+set.seed(1)
+
+std_points  <-  replicate(n = 5000, expr = standard_deviation_bessel_correction(sample(x = houses$SalePrice, size = 10)))
+
+std_points_tibble <- tibble::tibble(std_points)
+
+ggplot(data = std_points_tibble, aes(x = std_points)) +
+    geom_histogram(bins = 10, position = "identity") +
+    geom_vline(aes(xintercept = population_stdev)) +
+    xlab("Sample standard deviation") + 
+    ylab("Frequency")
+```
+
+
+It looks like Bessel's correction added some visible improvements and partially corrected the underestimation problem:
+
+
+![](https://dq-content.s3.amazonaws.com/447/s2m4_bessel.png)\
+
+The improvement brought by Bessel's correction is more obvious when we compare the average values of the two distributions above. The mean of the 5,000 sample standard deviations without Bessel's correction is roughly 70,358, while the mean standard deviation of the sample standard deviations having the correction is roughly 74,164. This is significantly closer to the population standard deviation, which is approximately 79,873.
+
+We could decrease the denominator more (dividing by n−2 maybe) to try improving the correction. However, we need a single mathematical definition for the sample standard deviation, and we have to choose between 
+n, n−1, n−2, etc. Remember that in practice we don't know the population standard deviation, so we cannot tell which correction would work best for each sample standard deviation.
+
+
+Statisticians agree that n−1 is the best choice for the sample standard deviation formula. We'll explore a strong argument in support of this in the next screen.
+
+Now that we know what formulas to use for samples and populations, we introduce some standard notation that will help us understand other statistics resources. The population standard deviation is denoted with the Greek letter σ (read "sigma" or "lowercase sigma"):
+
+$$\begin{equation}
+\sigma = \sqrt{
+\frac{
+(x_1 - \mu)^2 +
+(x_2 - \mu)^2 +
+... +
+(x_N - \mu)^2
+}{N}
+}
+= \sqrt{
+\frac{
+\displaystyle\sum_{i = 1}^{N}
+(x_i - \mu)^2
+}
+{N}
+}
+\end{equation}$$
+Remember that the population standard deviation $\sigma$ is just the square root of the population variance. For this reason, the population variance is written as $\sigma^2$ (such that taking the square root of the variance $\sigma^2$ results in the standard deviation $\sqrt{\sigma^2} = \sigma$
+
+
+$$\begin{equation}
+\sigma^2 = \frac{
+(x_1 - \mu)^2 +
+(x_2 - \mu)^2 +
+... +
+(x_N - \mu)^2
+}{N} = \frac{
+\displaystyle\sum_{i = 1}^{N}
+(x_i - \mu)^2
+}
+{N}
+\end{equation}$$
+
+The sample standard deviation is simply denoted with $s$, while the sample variance is denoted with $s^2$ (also notice Bessel's correction in the denominator):
+
+
+$$\begin{equation}
+s = \sqrt{
+\frac{
+(x_1 - \bar{x})^2 +
+(x_2 - \bar{x})^2 +
+... +
+(x_n - \bar{x})^2
+}{n - 1}
+}
+= \sqrt{
+\frac{
+\displaystyle\sum_{i = 1}^{n}
+(x_i - \bar{x})^2
+}
+{n - 1}
+}
+\end{equation}$$
+
+
+$$\begin{equation}
+s^2 = \frac{
+(x_1 - \bar{x})^2 +
+(x_2 - \bar{x})^2 +
+... +
+(x_n - \bar{x})^2
+}{n-1} = \frac{
+\displaystyle\sum_{i = 1}^{n}
+(x_i - \bar{x})^2
+}
+{n-1}
+\end{equation}$$
+
+The main takeaway is that we need to use the $s$ and $s^2$ formulae (with Bessel's correction) for samples. For populations, we can use the $\sigma$ and $\sigma^2$ formulae (without Bessel's correction).
+
+
+Let's compare our standard implementation of the variance and standard deviation with the equivalent R base functions:
+
+
+- Standard deviation `sd()`.
+- Variance `var()`.
+
+
+```{r}
+set.seed(1)
+
+sample_sales  <-  sample(x=houses$SalePrice, size=100)
+
+variance_bessel_correction <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sum(distances) / (length(distances) - 1)
+}
+
+standard_deviation_bessel_correction <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / (length(distances)-1) )
+}
+computed_stdev  <-  standard_deviation_bessel_correction(sample_sales)
+computed_stdev
+stdev_r  <-  sd(sample_sales)
+stdev_r
+equal_stdevs  <-  computed_stdev == stdev_r
+
+computed_var  <-  variance_bessel_correction(sample_sales)
+computed_var
+var_r  <-  var(sample_sales)
+var_r
+equal_vars  <-  computed_var == var_r
+```
+## Sample Variance — Unbiased Estimator
+
+
+In the previous screen, we stated that statisticians agree that $n-1$ is better than $n$ or $n-2$ for Calculating the sample standard deviation $s$. An argument supporting this comes from the fact that the sample variance $s^2$ (which uses $n-1$) is an unbiased estimator for the population variance $\sigma^2$. Since standard deviation is just the square root of variance, it makes sense to use $n-1$ as well (although standard deviation is not an unbiased estimator, as we'll see).
+
+
+
+As we learned previously when we discussed the mean, we call a statistic an unbiased estimator when that statistic is equal on average to the parameter it estimates. Remember that the sample mean $bar{x}$is an unbiased estimator for the population mean $\mu$ no matter whether we sample with or without replacement. The sample variance $s^2$ is an unbiased estimator for the population variance $\sigma^2$ only when we sample with replacement. In the diagram below, we will:
+
+- Take all possible samples of size $n=2$ from the population $[0,3,6]$ with$\sigma^2=6$.
+
+- Compute the sample variance $s^2$ for each sample. 
+
+- Take the mean of all the sample variances $s^2$. We can see that the mean is 6, which is the same as the population variance $s^2$, which shows that the sample variance $s^2$ is an unbiased estimator for the population variance $\sigma^2=6$. 
+<center>
+![](https://dq-content.s3.amazonaws.com/447/s2m4_replacement.svg)\
+</center>
+\
+Although the sample variance $s^2$ is an unbiased estimator, and the sample standard deviation $s$ is basically $\sqrt{s^2}$, the unbiasedness doesn't carry over. $\sigma$ is roughly 2.45 for the population. 
+
+<center>
+![](https://dq-content.s3.amazonaws.com/447/s2m4_stdev_replacement.svg)\
+</center>
+\
+In the exercise below, we'll see that the sample variance $s^2$ and the sample standard deviation $s$ are biased when we sample without replacement.
+
+
+```{r}
+population  <-  c(0, 3, 6)
+
+samples  <-  list(c(0,3), c(0,6),
+               c(3,0), c(3,6),
+               c(6,0), c(6,3)
+)
+
+variance <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sum(distances) / length(distances)
+}
+
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 #we only need to compute the squared distances here
+    sqrt(sum(distances) / length(distances) )
+}
+population_var  <-  variance(population)
+population_std  <-  standard_deviation(population)
+
+
+st_devs  <-  purrr::map_dbl(samples,sd)
+variances  <-  purrr::map_dbl(samples,var)
+
+
+mean_std  <-  mean(st_devs)
+mean_var  <-  mean(variances)
+
+
+population_var
+mean_var
+population_std
+mean_std
+
+
+equal_stdev  <-  population_std == mean_std
+equal_var  <-  population_var == mean_var
+```
+# 5. Z-scores
+
+## Individual Values 
+Over the last four lessons, we focused on distributions as a whole and learned to summarize entire distributions and measure their variability. In this lesson, we'll switch the focus to the individual values in a distribution and learn a few statistical techniques that can help us answer practical questions.
+
+We'll continue working with our dataset on house prices.
+
+Let's say we randomly sampled one sale price from the SalePrice column, and the value we got was \$220,000. Now we may want to ask: Is a house costing \$220,000 cheap, expensive, or average-priced? To answer this question, we can start with finding the mean price of a house and then figure out whether \$220,000 is below or above the mean:
+```{r}
+mean(houses$SalePrice)
+```
+
+The sampled house (\$220,000) is clearly more expensive than the average house (roughly \$180,796), but is this price slightly above the average or is it very far above the average? The answer depends on the standard deviation of the distribution of sale prices.
+
+To see why this is true, consider the two normally-distributed samples of sale prices below (we made this simplifying assumption of normality for teaching purposes). Both samples have the same mean $bar{x}=180,000$, but the sample standard deviations $s$ are different (on the left, $s = 40,000$ , while on the right $s = 40,000$). For formatting purposes, we'll denote thousands with "k", so 180,000 will become 180k:
+
+
+![](https://dq-content.s3.amazonaws.com/448/s2m5_different_sds.svg)\
+For the sample with a greater standard deviation ($s = 40,000$), we can see that \$220,000 is fairly close to the mean, indicating that houses at that price are common and thus not very expensive (relative to the other houses on the market).
+
+For the other sample ($s=10,000$), we see $220,000 on the far right of the distribution, indicating that houses at that price are uncommon and thus very expensive (relative to the other houses on the market).
+
+Now let's try to figure out how far off from the mean a value of \$220,000 is in the distribution of the `SalePrice` variable.
+
+```{r}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / length(distances) - 1) #subtraction of 1 is to get an unbiased 
+}                                                #estimate of the population standard deviation based on the sample
+
+st_dev  <-  standard_deviation(houses$SalePrice)
+mean  <-  mean(houses$SalePrice)
+ggplot(data = houses,
+   aes(x = SalePrice)) +
+   geom_density(alpha = 0.1,
+                color='blue',
+                fill='blue') +
+   geom_vline(aes(xintercept = mean,
+                  color = 'Mean'),
+              size = 1.2 ) +
+   geom_vline(aes(xintercept = 220000,
+                  color = '220,000'),
+              size = 1.2 ) +
+   geom_vline(aes(xintercept = mean+st_dev,
+                  color = 'Standard deviation'),
+              size = 1.2 ) +
+   scale_y_continuous(labels = scales::comma) +
+   scale_x_continuous(labels = scales::comma,
+                      lim = c(min(houses$SalePrice),
+                              max(houses$SalePrice))) +
+   scale_colour_manual(values = c("Mean"="black",
+                                  "220,000"="red",
+                                  "Standard deviation"="orange"),
+                       name = "") +
+   theme_bw() +
+   theme(legend.position='top') +
+   xlab("Sale Price") +
+   ylab("Density")
+
+```
+
+## Number of Standard Deviations
+
+Previously, we determined whether \$220,000 is expensive or not by considering both the mean and the standard deviation of the distribution. We found an answer using a kernel density plot, but overall, the process took more steps than it was ideal, and we also relied on a visual estimate which lacks high precision.
+
+We need to find a faster and more precise way to measure how far off a value is from the mean (taking into account at the same time the standard deviation of the distribution). Let's take another look at the two distributions we discussed in the previous screen:
+
+
+![](https://dq-content.s3.amazonaws.com/448/s2m5_different_sds.svg)\
+For each distribution, the distance between \$220,000 and the mean \$180,000 is \$40,000. For the distribution on the left, this distance of \$40,000 is exactly equal to its standard deviation (we see on the left graph above that $s=40000$). With this in mind, we could say that \$220,000 is one standard deviation away from the mean — this is the same as saying \$220,000 is \$40,000 away from the mean (because "one standard deviation" is equivalent to \$40,000).
+
+
+For the distribution on the right, the standard deviation is \$10,000. The distance between \$220,000 and \$180,000 is still \$40,000, but in this case, \$40,000 is four times greater than the standard deviation of \$10,000. Therefore, we could say that \$220,000 is four standard deviations away from the mean — this is the same as saying that \$220,000 is \$40,000 away from the mean (because "four standard deviations" is equivalent to \$40,000, since one standard deviation is \$10,000, and $4 \times 10,000 = 40,000$
+
+
+![](https://dq-content.s3.amazonaws.com/448/s2m5_4sds.svg)\
+
+So it looks like we can measure how far off a value is from the mean in terms of number of standard deviations. If a price of \$220,000 is one standard deviation away from the mean, we can conclude that this value is relatively close to the mean, and it's not very expensive compared to the other prices in the distribution.
+
+If a price of \$220,000 is four standard deviations away from the mean, then we know that this value is very far away from the mean. This means that \$220,000 is very uncommon and very expensive compared to the other prices in the distribution.
+
+
+```{r}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / length(distances) - 1)  
+}
+distance  <-  220000 - mean(houses$SalePrice)
+st_devs_away  <-  distance / standard_deviation(houses$SalePrice)
+st_devs_away
+```
+
+## Z-scores
+
+In the previous exercise, we managed to find the number of standard deviations away from the mean for a value of \$220,000 by:
+
+
+- Finding the distance between the value and the mean (by subtracting the mean from that value)
+- Dividing the distance by the standard deviation of the distribution
+
+Let's try to describe this process algebraically: For any value $x$ in a population with mean $\mu$ and  standard deviation $\sigma$, the number of standard deviations away from the mean is given by the formula below, where we denote the number of standard deviations away from the mean with $z$:
+
+$$\begin{equation}
+z = \frac{x - \mu}{\sigma}
+\end{equation}$$
+
+
+The value representing the number of standard deviations away from the mean is commonly known as the standard score, or the z-score. We'll use the term "z-score" throughout our courses.
+
+We can also define Z-scores for samples. For any value $x$ in a sample with mean $\bar{x}$ and standard deviation $s$  (with Bessel's correction), the z-score $z$ is given by the formula:
+
+
+$$
+\begin{equation}
+z = \frac{x - \bar{x}}{s}
+\end{equation}
+$$
+The z-scores we've dealt with so far were all positive, but we can have negative z-scores as well. Let's consider one of the samples from the last screen (the one with a mean $\bar{x}$ of \$180,000 and a standard deviation $s$ of \$40,000). A price of \$100,000 will have a z-score of -2:
+
+$$\begin{equation}
+z = \frac{100000 - 180000}{40000} = \frac{-80000}{40000} = -2
+\end{equation}$$
+
+![](https://dq-content.s3.amazonaws.com/448/s2m5_negative_z.svg)\
+
+
+
+
+We can see that a z-score has two parts:
+
+- The sign, which indicates whether the value is above or below the mean
+- The value, which indicates the number of standard deviations that a value is away from the mean
+
+
+Generally, the sign of a z-score is written out, even if the z-score is positive. If a value is two standard deviations away from the mean, we should write that the z-score is +2, not 2.
+
+
+```{r}
+min_val  <-  min(houses$SalePrice)
+mean_val  <-  mean(houses$SalePrice)
+max_val  <-  max(houses$SalePrice) 
+
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / (length(distances) - 1) )
+}
+min_val <- min(houses$SalePrice)
+mean_val <- mean(houses$SalePrice)
+max_val <- max(houses$SalePrice)
+
+standard_deviation <- function(vector) {
+    distances <- (vector - mean(vector))**2 
+    sqrt(sum(distances) / (length(distances) -1))
+}
+
+z_score <- function(value, array) {
+  mean <- sum(array) / length(array)
+  
+  st_dev <- standard_deviation(array)
+  
+  distance <- value - mean
+  z <- distance / st_dev
+  
+  return(z)
+}
+
+min_z <- z_score(min_val, houses$SalePrice)
+mean_z <- z_score(mean_val, houses$SalePrice)
+max_z <- z_score(max_val, houses$SalePrice)
+
+min_z
+mean_z
+max_z
+```
+
+## Locating Values in Different Distributions
+
+Now we'll consider an example that's suggestive for the kind of questions we can answer using z-scores.
+
+Let's say we're working as data analysts for a real estate company, and we want to find the best neighborhood in Ames to invest in (remember that our dataset describes sale prices for houses in Ames, Iowa). Our company wants to buy a couple of houses that we can then rent and ideally sell back later at a higher price. We think that location is an important factor driving rental and sale prices, and we want to target our investment based on location.
+
+The company budgeted \$10 millions for this investment, and the plan is to buy 50 houses of \$200,000 each. Depending on the market particularities of each neighborhood, a \$200,000 house can be considered cheap, average-priced, or expensive. We want to find a neighborhood where a price of \$200,000 goes as average because average-priced houses are the ones that are most rented and easiest to sell.
+
+Sale prices are lower in a less desirable neighborhood, and someone can get a high-quality house for \$200,000 — but people usually avoid bad neighborhoods for a variety of reasons: distance from the workplace, lack of schools, pollution, noise, etc.
+
+People also tend to avoid high-quality neighborhoods because of the higher sale prices — with \$200,000, we may only be able to get a poor-quality house in a good location. So most people will aim for something in the middle — these people make up the market we intend to reach.
+
+We're asked by our real estate specialists to analyze historical data on five neighborhoods:
+
+- North Ames
+- College Creek
+- Old Town
+- Edwards
+- Somerset
+
+Our goal is to find out for which of these neighborhoods a \$200,000 house is average-priced. We can solve this task quickly by measuring the z-score for a \$200,000 value for each of the five distributions — each of the five neighborhoods has its own distribution of sale prices with its own mean and standard deviation.
+
+We saw in the previous exercise that the mean of a distribution has a z-score of 0, so our recommendation should be the neighborhood with the z-score closest to 0 (we'll detail later in this lesson why the mean of a distribution has a z-score of 0).
+
+Note that we cannot simply find the mean sale price of each neighborhood and then just subtract \$200,000 from the mean to find the neighborhood with the lowest difference. We'd fail to take into account the variability of each distribution if we did it this way.
+
+
+```{r}
+min_val <- min(houses$SalePrice)
+mean_val <- mean(houses$SalePrice)
+max_val <- max(houses$SalePrice)
+
+standard_deviation <- function(vector) {
+    distances <- (vector - mean(vector))**2 
+    sqrt(sum(distances) / (length(distances) -1))
+}
+
+z_score <- function(value, array) {
+  mean <- sum(array) / length(array)
+  
+  st_dev <- standard_deviation(array)
+  
+  distance <- value - mean
+  z <- distance / st_dev
+  
+  return(z)
+}
+
+target_neighborhoods <- c('NAmes', 'CollgCr', 'OldTown', 'Edwards', 'Somerst')
+# Filter only the interesting locations from the dataset
+# Group by neighborhood and find the z-score for 200000 for every location
+# Sort the result by zcore
+houses %>%
+    filter(Neighborhood %in% target_neighborhoods) %>%
+    group_by(Neighborhood) %>%
+    summarise(zscore = abs(z_score(200000, SalePrice))) %>%
+    ungroup() %>%
+    arrange(zscore)
+
+# Find the location with the z-score closest to 0
+best_investment  <-  'College Creek'
+```
+## Transforming Distributions
+
+Z-scores are often used to transform entire distributions by converting all the values to z-scores. For instance, consider, the distribution of the `SalePrice` column:
+
+
+
+
+
+```{r}
+ggplot(data = houses,
+    aes(x = SalePrice)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$SalePrice), 
+                               max(houses$SalePrice))) +
+    theme_bw() + 
+    xlab("Sale Price") + 
+    ylab("Density")
+```
+
+
+We can transform the entire distribution by converting each value to a z-score. In the next code block, we will:
+
+
+- Convert each value to a z-score by using the `dplyr::mutate()` function.
+- Store the z-scores in a separate column named `z_prices`.
+- Plot the kernel density plot for the original values side by side and the kernel density plot for the z-scores using `ggplot2` and `ggpubr` packages.
+
+```{r}
+
+houses <- houses %>%
+    mutate(z_prices = (SalePrice - mean(SalePrice)) / standard_deviation(SalePrice) )
+
+
+q1 <- ggplot(data = houses,
+    aes(x = SalePrice)) +
+    geom_density(alpha = 0.1, 
+                color='blue', 
+                fill='blue') +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$SalePrice), 
+                               max(houses$SalePrice))) +
+    theme_bw() + 
+    xlab("Sale Price") + 
+    ylab("Density") 
+
+q2 <- ggplot(data = houses,
+    aes(x = z_prices)) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue') +
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma, 
+                       lim = c(min(houses$z_prices), 
+                               max(houses$z_prices))) +
+    theme_bw() + 
+    xlab("Z Price") + 
+    ylab("Density")
+
+# Show the plots side-by-side
+library(ggpubr)
+
+ggarrange(q2, q1, ncol = 2, nrow = 1)
+```
+
+Notice that the shape of the initial distribution is preserved perfectly in the new distribution of z-scores. We'll dig more into why this happens in the next screen. For now, let's find out what happens to the mean and the standard deviation when we convert all the values to z-scores.
+
+```{r}
+standard_deviation <- function(vector) {
+    distances  <-  (vector - mean(vector))**2 
+    sqrt(sum(distances) / length(distances) )
+}
+
+houses <- houses %>%
+    mutate(z_prices = (SalePrice - mean(SalePrice)) / standard_deviation(SalePrice))
+z_mean_price  <-  mean(houses$z_prices)
+z_stdev_price  <-  standard_deviation(houses$z_prices)
+
+z_mean_price
+z_stdev_price
+# Transforming 'Lot Area'
+houses <- houses %>%
+    mutate(z_area = (`Lot Area` - mean(`Lot Area`)) / standard_deviation(`Lot Area`))
+
+z_mean_area  <-  mean(houses$z_area)
+z_stdev_area  <-  standard_deviation(houses$z_area)
+z_mean_area
+z_stdev_area
+```
+
+
+## The Standard Distribution
+
+In the last exercise, the mean values were both extremely close to 0. For instance, we got a mean of `-9.96554232764137e-17` (notice the `e-17` at the end) for the z-scores distribution of the `SalePrice` column. This number uses scientific notation to abbreviate what in full would be `-0.0000000000000000996554232764137`. Also, both the standard deviations were equal to 1.
+
+
+In fact, for every distribution of z-scores, the mean is always 0 and the standard deviation is always 1. We got slightly different values in the previous exercise because of small rounding errors. Let's now figure out why the mean is always 0 and standard deviation is always 1.
+
+
+Consider the transformation of a normally-distributed population of sale prices with mean $\mu=180,000$ and standard deviation $\sigma=10,000$:
+
+
+
+![](https://dq-content.s3.amazonaws.com/448/s2m5_relabeling.svg)\
+
+Notice that when we transform to z-scores, the initial values are practically relabeled and the relative location of each value in the distribution is perfectly preserved. This explains why the shape of the original distribution is preserved. It also means that the location of the mean and the standard deviation is preserved.
+
+
+The mean is located at 180,000 in the initial distribution. In the z-score distribution, the mean has the same location, but now there's a value of 0 at that location because the z-score of 180,000 is 0.
+
+Notice that the value of the standard deviation (10,000) is given by the difference between the value that is one standard deviation above the mean (190,000) and the mean (180,000).
+
+
+$$\begin{equation}
+190,000 - 180,000 = 10,000
+\end{equation}$$
+
+After converting 190,000 and 180,000 to z-scores, the difference becomes 1-0 =1,so the standard deviation of the z-score distribution is 1.
+
+We denote with $\mu_z$ the mean of a distribution of z-scores, and with $\sigma_z$ the standard deviation of a distribution of z-scores. We can show mathematically that $\mu_z=0$ and $\sigma_z =1$ for any distribution of z-scores.
+
+Because locations are preserved, $\mu_z$ is equal to the z-score of the mean $\mu$ in the original population. The z-score of $\mu$ is 0 for any value of $\mu$ becuase:
+$$
+\begin{equation}
+\mu_z = \frac{\mu - \mu}{\sigma} = \frac{0}{\sigma} = 0
+\end{equation}
+$$
+$\sigma_z$ is equal to the z-score of the first value that is one standard deviation above the mean (that would be 190,000 in the example above). We can refer to the first value that is one standard deviation above the mean as $\mu + \sigma$, and we can see that the z-score of $\mu + \sigma$ is 1 for any value of $\mu$ and $\sigma$
+
+
+
+$$\begin{equation}
+\sigma_z = \frac{(\mu + \sigma) - \mu}{\sigma} =
+\frac{\sigma}{\sigma} = 1
+\end{equation}$$
+
+A distribution of z-scores is often called a standard distribution (remember that z-scores are also called standard scores). When we convert a distribution to z-scores, we'd say in statistical jargon that we standardized the distribution.
+
+
+## Standardizing Samples
+
+Before digging into some of the applications of standardizing distributions, let's discuss some important details around standardizing samples. In the previous exercise, we found that $\mu_z=0$
+and $\sigma_z=1$ for the distribution $[0,8,0,8]$, which we assumed to be a population.
+
+
+Let's instead treat it as a sample and proceed to standardize it. Because it's a sample, we'll use the formula for the sample standard deviation $s$ (the formula containing Bessel's correction):
+
+
+```{r}
+sample  <-  c(0,8,0,8)
+
+x_bar  <-  mean(sample)
+s  <-  sd(sample)
+
+standardized_sample  <-  (sample - x_bar) / s
+
+print(standardized_sample)
+```
+
+
+Notice that the mean of `standardized_sample` is 0, just like we'd expect, but the standard deviation is not 1:
+
+```{r}
+mean(standardized_sample)
+standard_deviation(standardized_sample)
+sd(standardized_sample)
+```
+Above, we measured the standard deviation using the formula for the population standard deviation σ (the formula without Bessel's correction). But is it justified to use the formula for the population standard deviation?
+
+When we standardize a sample, the resulting distribution of z-scores is itself a sample. This means that we need to use the formula for the sample standard deviation $s$ when we compute the standard deviation. Let's see if that makes the standard deviation equal to 1, just like we'd expect.
+
+## Using Standardization for Comparisons
+
+Standardizing distributions can prove very useful when we need to compare values coming from different systems of measurement. Let's say there are two companies in Ames that offer services in evaluating overall house quality. Inspectors from each company examine houses and rate them with an index score which describes the overall quality of the house.
+
+The inspection itself is quite expensive, and a house owner generally asks the service from only one company. The problem is that each company has its own system of measuring overall quality, which results in index scores that are impossible to compare. We've coded some index scores and saved them in the columns `index_1` and `index_2`:
+
+
+```{r}
+houses <- houses %>%
+  mutate(index_1 = SalePrice/ 100000 + 37) %>%
+  mutate(index_1 = replace(index_1,  row_number() %% 2 != 0, NA_real_) ) %>%
+  mutate(index_2 = SalePrice/ 90000 - 2.8) %>%
+  mutate(index_2 = replace(index_2,  row_number() %% 2 == 0, NA_real_) )
+```
+
+Here is how the first six rows of the columns `index_1`, `index_2`, and `SalePrice` look like.
+
+```{r}
+houses %>% select(index_1, index_2, SalePrice) %>% head
+```
+
+Let's suppose for a moment that these houses are not yet sold, and a client needs our help to choose between the first and the second house (from the table above). We want to begin with comparing index scores, but the first house has an index of -0.411, the second's index is 38.0, and the two indices come from different measurement systems, which makes them impossible to compare.
+
+One thing the two systems have in common is that the index is directly proportional with the house quality — a lower index means lower quality, and a higher index means higher quality. To compare these indices coming from different measurement systems, we can:
+
+
+- Standardize each distribution of index values (transform each index to a z-score).
+- Then compare the z-scores.
+
+
+
+Average houses will have z-scores around 0 in both distributions, good-quality houses will have z-scores significantly greater than 0, and low-quality houses will have z-scores significantly lower than 0.
+
+For the sake of the example, we're also under the strong assumption that both companies evaluate houses of all levels of quality. If a company evaluates only low-quality houses, then the best of the low quality houses will have a z-score signficantly greater than 0, suggesting erroneously that they are high-quality.
+
+
+```{r}
+standard_deviation <- function(vector) {
+  distances  <-  (vector - mean(vector))**2 
+  sqrt(sum(distances) / length(distances) )
+}
+
+
+mean_index_1  <-  mean(houses$index_1, na.rm = T)
+mean_index_2  <-  mean(houses$index_2, na.rm = T)
+
+sd_index_1  <-  standard_deviation(na.omit(houses$index_1))
+sd_index_2  <-  standard_deviation(na.omit(houses$index_2))
+houses <- houses %>%
+  mutate(z_1 = (index_1 - mean_index_1) / sd_index_1 ) %>%
+  mutate(z_2 = (index_2 - mean_index_2) / sd_index_2 ) 
+
+head(houses %>% select(z_1, z_2), 2)
+
+```
+
+
+
+## Converting Back from Z-scores
+
+
+Previously, we standardized the `index_1` and `index_2` distributions, and managed to solve our comparison task. Z-scores may not always be straightforward to work with or communicate to non-technical audiences. Fortunately, we can convert them to other values that are more intuitive.
+
+
+Remember that the formula for finding a z-score in a population is:
+
+
+$$\begin{equation}
+z = \frac{x - \mu}{\sigma}
+\end{equation}$$
+With a little algebra we can show that $x = z\sigma + \mu$ (remember that $x$  is the initial value):
+$$\begin{equation}
+z = \frac{x - \mu}{\sigma}\ \ \ | \ \ multiply\ both\ sides\ with\ \sigma
+\end{equation}$$
+
+$$\begin{equation}
+z\sigma = x - \mu\ \ \ | \ \ add\ \mu\ to\ both\ sides
+\end{equation}$$
+$$\begin{equation}
+z\sigma + \mu = x
+\end{equation}$$
+We can use the $x = z\sigma + \mu$  formula to convert z-scores to more intuitive values. We already have the values for $z$, but what about $\mu$ and $\sigma$? We are actually free to choose any values we want for $\mu$ and $\sigma$. We want some more intuitive values for our two standardized distributions of index values, so let's choose $\mu=50$ and $\sigma=10$
+
+The first house has a z-score $z = 0.429742$, and applying  $x = z\sigma + \mu$ for a mean $\mu=50$ and a standard deviation $\sigma=10$we get:
+
+$$\begin{equation}
+0.429742 \cdot 10 + 50 = 54.29742
+\end{equation}$$
+
+Each z-score in the distribution will follow the same procedure — it'll be multiplied by 10 and then we'll add 50 to the result of the product. This means that the location of each z-score will be preserved perfectly — it's all a matter of relabeling. To make this transformation, notice that we took several steps:
+
+- We standardized an initial distribution with a given μ and σ (we performed this step in the previous exercise when we standardized the distribution of `index_1` and `index_2`).
+We converted the standardized distribution to values that together have a different mean μ and standard deviation σ than they did initially.
+
+
+For any standardized distribution we can also convert the z-scores back to the original values. All we have to do is use the initial values for $\mu$ and $sigma$ in the $x = z\sigma + \mu$ formula. However, it's more common in practice to transform the standardized distribution with convenient values for $\mu$ and $sigma$. One practical example include transforming test scores for the SAT test using $\mu=500$ and $\sigma=110$ or transforming IQ scores from different measurement systems using $\mu=100$ and $\sigma=15$
+
+Notice that above we discussed only about populations, but the same reasoning applies to samples.
+
+```{r}
+houses_merged <- houses %>% 
+    mutate(z_1 = tidyr::replace_na(z_1,0)) %>%
+    mutate(z_2 = tidyr::replace_na(z_2,0)) %>%
+    mutate(z_merged = z_1 +  z_2)
+mean  <-  50
+st_dev  <-  10
+houses_merged <- houses_merged %>%
+    mutate(transformed = z_merged * st_dev + mean)
+                            
+mean_transformed  <-  mean(houses_merged$transformed)
+stdev_transformed  <-  standard_deviation(houses_merged$transformed)
+```
+
+
+
+```{r}
+ggplot(data = houses,
+    aes(x = scale(`Lot Area`))) +
+    geom_density(alpha = 0.1, 
+                 color='blue', 
+                 fill='blue')+
+    scale_y_continuous(labels = scales::comma) +
+    scale_x_continuous(labels = scales::comma) +    theme_bw() + 
+    xlab("Lot Area") + 
+    ylab("Density")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

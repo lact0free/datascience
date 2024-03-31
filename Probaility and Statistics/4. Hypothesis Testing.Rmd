@@ -1,0 +1,1039 @@
+---
+title: "4. Hypothesis Testing"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. Probability Distribution
+
+## Distribution of Probability
+
+In the last course, we learned about some of the basic ideas behind probability: what it represents, how to calculate it and some rules for approaching our calculations. We motivated our examples using coins, dice and cards since they represent real-world examples of the concepts we covered. In all the examples we've used so far, we have the same implicit assumption: we have assumed that the probability of observing any single outcome is equally likely. That is, the probability of rolling a 1 on a six-sided dice is the same as the probability of rolling a 6. This assumption of probability being equally distributed across the different outcomes is valid for some phenomena, but not so in general.
+
+This brings us to the purpose of this lesson. As we progress, we'll discuss different ways that probability can be distributed across the different outcomes of the experiment and explore some examples of said probability distributions. The quickest way to understand how probability is distributed is to look at a visualization. To use the dice roll as an example again, we know that each outcome has a 1 in 6 probability of happening, so its probability distribution would look like:
+
+![](https://dq-content.s3.amazonaws.com/439/uniform-dice.png)\
+
+
+Knowing how probability is distributed is important because it tells us many important things about the experiment, such as:
+
+- what outcomes has the highest probability associated with it?
+- what would be the probability of observing a range of outcomes instead of just a single one?
+In this case, all of the outcomes are equally likely, so we see a characteristically flat line as expected. If we were to visualize the probability distribution for a coin toss or drawing a single card, we would also see a similarly flat curve.
+
+The "shape" of this probability distribution is so common that it has been given a special name: The Uniform Distribution. We can represent the probabilities of a dice roll, coin toss, and card drawing all as a uniform distribution, with some slight tweaks to adjust it to each particular situation. We'll start our exploration of probability distributions with the uniform.
+
+## Useful Qualities of Probability Distributions
+
+
+In the last screen, we saw a visualization of how the probability is distributed for a single dice roll. If the probabilities of a random experiment take on a flat shape, we say it follows a uniform distribution. We started with the a dice roll and constructed the probability distribution, as seen below.
+
+
+![](https://dq-content.s3.amazonaws.com/439/uniform-dice.png)\
+We can learn a lot about a random experiment just by looking at its probability distribution. Let's say that we start with the visualization. What would we be able to learn about the random experiment that produced it just by looking at the graph? We'll use another visualization as an example:
+
+
+![](https://dq-content.s3.amazonaws.com/439/10-uniform.png)\
+Judging from the shape of the distribution, we can also see that this random experiment follows a uniform distribution. Looking at the x-axis, we can tell that the outcomes of the experiment are the numbers from 1 to 10. Conversely, we can also see what outcomes aren't a part of the random experiment. Since there are 10 outcomes, and each has the same amount of probability distributed to it, we can mentally calculate that each outcome has a 10% probability of occurring. Just by looking at a visualization, there's already a lot we can deduce about the random experiment without knowing any specific details about it.
+
+Since probability distributions are created from probabilities, it's natural that they must also follow the rules of probability. We learned in Probability Fundamentals that probability can range from 0 to 1, but not go any lower or higher. From this, we know that we should never see a probability distribution where the probability was negative or greater than 1. Finally, we know that if we try to calculate the probability of observing all of the outcomes (aka the sample space), then we would get a probability of 100%. This fact can also be observed in the probability distribution. If we added up all of the probability over all of the outcomes we saw in a distribution (aka the heights of all the bars), then they should all sum to 1.
+
+It is important to remember that all probability distributions share these qualities. The uniform distribution is a useful tool for learning this intuition, which is why we start with it. Once we start looking at other probability distributions with more complicated shapes, we can use these shared qualities to calculate probabilities and learn things about the random experiments that produce them.
+
+Take some time to practice using recognizing these characteristics below.
+
+Below are two hypothetical probability distributions. Using the visualizations, answer the following questions:
+
+
+![](https://dq-content.s3.amazonaws.com/439/hypothetical-distributions.png)\
+
+1. Do either of these distributions follow a uniform distribution? Assign `TRUE` to `are_uniforms` if you believe so, FALSE otherwise.
+2. What outcome of the random experiment has the highest probability associated with it? Assign your answer to `most_probable_A`
+3. Is Random Experiment B a valid probability distribution?
+- Calculate the total amount of probability in Random Experiment B, and assign it to `total_probability_B`.
+- If you believe Random Experiment B has a valid probability distribution, assign `TRUE` to `is_B_valid`, `FALSE` otherwise.
+
+
+```{r}
+are_uniforms <- FALSE
+most_probable_A <- 1
+total_probability_B <- 0.2 + 0.2 + 0.2 + 0.2 + 0.3
+is_B_valid <- FALSE
+```
+
+## The Probability Distribution Function
+
+As we start going into non-uniform distributions, it will be harder to keep track of what probabilities are distributed to which outcome. We need a convenient, mathematical way to express how probability is distributed since we won't always have a visualization to reference. The tool we'll use is called the probability distribution function: a function that takes in an outcome and gives the probability associated with that outcome.
+
+A function is useful here because it allows us to associate a single probability to a single outcome. That is to say, the probability distribution function creates a 1-to-1 correspondence between the outcomes and the probabilities associated with them. Conventionally, we'll denote a probability distribution function as $P$. Consider the random experiment that we looked at in the last screen:
+
+![](https://dq-content.s3.amazonaws.com/439/10-uniform.png)\
+
+Since each outcome has the same amount of probability distributed to it, we would say that this particular function is a constant function. Using $X$ to represent an outcome, we can represent the probability distribution functionally as:
+
+$$P(X) = \frac{1}{10} \text{, for i in }  [1,2, \ldots, 10] \\
+P(X) = 0 \text{, elsewhere }$$
+To fully describe the visualization, we need to indicate two things. First, we need to describe what outcomes actually have probability distributed to them, in this case the numbers between 1 and 10. Implicitly, this also means we need to describe where the function doesn't have probability, indicated by the second equation that describes the probability "elsewhere". Elsewhere refers to all the values that aren't the numbers between 1 and 10. Stating what values have no probability associated with it allows us to be more explicit about what outcomes are in the sample space. Since the function is constant, it doesn't matter what outcome we look at. For example, the probability that we see a 1 is the same as the probability that we see a 10 in the example.
+
+
+$$P(X = 1) = P(X = 10) = \frac{1}{10}$$
+A constant function doesn't fully demonstrate why a probability distribution function might be useful, so we'll explore a more complex example in the next screen.
+
+
+## Example: Sum of Two Dice Rolls
+Many board games incorporate rolls of two dice and looking at the sum of the two dice results. If you rolled a 1 and a 6, then the sum you observe would be a 7. Let's say that you have a board game night planned with friends, and you want to gain an advantage by familiarizing yourself with the probability distribution for this sum. The day before the board game night, you lay out the different possibilities below in a table:
+
+![](https://dq-content.s3.amazonaws.com/439/pr1m2_sums.png)\
+
+Looking at all the different possible sums is a start, but we can do better by visualizing this table as a probability distribution. Noting that there are 36 combinations that the dice can result in, you calculate the different probabilities for each sum and create the following visualization:
+
+
+![](https://dq-content.s3.amazonaws.com/439/dice-prob-dist.png)\
+
+
+It's easier to see that the most likely sum that you'd see in a double dice roll is 7, based on the peak that you see in the probability distribution. As you get farther away from 7, the probability of observing smaller or larger values decreases. The probability distribution has a nice symmetric quality, which may come into handy later. Before you go to your game night, you'd like to summarize this visualization further into a probability distribution function.
+
+
+Using the table of sums and the visualization of the probability distribution, help fill out some of the probability distribution function for the two dice rolls. We'll use $X$ to indicate an outcome of the dice roll sum.
+
+
+
+1. What is $P(X = 2)$? Assign this probability to `prob_2`.
+2. What is $P(X = 4)$? Assign this probability to `prob_4`.
+3. What is $P(X = 7)$? Assign this probability to `prob_7`.
+4. What is $P(X = 10)$? Assign this probability to `prob_10`.
+
+
+```{r}
+prob_2 <- 1/36
+prob_4 <- 3/36
+prob_7 <- 6/36
+prob_10 <- prob_4
+```
+
+## Cumulative Probability
+
+The probability distribution function is useful for quickly understanding how much probability is distributed to a single outcome, but it is also great for helping us calculate the probabilities for ranges of outcomes as well. We'll go back to the probability distribution of the sum of two dice rolls to demonstrate this.
+
+
+![](https://dq-content.s3.amazonaws.com/439/dice-prob-dist.png)\
+
+
+In addition to being able to ask what the probability of seeing a 3 is, we can also ask what the probability of seeing a probability of 3 or less is as well. The only two outcomes that satisfy this condition are 3 and 2, so we can formulate the probability of observing a 3 or less as:
+
+
+$$P(X \leq 3) = P(X = 3) + P(X = 2) = 2/36 + 1/36$$
+There is a special name for this type of probability. When we calculate probabilities up until a certain outcome, we call these probabilities cumulative probabilities. They are called cumulative because we are adding up all of the probability up until a certain point. Cumulative probabilities are important to us because sometimes we want to know how probable a certain set of the outcomes are. This fact will become more crucial to our understanding of hypothesis testing. For now, it's important to understand that cumulative probabilities allow us to get probabilities of ranges of outcomes, as opposed to just a single one.
+
+By convention, cumulative probabilities are typically defined as all the probabilities up until a certain point. In other words, all the outcomes that are less than or equal to a given outcome. If we wanted to calculate the probability of all the outcomes greater than 3, we might just sum up all the probabilities of the numbers from 4 to 12:
+
+
+$$P(X > 3) = P(X = 4) + P(X = 5) + \ldots + P(X = 12) = 33/36$$
+
+
+Using the properties of probability however, we have another clever way to calculate this probability. Even though cumulative probabilities typically look at all the outcomes less than or equal to a given outcome, we can use them to calculate probabilities of seeing higher outcomes. We found earlier that the only outcomes less than or equal to 3 were 2 and 3 itself. The opposite, or complement, of all the outcomes less than or equal to 3 is all the outcomes greater than 3, which is what we want. Using this fact to our advantage, we can calculate the probability in the following way:
+
+$$P(X > 3) = 1 - P(X \leq 3) = 1 - \frac{3}{36} = \frac{33}{36}$$
+For some arbitrary outcome $n$, we can generalize this formula to:
+
+$$P(X > n) = 1 - P(X \leq n)$$
+With this in mind, we can practice calculating other cumulative probabilities.
+
+We've provided the table of dice roll sums below. Using this table, calculate the following probabilities:
+
+
+![](https://dq-content.s3.amazonaws.com/439/pr1m2_sums.png)\
+
+
+1. Calculate the probability $P(X \leq 6)$ and assign the result rounded to three significant figures to the variable `prob_leq_6`.
+2. Calculate the probability $P(X > 6)$ and assign the result rounded to three significant figures to the variable `prob_gt_9`.
+3. Calculate the probability $P(6 \leq X \leq 8)$ and assign the result rounded to three significant figures to the variable `prob_btwn_6_and_8`.
+
+
+```{r}
+prob_leq_6 <- round(1/36 + 2/36 + 3/36 + 4/36 + 5/36, digits = 3)
+prob_gt_9 <- round(6/36, digits = 3)
+prob_btwn_6_and_8 <- round(5/36 + 6/36 + 5/36, digits = 3)
+```
+
+
+## From Random Experiments To Actual Experiments
+
+
+The dice random experiment helps inform us about probability and probability distributions, so that we have a good fundamental grasp before diving into real-life experiments. When we start learning about hypothesis testing, we'll need to understand how our data is distributed.
+
+You can also think of gathering data as a random experiment in and of itself. As a first example, let's say that we are interested in measuring the weights of people who work for our company. Weights are continuous and can take on a continuum of values. If we pick a random person in the company and measure their weight, we cannot say with certainty what their weight will be. Because we don't know what we will observe when we measure this person's weight, we can call think of measuring weight as random experiment. This fact applies in general with most things that would want to measure.
+
+So, when we gather data of any sort on a single person, we are essentially performing a random experiment on them. As we measure more and more people, we'll gather more and more data. After we gather enough data, we can start to graph the empirical distribution of the data. The empirical distribution shows us how the data we measure is distributed and tells us the probability of seeing a particular value in the data. This is why we call it an empirical distribution; "empirical" means based on observation or evidence.
+
+As an example, let's say that we gathered hypothetical data on how fast Dataquest students finish their lessons on average. After gathering all the data, we used `ggplot` and `geom_density()` to generate the empirical distribution:
+
+![](https://dq-content.s3.amazonaws.com/439/user-time-distribution.png)\
+
+
+From our data, we can start learning some things about how our hypothetical users fare in their learning. We can see from the peak that most students finish their exercises at around 90 seconds. There are also a considerable amount of variation, ranging from 45 seconds to 135 seconds. The empirical distribution also appears to be symmetric. Just like with the probability distribution, we can learn a lot from the empirical distribution of our data.
+
+You might ask yourself, "What's the difference between an empirical distribution and a probability distribution?" In past random experiments, we knew all the possible values of the sample space. This allowed us to calculate the exact probability associated with each outcome. When we collect real-life data, we do not see all the possible values that the outcomes can take. For example, if we collect weight data just on 50 people, the data is only representative of those 50 people, not the general population. It is highly unlikely, if not certain, that the weights we measure do not represent all the possible weights that people can take. There is a special relationship between the empirical distribution and the probability distribution for a random experiment. As we collect data more people, we would expect our empirical distribution to start resembling the actual probability distribution. Even though we can collect only a finite amount of data, we can still learn about its distribution.
+
+From here on out, we'll consider more real-life data as we discuss probability distributions.
+
+## The Normal Distribution
+
+
+In the last few screens, we'll discuss one of the most important probability distributions in statistics: the normal distribution. The normal distribution is also known as the "bell curve" for its characteristic bell shape. Many real world phenomena resemble a normal distribution, which is why it's so important to the field of statistics. Perhaps one of the most famous examples of a real-world quantity following a normal distribution is IQ. Recall the empirical distribution we saw from the Dataquest user lesson times:
+
+![](https://dq-content.s3.amazonaws.com/439/user-time-distribution-overlay.png)\
+
+
+We've overlayed the outline of an actual normal distribution over the empirical distribution, and we can see that the two closely match each other. Even though our data isn't exactly like the normal distribution, it is still a great approximation. Assuming that the data follows a normal distribution allows us to study the data in more detailed ways, like in hypothesis testing. This assumption doesn't always work, but for our purposes, we'll assume that our data does follow a normal distribution. The normal distribution is one of the most well-studied probability distributions and has a lot of R functionality dedicated to it. We'll spend the rest of the lesson looking at these functions.
+
+All the characteristics of probability distributions we learned in this course still apply to the normal distribution, but there are some key differences that we need to be aware of. The past probability distributions we saw in this lesson were called discrete, meaning that its probability is distributed to single, distinct values. For example, in the sum of two dice rolls, we saw that the only possible sums ranged from 2 to 12. There was no probability allocated to in-between values like 4.5. The normal distribution is different in that it is continuous, meaning that it can take on any values within a range, not just distinct values. In the example above, we see that the lesson finish times range anywhere between 30 and 150.
+
+Another special aspect about the normal distribution is that they are always defined by two special values: a mean and a variance. In other words, if you specify the mean and for variance for a normal distribution, you would know exactly what the distribution looks like in a visualization. The plot below shows three different normal distributions with different means and variance.
+
+![](https://dq-content.s3.amazonaws.com/439/three-normals.png)\
+
+Changing the mean of a normal distribution shifts where its peak is on the x-axis. Increasing the mean shifts the normal distribution to the right, while decreasing shifts it left. Changing the variance changes the spread or how wide the normal distribution is. Increasing variance makes the normal distribution wider and shorter, while decreasing it makes it narrower and taller. For the Dataquest user lesson data, it seems to be well approximated by a normal distribution with mean 90 and variance 15. Deciding the mean and variance of our data is critical in hypothesis testing: we ultimately use hypothesis testing to see what values for the mean and variance might work for the data.
+
+We've covered a lot conceptually here, but in the next screen we'll learn more about the normal curve and how to use R to calculate these probabilities in a normal.
+
+## Probability Density Function for the Normal Distribution
+
+We learned that normal distribution was a bell-shaped. If you were curious, this bell shape is produced by the following formula, the probability density function $P(x)$ for a normal curve:
+
+
+$$P(X = x) = \frac{1}{\sqrt{2 \pi \sigma^2} } e^{-\dfrac{1}{2\sigma^2} (x - \mu)^2}$$
+This formula deserves some explanation. The mean is represented by the symbol $\mu$ (read as "mu"), while the variance is represented as $\sigma^2$ (read as "sigma squared"). The particular outcome is represented by the small $x$, while the random experiment itself is big $X$. We would read $P(X=x)$ as "the probability density that the random experiment takes on $x$ as a value." We say "density" because that particular point is not a probability; it is more a statement of how often one value will appear relative to another. For example, if a the value 0 has a higher density that the value 1, we would interpret that as saying that 0's are more likely to occur than 1's.
+
+In practice, you will not be dealing with this formula directly since R has so much functionality dedicated to the normal distribution. Knowing the specific probability distribution function for the normal distribution is useful in many ways, but for now we show it for those who are curious about how a bell shape is produced by a function.
+
+From a data scientist's perspective, the more common way you'll deal with the normal probability density function is through the `dnorm()` function. The "d" in `dnorm()` stands for "density", which is another name for the probability distribution function, and the "norm" part refers back to the normal. `dnorm()` has one required argument and two optional arguments. The first argument is the specific value that we want to calculate a probability for, represented by the small "x" in $P(X=x)$. The first optional argument is `mean` and is where you can define the mean of the normal distribution that you are trying to calculate the probability from. The second optional argument is called sd, which stands for "standard deviation". You may recall that standard deviation is just the square root of variance $\sigma^2$, so it is represented as $\sigma$  If you'd like to specify a variance for `dnorm()`, then you would need to square root the value that you pass into the sd argument. This is a small gotcha for people who are new to using the function. If you do not specify mean and sd, then the function automatically defaults to using `mean = 0` and `sd = 1`.
+
+Let's say that we wanted to calculate the probability density of observing a lesson speed of 90 seconds in our hypothetical example. We're using a normal with mean 90 and variance 15 to model the data, so we would use the following code to get the probability of observing a 90.
+
+```{r}
+dnorm(90, mean = 90, sd = sqrt(15))
+```
+
+This value corresponds to what we see in the visualization. With what you've learned, get some practice using the `dnorm()` function to calculate probabilities in a normal distribution. In the next screen, we'll cover cumulative probabilities.
+
+1. Calculate the probability density of seeing the number 0 in a normal distribution with mean 0 and standard deviation 1. Assign this value to `prob_norm_0`
+2. Calculate the probability density of seeing the number 5 in a normal distribution with mean 5 and standard deviation 5. Assign this value to `prob_norm_5`
+3. Calculate the probability density of seeing the number -1 in a normal distribution with mean 1 and variance 4. Assign this value to `prob_norm_1`
+
+```{r}
+prob_norm_0 <- dnorm(0)
+prob_norm_5 <- dnorm(5, 5, 5)
+prob_norm_1 <- dnorm(-1, 1, 2)
+```
+
+##  Cumulative Probability for the Normal
+
+In the last screen, we learned how to use the `dnorm()` function to calculate probability densities of specific values in the normal distribution. As we finally wrap up this lesson, we'll look to another function to calculate cumulative probabilities for a normal curve. Unlike with discrete probability distributions, calculating probabilities in a continuous distribution by hand requires calculus, which is out of the scope of this course. Thankfully, R has another function that captures this entire calculation in one line. This function is called `pnorm()`.
+
+The "p" in `pnorm()` is supposed to represent the cumulative probability calculation and has similar syntax to `dnorm()`. Like `dnorm()`, `pnorm()` also takes one required argument and two optional arguments. The required argument represent the value that we want to take the cumulative probability up to, as represented in the equation $P(X \leq x)$.  The optional arguments are also mean and sd, which allow you to specify these values for the normal you're trying to calcualte the cumulative probability for. Let's say that we want to calculate the cumulative probability up until the number 1 in a normal with mean 0 and standard deviation 1. As we've mentioned before, cumulative probability looks to the left of the value by convention, as shown below:
+
+
+```{r}
+pnorm(1)
+```
+![](https://dq-content.s3.amazonaws.com/439/cumulative-normal.png)\
+
+If we wanted to calculate the probability of a range in a normal distribution, then we would need to use `pnorm()` twice. By taking advantage of the fact that `pnorm()` always calculate the probability to the left of a given value, we can subtract two cumulative probabilities to get the value of a region. If we want to get the cumulative probability between the values -1 and 1 in a normal distribution with mean 2 and variance 9, we would use the code below. We've also represented this subtraction graphically:
+
+```{r}
+pnorm(1, 2, 3) - pnorm(-1, 2, 3)
+```
+
+
+![](https://dq-content.s3.amazonaws.com/439/middle-region.png)\
+
+Cumulative probability calculations are critical in hypothesis testing, so it is worth spending some time understanding the differences between `dnorm()` and `pnorm()`. With continuous probability distributions, we can see that cumulative probability is represented as the "area" under the curve. This is different from the counting and addition we did for discrete probability distributions. This is perhaps one of the most important takeaways of the lesson. With cumulative probabilities of a normal distribution under our belt, we are ready to learn on our first hypothesis test.
+
+
+
+1. What is the cumulative probability up until the value 0 in a normal distribution with mean 0 and variance 1? Assign this probability to `cumulative_prob_0`.
+2. What is the cumulative probability up until the value 3 in a normal distribution with mean 5 and standard deviation 9? Assign this probability to `cumulative_prob_3`.
+3. What is the cumulative probability between the values -1 and 1 in a normal distribution with mean 3 and standard deviation 1? Assign this probability to `cumulative_prob_btwn`.
+
+```{r}
+cumulative_prob_0 <- pnorm(0)
+cumulative_prob_3 <- pnorm(3, 5, 9)
+cumulative_prob_btwn <- pnorm(1, 3, 1) - pnorm(-1, 3, 1)
+```
+
+# 2. Hypothesis Testing
+
+## Hypotheses and Hypothesis Testing
+
+
+We all have beliefs about how the world works. These beliefs are usually based on events we observe throughout our lives, and we develop theories on the causes to these events. An egg tastes better after breaking it over a hot pan, so we begin to think that the heat plays a role in making it tastier. When a belief has evidence to back it up, we are more likely to believe that it reflects the truth. As more evidence piles up, these beliefs eventually solidify — at least until contradictory evidence comes to light.
+
+When we propose an idea for how the world works, we are making a hypothesis. A hypothesis is an attempt to explain a phenomenon based on limited evidence. We say "limited" because a phenomenon would just be a fact if we knew everything about it. You may also think about a hypothesis as an educated guess as to how something works. You may observe in your everyday life that your best boiled eggs happen when they are cooked from 6 to 7 minutes. From these observations, you can propose a hypothesis that all boiled eggs are perfectly cooked after this particular amount of time.
+
+An essential characteristic of all hypotheses is that they are testable. That is to say, you can set up a process or experiment that will do only one of two things: support the hypothesis or reject it. We must be able to test our hypotheses, or else we will not be able to figure out if the hypothesis represents the ground truth or not. Developing hypotheses and learning how to test them are critical skills for data scientists. Data scientists leverage data to guide company strategy and make improvements to their products. Some examples of hypothesis problems that data scientists may face include:
+
+- If we use a new ad on our website, how will we know if it has created a meaningful increase in user engagement?
+- if we raise the price of a product, will it cause a meaningful drop in sales?
+- if we develop a new weight loss pill, how can we know if it helped people lose more weight?
+
+In this lesson, we'll learn the framework to create hypotheses and test them. This framework is called hypothesis testing, which has a rigorous mathematical foundation and served as the guiding force for researchers and data scientists alike on their experiments. Once mastered, we can start properly making data-driven decisions. In the next screen, we'll discuss different types of hypotheses and the proper way to talk about them.
+
+
+## Null & Alternative Hypotheses
+
+
+When we propose hypotheses, there are really only two conclusions we can reach. After you perform an experiment and collect your data, the results will either support your hypothesis or discredit it. To be more precise, when we perform an experiment, there are actually two hypotheses that are being tested at the same time. One hypothesis corresponds to your own belief about the world, while the other corresponds to the contrary. Take the example of the new ad from the last screen.
+
+In this case, the ad will either increase sells or it won't. In order to test this, a natural experiment to devise would be to randomly divide up your website users into two populations: one set of users will see the new ad, while the second set will not see it. With these two groups in place, you'll measure how many people in each group engage with the ad. After the experiment is finished, you can compare the number of engaged users between the two groups. One hypothesis is that the ad did increase user engagement; the other hypothesis is that the ad did not increase user engagement.
+
+In the world of hypothesis testing, these two hypotheses have special names. The hypothesis that stated that the ad won't have an effect on the world is called the null hypothesis. Likewise, the hypothesis that states that it will increase engagement is the alternative hypothesis.
+
+We can frame the other examples in terms of a null and alternative hypothesis as well:
+
+- if we raise the price of a product, will it cause a meaningful drop in sales?
+
+ - null hypothesis: the number of purchases of the product was the same at the lower price than it was at the higher price.
+ - alternative hypothesis: the number of purchases of the product was lower at the higher price than it was at the lower price.
+- if we develop a new weight loss pill, how can we know if it helped people lose more weight?
+
+ - null hypothesis: patients who went on the weight loss pill lost no more weight than those who didn't.
+ - alternative hypothesis: patients who went on the weight loss pill lost more weight than those who didn't.
+Why is there a need to define these two hypotheses in the first place? The full answer is out of scope of the course, but we can try to shed a little light on the rationale. In court trial, we presume a defendant on trial to be "innocent until proven guilty." That is, until we see evidence of a person's guilt, we default to assuming their innocence. In the same way, we presume that nothing special will happen in a random experiment until the data says otherwise. The null hypothesis assumes that the experiment will not change the world in any way, so we assume that this is the default case. With the null and alternative hypotheses now in our vocabulary, we can start incorporating them into our understanding of hypothesis testing.
+
+
+## Walking Through An Experiment
+
+
+We'll walk through an example experiment to learn how to create a null and alternative hypothesis. We have data from a fake experiment on weight loss. A company has developed a new drug that was designed to help subjects lose weight. In order to test the drug, the company gathered people to participate in the study and randomly split them into two groups. Group A was given a placebo pill, while Group B was designated to take it. Group A is our control group, while Group B is our treatment group. The company measured each participant's weight before the start of the study and recorded it again after the end. The resulting data in `weight_loss.csv` contains information on how much weight each person lost.
+
+The event we are interested in studying is whether or not the drug helps with weight loss. Knowing what we know about null and alternative hypotheses, we would construct them as follows:
+
+- $H_0$: the new drug will not reduce the subjects' weight
+- $H_A$: the new drug will reduce the subjects' weigh
+
+We use $H$ to denote a hypothesis and the subscript $0$ or $A$ to distinguish between the null and alternative hypothesis. The company is studying if the new drug will lead to weight loss, so the alternative hypothesis is specifically worded to state this. If we're to consider if the drug were to change the weight in either direction, lose or gain, then the hypothesis would have to be phrased differently. This small detail is why it's important to be specific with what event you want to test.
+
+
+Everybody is different, so we would expect the drug to affect individuals in different ways. There are also many other factors that can cause a subject's weight to change, regardless of what group they're in. The consequence of all these changes on weight causes measured weight loss to vary in both groups.
+
+If the weight loss can vary in both groups, how would we be able to compare them? We need a single value that helps summarize the weight loss in the entire group, and we can get this in the mean or average of each group. By taking the mean of each group, it makes it easier to compare Group A and Group B in terms of weight loss. The diagram below illustrates the each of the weight losses of each subject, stratified by their drug group:
+
+
+![](https://dq-content.s3.amazonaws.com/440/weight_loss_histogram.png)\
+
+There is some overlap between the distribution of the two groups' weight losses. That being said, there is also a slight shift to the right in Group B. We'll explore this aspect of the data in the next screen. Before we move on, calculate the means to get an idea of how different the average weight losses are between the two groups.
+
+
+For this exercise, we've loaded the data into the file `weight_loss.csv`. The first column contains the weight losses for Group A, while the second column contains the weight losses for Group B.
+
+1. Calculate the mean for Group A and assign it to `mean_group_a`.
+2. Calculate the mean for Group B and assign it to `mean_group_b`.
+
+
+```{r}
+library(readr)
+data <- read.csv("weight_loss.csv")
+mean_group_a <- mean(data$A)
+mean_group_b <- mean(data$B)
+mean_group_a
+mean_group_b
+```
+
+Examining The Shape Of The Empirical Distribution
+In the last screen, we saw an experiment that split subjects into two groups: a treatment and control group. Since there was nautral variation in the amount of weight loss in all the subjects, we took the average weight loss in each group. On this screen, we'll dig more into the intuition on why we would use the mean to compare the two groups. We'll refer back to the visualization of the data below:
+
+For Group A, most of the weight losses for people in Group A hovers around 2.5 pounds, as indicated by the peak in the red empirical distribution. Some people lose less than 2.5 pounds while others lose more than the average, but the general balance is around 2.5 pounds. Generally, there are simlar amounts of people who lose a lower-than-average amount of weight to those who lose a higher-than-average amount of weight. As we get farther away from the mean weight loss, there is an approximate symmetric shape to Group A's empirical distribution. Overall, Group A's distribution forms an approximate bell curve, which we learned was called the normal distribution in the last lesson. The same can be said of the shape of Group B's distribution.
+
+If we assume that each group's weight losses forms a normal distribution, we can develop the intution behind how to use the means to decide which hypothesis to support. We'll put aside the raw data for a bit to consider some hypothetical situations. With two normal curves, there are two extreme situations in how much the two overlap. One extreme case is no overlap, while the other is total overlap, as seen below.
+
+![](https://dq-content.s3.amazonaws.com/440/normal-curves.png)\
+
+If two experimental groups looked like the left plot, then it is apparent that the two groups are very different. Conversely, if the two groups resembled the right plot, then the distribution of their weight losses would look similar. This brings us back to the means of each group. Recall that normal distributions are defined by two important values: the mean and the variance. The mean is represented by the peak of the normal distribution, while the variance changes how wide the bell is. When we look at the separation between the two curves in the diagram, we can think of this as comparing their means. That is, if the means of the two groups are extremely different, it suggests that the groups are truly different from each other. Applying this idea back to our weight loss data, if the average weight loss of Group A is much less than the average of Group B, it suggests that they are different; that is, the drug helped increase weight loss in this group!
+
+This idea is central to this lesson and is worth reiterating. Natural variation in our subjects causes them to experience different degrees of weight loss. This variation leads to approximate bell shapes for both groups' weight losses. With our data, we can calculate the average weight loss for each group, as well as the variance of the data. By performing this experiment with their new drug, the company is trying to study if the drug will increase the average amount of weight loss enough in the group that takes it. If the drug increases the average weight loss enough, we will be able to distinguish it more easily in a visualization.
+
+In real-world data, the overlap of the two groups will vary somewhere between the two extremes, and we see this in our data. The question of comparing groups then becomes, "How do we know they're different if there is some overlap?" Statistics give us an answer to this.
+
+## Restating Our Hypotheses
+
+Recall that statistics are really just handy summaries of data. In terms of the weight loss experiment, the average or mean would tell us how much weight loss a new subject would expect to experience if they were put in a particular group. The variance tells us how much the weight losses in a group differ from the average. As we've mentioned before, the mean plays a crucial role in allowing us to compare groups, but we haven't incorporated them into our hypotheses! For our weight loss experiment, our two hypotheses currently take the form:
+
+
+- $H_0$: the new drug will not reduce the subjects' weight
+- $H_A$: the new drug will reduce the subjects' weigh
+
+In the last screen, we looked at how we might be able to distinguish between two normal curves. We saw that we could distinguish two normal curves if their two means were extremely different from each other. If the two curves have a lot of overlap, then the means would be similar to each other. The hypotheses in their current form are qualitative, and don't really allow us any way to do the testing we want to do. By grounding the hypotheses in numbers, we allow ourselves to better define them and make it easier to test which one is the case. We have assumed that each group is normally distributed, so we'll rephrase the hypotheses in terms of group means.
+
+
+
+- $H_0$: the mean weight loss of Group B is the same as the mean weight loss of Group A
+- $H_A$: the mean weight loss of Group B is greater than the mean weight loss of Group A
+
+Notice that we haven't mentioned variance in our hypotheses. We could technically add in variance into the hypotheses, but it adds extra complexity that we don't need at the moment. Variance still plays an important role in hypotheses testing, but more on a conceptual level. We'll refer back to our diagram of the two normal curves together:
+
+
+
+![](https://dq-content.s3.amazonaws.com/440/normal-curves.png)\
+
+
+In the above diagram, both groups have essentially the same shape. In other words, they have the same variance. Having a large variance means that the bell is wider and shorter, while having a small variance will make the bell taller and thinner. The variance of the normal curve influences how much it might overlap with other nearby curves, so it plays a critical role in changing how well we can distinguish between two normal curves. Applying this to the experiment, the variance of the two groups may decide if we are able to tell them apart! The diagram below illustrates this effect:
+
+![](https://dq-content.s3.amazonaws.com/440/variance-illustration.png)\
+
+
+In both plots, the two curves on each plot are the same distance from each other. The only thing that was changed for the second plot was that the variance was reduced for both curves. On the left it is harder to distinguish between the two groups, while it is more clear on the right. Variance plays a larger role in distinguishing between two groups when the differences between them are small. Two normal curves could actually have a small, but meaningful difference between them, but if they both have high variance, this difference might be hidden. This fact is why researchers and data scientists try to have as many sample points as possible for their experiments: more subjects typically reduces the variance of the measurements you take from them.
+
+We're close to learning the our first hypothesis test. We've slowly developed an intuition behind how to tell between two normal curves by looking at both their means and variances. Before we move on, we'll need to calculate the variance for each group.
+
+
+1. Calculate the variance for Group A and assign it to `var_group_a`.
+2. Calculate the variance for Group B and assign it to `var_group_b`.
+
+
+
+```{r}
+var_group_a <- var(data$A)
+var_group_b <- var(data$B)
+var_group_a
+var_group_b
+```
+
+In previous screens, we alluded to the fact that real-world data usually has some degree of overlap between two groups of data. In our case, we saw that there was some overlap between the weight losses of Group A and Group B.
+
+![](https://dq-content.s3.amazonaws.com/440/weight_loss_histogram.png)
+
+We have assumed that the weight losses for both Group A and Group B are normally distributed and calculated their means and variances in previous screens. We've also rephrased our hypotheses in terms of their means. These steps were all necessary in setting up the test we'll perform to decide if the two groups are different in the presence of overlap between their weight losses.
+
+Let's take another look at our two hypotheses:
+
+
+- $H_0$: the mean weight loss of Group B is the same as the mean weight loss of Group A
+- $H_A$: the mean weight loss of Group B is greater than the mean weight loss of Group A
+
+
+
+While these hypotheses are what we need, they could still use some improvement. Converting the hypotheses into more quantitative terms was a step in the right direction, but mathematical statements are the best for assigning a clear "yes/no" decision to the hypotheses. We can convert the above hypotheses into a mathematical form using some notation:
+
+- $\bar{x}_A = \bar{x}_B$
+- $\bar{x}_A < \bar{x}_B$
+
+
+We use $\bar{x}$ to denote the average and the subscript A or B to distinguish between the two groups. You can confirm for yourself that the phrases are the same as the mathematical equations we wrote out. One benefit of converting the phrases into mathematical terms is that we can manipulate the mathematical versions in helpful ways. For example, instead of looking at two quantities ($\bar{x}_A$ and $\bar{x}_B$), we can subtract $\bar{x}_B$ from both sides and focus the hypothesis onto one quantity: the difference between the means.
+
+- $\bar{x}_A - \bar{x}_B = 0$
+- $\bar{x}_A - \bar{x}_B < 0$
+
+The hypotheses are still the same, but the above hypotheses suggest something different: that the difference between the two group means is either zero or less than zero. For this particular example, we're going to assume that the variances we calculated from the data represent the true variance we would see if we tested many, many people. [The difference between means from two normals also follows a normal distribution.]{color="red"} For this particular normal distribution, its mean is $\bar{x}_A - \bar{x}_B$ and its variance is a weighted sum of the variances of the two groups you're comparing, given by the following equation:
+
+
+$$\begin{equation}
+\sigma^2_{\text{diff}} = \frac{\sigma_A^2}{n_A} + \frac{\sigma_B^2}{n_B}
+\end{equation}$$
+
+We moved from comparing two qualities to focusing on their difference instead. Thanks to some technical properties of the normal distribution, we know that the difference between two groups that follow normal distributions is also normal. Before we finally learn the test, please calculate the mean and variance of this particular normal.
+
+1. Using the data, calculate the difference of the means of the groups, and assign it to `diff_mean`.
+2. Using the data, calculate the variance of the difference of the means of the groups, and assign it to `diff_var`.
+
+```{r}
+diff_mean <- mean(data$A) - mean(data$B)
+diff_var <- (var(data$A)/length(data$A)) + (var(data$B)/length(data$B))
+
+diff_mean
+diff_var
+```
+
+## The Two Sample Independent t-test
+
+
+Let's look at the mathematical versions of our null and alternative hypotheses:
+
+- $\bar{x}_A - \bar{x}_B = 0$
+- $\bar{x}_A - \bar{x}_B < 0$
+
+We learned in the last screen that the difference between means of two normal distributions also follows a normal. [This detail gives our hypotheses an additional important meaning: the null hypothesis is a declaration that this particular normal distribution (aka the difference in weight loss) has a mean of 0.]{color="red"} The alternative hypothesis says that its mean is less than 0. Both hypotheses are statements about probability distributions!
+
+The importance of this statement cannot be understated. When we create hypotheses for hypothesis tests, we are making claims that the world follows a particular probability distribution. Our first null hypothesis as "the new drug will not reduce the subjects' weight," which we slowly transformed into "the difference in means between the two groups is zero". Along the way we incorporated the normal distribution into our hypotheses. These statements are still the same, but we have slowly moved from qualitative terms to quantitative definitions. Statistics and probability together form the basis of hypothesis testing and are what allow us to make mathematically rigorous assertions about the world around us. Now we will see how to assign a probability to our hypotheses.
+
+Recall from the Statistics Intermediate course that any normal distribution can be standardized, meaning that we can change it to have mean 0 and standard deviation 1. In order to standardize a normal distribution, we subtract the mean and divide by the standard deviation, as shown below:
+
+$$\begin{equation}
+t = \frac{x - \mu}{\sigma}
+\end{equation}$$
+
+In our experiment, $x$ will corresponds to the actual difference in means that we measured in the data: $\bar{x}_A - \bar{x}_B$. $\mu$ is typically used to represent the "true" mean of a normal distribution. When we do hypothesis testing, we assume the null hypothesis to represent this truth. For this null hypothesis, $\mu$ will be 0 since we are assuming that the drug will have no effect. Finally, $\sigma$  represents the standard deviation. We know what the variance is under the null hypothesis, so we can easily find the standard deviation:
+
+$$\begin{equation}
+\sigma^2 = \frac{\sigma_A^2}{n_A} + \frac{\sigma_B^2}{n_B} \implies
+\sigma = \sqrt{\frac{\sigma_A^2}{n_A} + \frac{\sigma_B^2}{n_B}}
+\end{equation}$$
+
+Filling in all of these values, our value for t becomes:
+
+$$\begin{equation}
+t = \frac{(\bar{x}_A - \bar{x}_B) - 0}{\sqrt{\frac{\sigma_A^2}{n_A} + \frac{\sigma_B^2}{n_B}}}
+\end{equation}$$
+
+This quantity is known as a test statistic. We call them test statistics because they are used to conduct the hypothesis test and conclude which hypothesis to support. Test statistics often follow a well-known probability distribution, so we can calculate the point probabilities and cumulative probabilities using similar code to what we learned in the previous lesson. In this case, $t$ follows a a t-distribution. A t-distribution is also bell shaped like the normal distribution, but it give slightly more probability to the tails than the normal. Because we are trying to investigate the means of two groups and the test statistic follows a t-distribution, we are conducting a two sample independent t-test. A two sample independent t-test is used to compare continuous qualities between two groups.
+
+Since test statistics follow a probability distribution, we can calculate a probability of observing that test statistic. From there, we can make a data-driven judgment call on which hypothesis we should follow. We'll touch upon this in the next screen, but try your hand at calculating the test statistic for our data.
+
+
+Calculate the test statistic for the weight loss experiment. Assign it to `test_statistic`.
+
+```{r}
+diff_mean / sqrt(diff_var)
+```
+
+
+## p-values
+
+In the last screen, we calculated a test statistic of about -6.96. For the two sample independent t-test, the test statistic is a ratio between a difference between means and the standard deviation. We always interpret test statistics relative to a null hypothesis, so we would interpret a test statistic of -6.96 as being about 7 standard deviations away from zero! Under a normal distribution, most of the data will fall between -3 and 3 standard deviations, so seeing a test statistic 7 standard deviations away is extremely unlikely. The diagram below illustrates this point:
+
+![](https://dq-content.s3.amazonaws.com/440/test-statistic.png)\
+
+We can use our knowledge of cumulative probability to calculate the probability of seeing this test statistic this extreme or more. Recall in the last lesson, that we can use the pnorm() function for the normal distribution. By assuming that the data follows a normal distribution, it gives us access to all this useful functionality. Assuming that the null distribution is true, the probability of observing a test statistic of -6.96 or lower is:
+
+```{r}
+pnorm(-6.96)
+```
+
+
+We look at all the points at -6.96 and below it because of the nature of continuous probability functions like the normal distribution. Our alternative hypothesis only considers that Group B's weight loss will be greater than Group A's, so we only need to look at one side of the normal distribution. This probability is extremely small and suggests that the actual difference of means is lower than zero. Equipped with this probability, we can finally make a judgment on which hypothesis we should support.
+
+The difference in the means we observed is so extreme under the null hypothesis that it seems unlikely that the null hypothesis is true. So, we will choose to reject the null hypothesis. The phrasing here is specific: we cannot say that the alternative hypothesis is supported. Even though we observed a test statistic of -6.96, it would be incorrect to say that the actual difference in average weight loss between the groups is this value. We have only shown that assuming a mean difference of 0 is highly unlikely. We can only either reject the null hypothesis or fail to reject the null hypothesis in hypothesis testing. This phrasing is chosen specifically so that we can rule out null hypotheses that aren't likely to happen.
+
+The probability we calculated earlier also has a famous name, called the p-value. In general, the p-value represents the probability of observing a test statistic as extreme or more as what we observed under the null hypothesis. If this value is high, it means that the difference in weight loss between the two groups likely comes from the null distribution. Translated back to our original hypotheses, it is likely that the new drug probably didn't play a role in increasing weight loss. On the other hand, a low p-value implies that there's an incredibly small probability that the mean difference we observed comes from the null distribution.
+
+This brings up an issue: how small should a p-value be before we decide to reject the null hypothesis? Unfortunately, there is no universally accepted answer, but many research fields have agreed that any p-values below 0.05 or 0.01 are "safe" thresholds to reject the null hypothesis.
+
+Hypothesis testing is one of the most important reasons that learning probability and statistics is so important to a data scientist. What we've learned here forms a great foundation for learning other types of tests, so we'll do a quick review of our process before we move on.
+
+1. Say we calculated a test statistic of `-3`. Would we reject the null hypothesis if we observed this test statistic if we were using a threshold of 0.05? Assign `TRUE` to `reject_null_stat_one`, `FALSE` otherwise.
+2. Say we calculated a test statistic of `-1.6`. Would we reject the null hypothesis if we observed this test statistic if we were using a threshold of 0.05? Assign `TRUE` to `reject_null_stat_two`, `FALSE` otherwise.
+
+
+
+```{r}
+reject_null_stat_one <- TRUE
+reject_null_stat_two <- FALSE
+```
+
+
+## The Process of Hypothesis Testing
+
+We make hypotheses when we propose that the world works out a certain way. In the case of our weight loss experiment, we hypothesized that the new drug would help subjects lose weight. We know that the drug will either cause a change or not, so we need to develop a null hypothesis to balance out the alternative hypothesis. The experiment split the subjects into two groups: one that received the drug, and another that didn't. After performing the experiment and collecting our data, we started to investigate the average weight loss in each group to allow us to better compare the two groups. Afterwards, we translated our hypotheses into mathematical statements in order to connect them to our data. We calculated a test statistic and used our knowledge of the normal distribution to calculate a special probability. This probability, a p-value, tells us the likelihood that we would observe the difference in mean weight losses, assuming that there would be no change at all. Since the p-value was small, so we decided to reject the null hypothesis and decide that the new drug did cause some degree of weight loss.
+
+The process of hypothesis testing with an experiment can be simplified as follows:
+
+1. Decide what kind of measurement you will be comparing between the treatment and control groups. This choice will change the type of test statistic you can use.
+2. Define your null and alternative hypotheses in both simple and mathematical terms.
+3. Calculate your test statistic.
+4. Figure out what probability distribution your test statistic comes from.
+5. Use this distribution to calculate your p-value.
+6. Use this p-value to decide whether to reject or fail to reject the null hypothesis.
+
+# 3. Categorical Data and the Chi-Squared Test
+
+## Looking At Categorical Data
+In the last lesson, we learned about the two sample independent t-test, which allowed us to compare the means of two groups. In this lesson, we'll learn about how we can perform a hypothesis test on a different data type: categorical data. As its name suggests, categorical data is just a collection of categories. A good example of categorical data could be t-shirt size, which could come in small, medium and large sizes. Categorical data is one of the most common data types you might encounter as a data scientist, so it would be good to develop a familiarity with a hypothesis test you can use with it.
+
+Categorical data often comes from surveys, where questions may ask participants about their race or income level. Both of these are great examples of categorical data. We'll be working with data on US income and demographics throughout this lesson. 
+
+
+Each row represents a single person who was counted in the `1990` US Census, and contains information about their income and demographics. Here are some of the relevant columns:
+
+- `age`: how old the person is
+- `workclass`: the type of sector the person is employed in.
+- `race`: the race of the person.
+- `sex`: the gender of the person, either `Male` or `Female`.
+
+We've asked one of our data engineers to produce a small subset of the Census data. We were supplied with a dataset with `32561` rows. Initial inspection of the data shows that `10771` are female and `21790` are male. This sample data seems to be somewhat biased, since we would expect the ratio to be more evenly split between the two genders. However, we currently don't have anything in our toolkit that will allow us to test if this data is significantly different from what we expect. The first look at the data indicates that something is off, but we need a hypothesis test to confirm this.
+
+
+
+How can we know if the data the engineer gave us was biased? As we move through the lesson, we'll slowly develop the intuition behind the hypothesis test for categorical data. At the end, we'll learn how to take other datasets and apply the same hypothesis test for future questions we may have about it.
+
+## Observed Data vs Expected Data
+
+In the last screen, we turned our intuition about the data —that the gender split should be even— into an expected value. Given the size of the data and the expectation that there should be a 50:50 split, we would expect there to be `16280.5` men and women in the data set. With our observed data and these expected values, we can actually calculate how much the data deviates from what we expect from it.
+Notice that there is a clear relationship between the two values. We would interpret this difference as there being 5509.5 more males than what we expect or 5509.5 fewer females than what we would expect. This number is useful, but we would prefer to have a more standardized way of expressing differences. The way we can do this is through percentages. Instead of just the raw differences, we can divide them by the expected values and multiply by 100 to obtain the percentage deviation.
+
+In order to calculate the percent deviation away from the expected values, we can use the following formula:
+
+$$\begin{equation}
+\text{% deviation} = \frac{\text{Observed} - \text{Expected}}{\text{Expected}}\times 100 = \frac{\text{O} - \text{E}}{\text{E}}\times 100
+\end{equation}$$
+For our data, use the above formula to calculate the percent deviation away from our expected gender counts.
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 00.49.04.png)\
+
+
+
+In the last screen, our observed values were `10771` Females, and `21790` Males. Our expected values were `16280.5` `Females` and `16280.5` Males.
+
+1. Compute the proportional difference in number of observed `Females` vs number of expected `Females`. Assign the result to `female_diff`
+2. Compute the proportional difference in number of observed Males vs number of expected Males. Assign the result to `male_diff`
+
+3. Compute the percentage deviation in the number of observed `Females` compared to the number of expected `Females`. Assign the result to `female_diff`
+
+4. Compute the percentage deviation in the number of observed Males compared to the number of expected Males. Assign the result to `male_diff`
+
+
+```{r}
+female_diff <- ((10771 - 16280.5) / 16280.5) * 100
+male_diff <- ((21790 - 16280.5) / 16280.5) * 100
+female_diff
+male_diff
+```
+
+
+## Dealing With Cancellation
+
+In the last lesson on the two sample independent t-test, we focused on the difference between the two groups because it was a simple, singular value that summarized how different the two groups were. It was our test statistic for the data. In hypothesis testing, we're always looking for a good test statistic for us to summarize the data and use to calculate the probability of observing the data we see. We are slowly moving towards our test statistic for categorical data, but you may have noticed a small snag.
+
+In the last screen, we obtained `-33.8%` for the female percent difference and `33.8% `for the male percent difference. Since an extra person in one gender always results in one less person in the other, summing these values together will always yield 0. Therefore, the sum of the raw deviations in all the categories won't be useful. One way to still utilize these percent differences and prevent cancellation is by squaring the differences, as shown below:
+
+
+$$\begin{equation}
+\frac{\text{O} - \text{E}}{\text{E}} \implies \frac{(\text{O} - \text{E})^2}{\text{E}}
+\end{equation}$$
+
+Squaring the differences has additional mathematical advantages. It not only prevents deviations from canceling each other out but also amplifies large deviations from expected values. Squaring small values still results in small values, but squaring large numbers exponentially increases their magnitude. This helps us identify particularly significant deviations from our expectations.
+
+By summing all the squared deviations together, we obtain a single test statistic that effectively summarizes the extent of deviation observed in our sample Census data.
+
+
+In the last screen, our observed values were `10771` Females, and `21790` Males. Our expected values were `16280.5` `Females` and `16280.5` Males.
+
+1. Compute the proportional difference in number of observed `Females` vs number of expected `Females`. Assign the result to `female_diff_sum`
+2. Compute the proportional difference in number of observed Males vs number of expected Males. Assign the result to `male_diff`
+
+3. Compute the percentage deviation in the number of observed `Females` compared to the number of expected `Females`. Assign the result to `female_diff_sum`
+
+4. Compute the percentage deviation in the number of observed Males compared to the number of expected Males. Assign the result to `male_diff_sum`
+
+```{r}
+female_diff_sq <- (10771 - 16280.5)^2 / 16280.5
+male_diff_sq <- (21790 - 16280.5)^2 / 16280.5
+squared_diff_sum <- female_diff_sq + male_diff_sq
+squared_diff_sum
+```
+
+## Some Statistical Insights
+
+Up until now, we've provided more mathematical justifcations for the formulas that we've used so far. Along with the mathematical justifications, there are strong statistical justifications. We'll have another look at the initial formula we used to calculate difference from expectation.
+
+
+$$\begin{equation}
+\text{deviation} = \frac{\text{Observed} - \text{Expected}}{\text{Expected}} = \frac{\text{O} - \text{E}}{\text{E}}
+\end{equation}$$
+This formula has a similar form to the t-statistic that we computed in the last lesson:
+
+$$\begin{equation}
+t = \frac{x - \mu}{\sigma} \longleftrightarrow \frac{\text{O} - \text{E}}{\text{E}}
+\end{equation}$$
+
+Standardizing by the expected value is similar to standardizing by the standard deviation. It turns out that both of these values follow a standard normal distribution! Here is the intution behind this: If we were to examine numerous sample datasets from the census, we would anticipate observing mostly minor deviations from our expected gender counts, while encountering infrequent instances of substantial deviations from our expectations. If we plotted a probability distribution of these deviations, we would observe a normal distribution. We weren't kidding when we said that the normal distribution appears everywhere in statistics!
+
+Now comes another statistical revelation. In order to prevent the sum of the differences from cancelling each other out, we needed to square the difference:
+
+
+$$\begin{equation}
+\frac{\text{O} - \text{E}}{\text{E}} \implies \frac{(\text{O} - \text{E})^2}{\text{E}}
+\end{equation}$$
+Squaring a value that comes from a standard normal distribution changes what distribution it comes from. Thankfully, this new probability distribution is also well studied. There's no need to understand the technical details behind this, but it's good to know that squaring a standard normal distribution produces a chi-squared distribution (pronounced KAI-squared).
+
+Recall that in the last lesson, we took advantage of the fact that the difference in means followed a normal distribution. Our null hypothesis assumed that the difference in the means was 0. Afterwards, we looked at how extreme our test statistic was under the null hypothesis, where we assumed the difference in means would be 0. Finally, we calculated the probability of seeing our test statistic or more extreme statistics under the null hypohthesis and called it our p-value.
+
+We have followed almost the same process here with the categorical data. We have created a test statistic — the sum of squared deviations— that summarizes the amount of deviation in our data. This test statistic, as we just found out, follows a chi-squared distribution, so we would also call it a chi-squared statistic. Our job now is to figure out what our null hypothesis is and then see how extreme our test statistic is under this assumption. Again, we are taking advantage of the fact that probability distributions can represent a hypothesis about the world. If the test statistic we observe is very improbable, it suggests that we should reject the null hypothesis.
+
+Many times, data scientists will blindly use hypothesis tests without having any understanding of why they allow us to reject hypotheses. Just having an awareness of the process of hypothesis testing and its justifications puts you a step ahead. In the next screen, we'll figure out what our null hypothesis is and get our probability distribution from it.
+
+## Developing a null hypothesis
+
+Early in the lesson, we assumed that the data have an even split between males and females. This was essentially the declaration of our null hypothesis, but we still have yet to formally define it. This step is easy to forget as a data scientist, but it is an essential one. It is best practice to lay out to yourself and teammates precisely what hypothesis you were trying to reject. Below, we will formally lay out our pair of hypotheses:
+
+- $H_0$: the data sample is not different from the Census data based on the gender ratio
+
+- $H_A$: the data sample is different from the Census data based on the gender ratio
+
+We already have our test statistic, the sum of squared deviations. We also know that this test statistic follows a chi-squared distribution. However, we need to use some information from our null hypothesis to know which chi-squared distribution to use. The chi-squared distribution actually comes from a family of distributions that are related to each other, but differ in a small way. We've seen this before with the normal distribution. We can shift where a normal distribution is on the number line by changing its mean, and we can change how fat or skinny it is based on what we use for its standard deviation. These two values are called parameters for the null distribution. Most probability distributions have parameters that slightly change how the distribution will look.
+
+For a chi-squared distribution, the parameter that changes its shape is called its degrees of freedom. Degrees of freedom is a complex parameter to explain, but in short, it describes how many independent variables are used to calculate the test statistic. In this case, we used two pieces of information: 1) the squared difference of the males and 2) the squared difference of the females. For a chi-squared distribution, the degrees of freedom is the number of categories we used to sum up to make the test statistic, minus one. Since we used two genders here, the degrees of freedom for the chi-distribution under the null hypothesis would be 1.
+Don't worry if this sounds too technical, the important information you need to glean away from knowing about degrees of freedom is that it influences the chi-squared distribution we use, and it's relatively easy to calculate. Below is a visualization of what a chi-squared distribution with 1 degree of freedom.
+
+![](https://dq-content.s3.amazonaws.com/441/chi-zero.png)\
+
+Most of the probability is between 0 and 1 in this chi-squared distribution. Anything bigger than 1 has an extremely low probability of happening. With this in mind, we can already expect that test statistics with high values would most likely have low probabilities. The test statistic we calculated was `3728`, so the we can already see that the probability of observing this test statistic is extremely low.
+
+
+Just so you know how extreme this statistic is, calculate the p-value of this statistic. In order to calculate the cumulative probability needed to get the p-value, we can use the `pchisq()` function. For this function we need to input a value we want to calculate the cumulative probability for and how many degrees of freedom we need. For example, getting the cumulative probability of the value 1 in a chi-squared distribution with 1 degree of freedom is:
+
+```{r}
+pchisq(1, df = 1)
+```
+
+The pchisq function is just like the `pnorm()` function that we used in the last lesson. R's functionalities for different probability distributions has a common naming scheme, making it easy to use.
+
+1. Calculate the p-value for the test statistic of `3728`, and assign it to `pvalue`
+2. Should we reject the null hypothesis based on this p-value? Assume that our threshold for rejecting the null hypothesis is 0.05. Assign `TRUE` to a variable `reject_null` if you think so, `FALSE` otherwise.
+
+```{r}
+pvalue <- 1 - pchisq(3728, 1)
+pvalue
+reject_null <- TRUE
+```
+
+
+
+## Importance of sample size
+
+The p-value we calculated in the last screen was so small that it essentially rounded down to 0, so we rejected the null hypothesis. The data engineer probably gave us a poor subset of the Census data. However, we enjoyed an exceptionally large sample size for both the males and females in our sample. The chi-squared distribution is what we call sensitive to small sample sizes. That is, if the sample size of our data set was a lot smaller, it might drastically change what the resulting test statistic could be. The change could be so drastic that we might accidentally fail to reject the null hypothesis when it is actually false. We'll demonstrate this using the following example
+
+Let's say we only received a dataset with `20` rows, but it had the same observed and expected proportions:
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.02.35.png)\
+
+
+We can compute the chi-squared value for this:
+
+$$\frac{(O_M - E_M)^{2}}{E_M} + \frac{(O_F - E_F)^{2}}{E_F}$$
+
+Assigning the values:
+
+$$\frac{(13 - 10)^{2}}{10} +  \frac{(7 - 10)^{2}}{10} = 0.9 + 0.9 = 1.8$$
+Using this test statistic, recalculate the p-value and reassess if we should still reject our null hypothesis.
+
+
+1. Calculate the p-value for the test statistic of `1.8`, and assign it to `pvalue`,
+2. Should we reject the null hypothesis based on this p-value? Assume that our threshold for rejecting the null hypothesis is 0.05. Assign `TRUE` to a variable `reject_null` if you think so, `FALSE` otherwise.
+
+
+```{r}
+pvalue <- 1 - pchisq(1.8, 1)
+pvalue
+reject_null <- FALSE
+```
+
+## Considering More Categories
+
+So far, we've worked with the simplest possible chi-squared statistic that has `2` categories. The chi-squared test allows us to work with any number of categories using the same basic formula. Let's consider the `race` column of the data. The possible values are `White`, `Black`, `Asian-Pac-Islander`, `Amer-Indian-Eskimo`, and `Other`.
+
+These are the expected proportions taken straight from the full 1990 US Census:
+
+- `White`: 80.3%
+- `Black`: 12.1%
+- `Asian-Pac-Islander`: 2.9%
+- `Amer-Indian-Eskimo`: .8%
+- `Other`: 3.9%
+
+Now, here's a table showing what we actually observe in the data the engineer gave us:
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.05.25.png)\
+
+
+The data looks like it slightly deviates from the expectation in terms of the `White` and `Other` categories, but we can use hypothesis tests to really confirm this or not. Our hypotheses become:
+
+- $H_0$: The proportions of different races in the same are the same as those in the full Census
+
+- $H_A$: The proportions of different races in the same are not the same as those in the full Census
+
+For each category (`White`, `Black`, `Asian-Pac-Islander`, `Amer-Indian-Eskimo`, and `Other`.):
+1. compute the difference between the expected and observed counts,
+2. square the difference,
+3. divide by the expected value,
+4. keep a running sum of the squared differences
+5. after summing everything, assign the result to `race_chisq`
+
+```{r}
+race_chisq <- 0
+observed <- c(27816, 3124, 1039, 311, 271)
+expected <- c(26146.5, 3939.9, 944.3, 260.5, 1269.8)
+
+for (i in 1:length(observed)) {
+    E <- expected[i]
+    O <- observed[i]
+    race_chisq <- race_chisq + ((O - E)^2/E)
+}
+
+race_chisq
+```
+
+
+## Adjusting The Distribution Under The Null
+
+Changing the number of categories that we examine changes the degrees of freedom for the chi-squared distribution that we use. Recall that the degrees of freedom is the number of categories minus 1. In this case, the degrees of freedom would be 4. The chart below shows that a chi-squared distribution with 4 degrees of freedom.
+
+
+![](https://dq-content.s3.amazonaws.com/441/CHI-FOUR.png)\
+
+
+
+In the chi-squared distribution with 1 degree of freedom, most of the probability was between 0 and 1. As a chi-squared distribution gains more degrees of freedom, the distribution starts to gain a skewed bell shape. We have our chi-squared statistic of `1080`, so you can calculate the p-value with the distribution under the null hypothesis.
+
+Using the chi-squared test, please evaluate whether or not we should reject the null hypothesis:
+
+
+
+- $H_0$: The proportions of different races in the same are the same as those in the full Census
+
+- $H_A$: The proportions of different races in the same are not the same as those in the full Census
+
+- Using our test statistic of `1080`, calculate the p-value. Assign this to the variable `pvalue`.
+
+
+
+```{r}
+pvalue <- 1 - pchisq(1080, 4)
+pvalue
+```
+
+# 4. Multi category chi-squared tests
+
+##  Multiple categories
+
+
+In the last lesson, we looked at the gender frequencies of people included in a sample data set on US income. We had an inkling that the amount of data we had on males and females was different from an even split, so we learned how to perform the chi-squared test to put this inkling to the test. The sample dataset consisted of `32561` rows, and here are the first few:
+- `age`: how old the person is
+- `workclass`: the type of sector the person is employed in.
+- `race`: the race of the person.
+- `sex`: the gender of the person, either `Male` or `Female`.
+- `high_income`: if the person makes more the `50k` or not.
+In the last lesson, we calculated a chi-squared statistic for a single categorical column, such as `sex`. In this lesson, we'll learn how to apply this same technique to two-way contingency tables that show how two categorical columns interact. For instance, here's a table showing the relationship between `sex` and `high_income`:
+
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.12.47.png)\
+
+On looking at this diagram, you might see a pattern between `sex` and `high_income`.If there were no interaction between `sex` and `high_income`, we would expect their values to be independent of each other. However, it's hard to immediately quantify that pattern and determine if it's statistically significant. We can apply the chi-squared test (also known as the chi-squared test of association) to figure out if there's a statistically significant correlation between two categorical columns.
+
+## Calculating expected values
+
+The first step we took in calculating the chi-squared statistic for a single categorical variable was calculating the expected value. This calculation gets a slightly more complicated when considering multiple categories at once, but we'll walk through an example here. In the last screen, we said that if there was no interaction between `sex` and `high_income`, then their counts should be independent from each other. This independence is the same independence that we learned about in Probability Fundamentals. If two events are independent, then the probability of both of them happening at the same time is just the product of their individual probabilities, as seen below:
+
+
+$$P(A \cap B) = P(A) \times P(B)$$
+We can use this relationship to calculate our expected values. In a multiple category chi-squared test, we calculate expected values across our whole dataset. We can illustrate this by converting our chart from last screen into proportions:
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.14.08.png)\
+
+Each cell represents the proportion of people in the data set that fall into the specified categories. For example:
+
+- 20.5% of Males in the whole data set earn >50k in income.
+- 33% of the whole dataset is Female
+- 75.9% of the whole dataset earns <=50k.
+
+The bottom row represents the probability of being a particular gender, while the last column represents the probability of being high income. The other cells neatly represent the intersection of the two events. Using this information, we can start calculating out the expected values using the formula above. For example, 24.1% of all people in income earn >50k, and 33% of all people in income are Female, so we'd expect the proportion of people who are female and earn >50k to be 0.241 * 0.33, which is 0.07953. We have this expectation based on the proportions of Females and >50k earners across the whole dataset. Instead, we see that the observed proportion is 0.036, which indicates that there may be some correlation between the sex and high_income columns.
+
+
+The expected values are calculated under the assumption that sex and high_income are independent of each other, so we can use this as our null hypothesis:
+
+- $H_0$: gender and earning a high income are independent of each other
+- $H_1$: gender and earning a high income are not independent of each other
+
+Saying that the two variables are not independent is another way of saying that the two influence each other. We can convert our expected proportion to an expected count value by multiplying by 32561, the total number of rows in the data set, which gives us 32561 * 0.07953, or 2589.6. With this in mind, calculate all of the expected values for all the different category combinations.
+
+Using the expected proportions in the table above, calculate the expected values for each of the 4 cells in the table.
+
+1. Calculate the expected value for Males who earn >50k, and assign to `males_over50k`.
+2. Calculate the expected value for Males who earn <=50k, and assign to `males_under50k`.
+3. Calculate the expected value for Females who earn >50k, and assign to `females_over50k`.
+4. Calculate the expected value for Females who earn <=50k, and assign to `females_under50k`.
+
+
+```{r}
+males_over50k <- .67 * .241 * 32561
+males_under50k <- .67 * .759 * 32561
+females_over50k <- .33 * .241 * 32561
+females_under50k <- .33 * .759 * 32561
+```
+
+## Calculating the chi-squared statistic
+
+
+In the last screen, you should have ended up with values like this:
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.18.46.png)\
+
+Now that we have our expected values, we can calculate the chi-squared value by using the same principles from the previous lesson. These are the steps:
+
+- Subtract the expected value from the observed value.
+- Square this difference.
+- Divide the squared difference by the expected value.
+- Repeat for all the observed and expected values and add up the values.
+
+The above process is summarized in the formula below:
+
+$$\sum \frac{(O - E)^{2}}{E}$$
+Here's the table of our observed values for reference:
+
+![](/Users/Ricardo/Desktop/Screenshot 2023-12-28 at 01.19.25.png)\
+
+Compute the chi-squared value for the observed values above and the expected values above.
+- Assign the result to `chisq_gender_income`.
+
+```{r}
+chisq_gender_income <- 0
+observed <- c(6662, 1179, 15128, 9592)
+expected <- c(5257.6, 2589.6, 16558.2, 8155.6)
+
+for (i in 1:length(observed)) {
+    O <- observed[i]
+    E <- expected[i]
+    chisq_gender_income <- chisq_gender_income + (O - E)^2 / E
+}
+chisq_gender_income
+```
+
+
+## Calculating degrees of freedom
+
+Now that we've found our chi-squared value, `1520.0`, we can use the same technique with the chi-squared sampling distribution from the last lesson to find a p-value associated with the chi-squared value. Before we can calculate p-value, we need to figure out how many degrees of freedom it has. In the last lesson, the degrees of freedom was described as the number of values that contribute to the statistic, minus 1. This formula changes somewhat when we consider the interaction between two categorical variables. Instead of considering just the number of categories, we only need to count how many different values each category can take.
+
+For a two-way contingency table, we can calculate the degrees of freedom by taking the number of categories for the first variable —sex— and subtract one from it. Then, we take this value and multiply it by the number of categories for the second variable, high_income, minus 1. The only difference between this calculation and the calculation we learned in the last lesson is that we must start multiplying. We essentially take the degrees of freedom for each individual categorical variable and multiply them together. The final result is the degrees of freedom we will use for the null hypothesis.
+
+The degrees of freedom calculation can be summarized below:
+
+$$df = (r - 1) * (c - 1)$$
+
+Here, r represents the number of categories for the variable we are using along the rows, which is high_income in this example. c represents the number of categories for the variable along the columns, which is sex.
+
+
+Using the above formula, calculate the degrees of freedom for this particular contingency table between sex and high_income. Assign this value to `df`.
+
+
+```{r}
+r <- 2
+c <- 2
+df <- (r - 1) * (c - 1)
+df
+```
+##  Calculating p-value
+
+Now that we know the degrees of freedom, we now know what the distribution of the statistic is under the null hypothesis. It turns out that the degrees of freedom for two categories with only two options each is still 1. We have all the ingredients we need to calculate the p-value.
+
+Recall that once we have the test statistic and the degrees of freedom, we can use the pchisq() function to calculate the cumulative probability of seeing this test statistic under the null.
+
+
+Calculate the p-value for observing a test statistic of `1520` under the null hypothesis. Assign this value to `pvalue`.
+Using the p-value, decide whether or not to reject or fail to reject the null hypothesis. If you believe we should reject the null hypothesis, assign the value `TRUE` to the variable `reject_null`. Otherwise, assign `FALSE.` Use a signifcance level of 0.05.
+
+
+
+```{r}
+pvalue <- 1 - pchisq(1520, 1)
+pvalue
+reject_null <- TRUE
+```
+
+## R's built-in chi-squared test function
+
+Over the course of this and the last lesson, we learned how to perform the chi-squared test by hand. The chi-squared test is such a common test that R actually has a dedicated function for the test, called `chisq.test()`. The input to `chisq.test()` is a data matrix; in this case, it's the contingency table that you use to calculate the test statistic by hand. The function takes this matrix and automatically calculates the test statistic, degrees of freedom, and p-value. The test uses the null hypothesis that the two categorical variables used are independent of each other.
+
+For example, we would use the following code to set up the data for our test for sex and high_income:
+
+```{r}
+income <- read.csv("income.csv")
+data <- table(income$sex, income$high_income)
+chisq.test(data)
+```
+
+We use the `table()` function to take the two categorical variables and convert them into a contingency table. Once we have constructed this table, we can give it to the `chisq.test()` function. The test function outputs all of the important characteristics of the test that we've described in a user-friendly format. The output mentions a "continuity correction", but you don't need to worry about this. Just know that the output of `chisq.test()` correctly describes the results of the test, and allows you to make the judgment about the null hypothesis.
+
+The reason we don't tell you about this function first is because it's important to become acquainted with the entire process of hypothesis testing. With a convenient function like `chisq.test()`, it's easy to overlook important technical aspects about the test. Without knowing what the null and alternative hypotheses, we have no way of knowing how to interpreting the resulting p-value. But now that you're equipped with the full process, you can use the function in an informed, responsible manner.
+
+The above code allows us to quickly test hypotheses concerning categorical variables in our data. Take this time to practice using this code on a different hypothesis test.
+
+You suspect that there is an association between race and education level. Using the income data, test the null hypothesis that race and education level are independent of each other. `Race` is contained in the race column, while `education` level is contained in the education column.
+
+1. Take these two columns and construct a two-way contingency table from them. Assign this table to the variable `race_education_table`.
+2. Using the `chisq.test()` function, perform the chi-squared test and make a decision about the null hypothesis. If you think we should reject the null hypothesis that race and education are independent of each other, assign `TRUE` to `reject_null`. Otherwise, assign `FALSE`. Use a signifcance level of `0.05`.
+
+
+```{r}
+race_education_table <- table(income$race, income$education)
+chisq.test(race_education_table)
+reject_null <- TRUE
+```
+## Caveats
+
+Now that we've learned the chi-squared test, you now have the ability to develop a hypothesis about relationship between categorical variables and test these hypotheses. There are a few caveats to using the chi-squared test that are important to cover, though:
+
+- Finding an insignificant result doesn't mean we can conclude that there is no association between the columns. For instance, if we found that the chi-squared test between the sex and race columns returned a p-value of .1, it wouldn't mean that there is no relationship between sex and race. It might be the case that the association between the two variables is too small to detect with the data on hand.
+- Finding a statistically significant result doesn't imply anything about the strength of the relationship between the two variables. For instance, finding that a chi-squared test between sex and race results in a p-value of .01 doesn't mean that the dataset contains too many Females who are White (or too few). A statistically significant finding means that there is some evidence that the two variables are not independent of each other. That is to say, having a particular gender can increase or decrease your probability of being a certain race, according to the data set.
+- Chi-squared tests work the best when the numbers in each cell of the cross table are large. There is no hard rule, but general rule-of-thumb is that the test is valid if each cell is greater than 5.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

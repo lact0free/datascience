@@ -1,0 +1,2744 @@
+---
+title: "1. Introduction to Statistics"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. Simple Random Sampling
+
+## Introduction
+
+The difference between a population and a sample is one of the foundational concepts in statistics. Simple random sampling allows us to select data from a population when performing statistical analysis in data science.
+
+Knowing how and what to sample is very useful in statistical analysis. In this lesson, we'll learn a few sampling methods and how to strategically select data points to create insights. Organizing and visualizing large amounts of data will make the process of discovering patterns in the data much easier.
+
+Here are a couple of takeaways you can expect by the end of this lesson:
+
+-   An introduction to populations and samples
+-   How to use various sampling methods
+
+Below is a diagram describing the workflow we'll be focusing on throughout this lesson:
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_course_workflow.svg)\
+
+In order to get the most out of this lesson, you'll need to be comfortable with programming in R. We'll begin by exploring the types of problems we can solve using statistics.
+
+## Solving Problems with Statistics
+
+Let's imagine that we're managing a small tech company with seven employees. At the end of the year, we collect some data about our employees so we can analyze our company. The data we collect is simple, and we can quickly make a few conclusions by using a bit of arithmetic and logic.
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_simple_table.svg)\
+
+Now, imagine that years have gone by, and our business has grown into a successful company with 231 employees. We still want to gather insights from data, but now we have so much data that analysis has become difficult. As the company continues to grow, analyzing data becomes nearly impossible.
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_complex_table.svg)\
+
+This is an example of a problem we can solve with statistics. Using statistical techniques, we can organize, summarize, and visualize large amounts of data to find hidden patterns.
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_stats_problem_solve.svg)\
+
+## Sampling
+
+Now, imagine we run an international company with over 50,000 employees. We've recently made a company-wide change that made our employees' jobs more difficult. Now we want to determine if this change has negatively affected our employees. If it has, then this change may cause future problems, and it'd be wise to undo this change.
+
+Data analysts can help. They can run a survey to collect data and answer our question. Surveying over 50,000 employees would be time-consuming and expensive, so the data analysts will survey approximately 100 people to get an answer to our question. This group of 100 selected from the entire company of over 50,000 employees is a sample.
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_inference.svg)\
+
+In our scenario, the analysis reveals that people are less satisfied with their jobs than they were the previous year (before the change). The inability to balance work and personal life is the main reported cause of dissatisfaction. The data analysts conclude that the decrease in satisfaction is significant, meaning that it's very unlikely to be coincidental. Something must have caused the decrease: the major change we recently implemented.
+
+This sort of scenario is very common in practice. As data analysts, we'll often need to use a small set of data to answer questions about a much larger set of data, which is what we'll learn throughout this statistics course.
+
+Now, let's examine the details of collecting data.
+
+## Population and Samples
+
+The data analysts in our previous example tried to determine if people in the company were less satisfied at work compared to the previous year. The question was about all the people working for the company, but the analysts only selected a small group to answer the question.
+
+In statistics, the set of all individuals relevant to a particular statistical question is a population. For our analyst's question, everyone working for the company was relevant. So the population in this case consisted of all the employees.
+
+![](https://s3.amazonaws.com/dq-content/393/Population.svg)\
+
+A smaller group selected from a population is a sample. When we select a smaller group from a population, we're sampling. In our example, the data analyst took a sample of approximately 100 people from a population of over 50,000 people.
+
+![](https://s3.amazonaws.com/dq-content/393/Sample.svg)\
+
+Whether a set of data is a sample or a population depends on the question we're trying to answer. For our analysts' question, the population consisted of everyone working at the company. However, if we change the question, the same group of individuals can become a sample.
+
+For example, if we tried to determine if people at international companies are satisfied at work, then our group of over 50,000 employees would become a sample. There are many international companies, and ours is just one of them. In this example, the population (the set of all individuals relevant to this question) includes everyone working at an international company.
+
+![](https://s3.amazonaws.com/dq-content/393/International_population.svg)\
+
+Populations don't only include people. Behavioral scientists, for instance, often try to answer questions about populations of monkeys, rats, or other lab animals. Similarly, analysts try to answer questions about countries, companies, vegetables, soils, pieces of equipment produced in a factory, etc.
+
+The individual elements of a population or a sample go by many names. Elements of a population are often individuals, units, events, or observations. We use these interchangeably, and they all refer to the same thing: the individual parts of a population. When we use the term "population individuals," we're not necessarily referring to people. "Individuals" is a general term that could refer to needles, frogs, stars, etc.
+
+In the case of a sample, you'll often see the following terminology used interchangeably: sample unit, sample point, sample individual, or sample observation.
+
+![](https://s3.amazonaws.com/dq-content/393/Unit.svg)\
+
+## Explore the Dataset
+
+```{r}
+wnba <- read_csv("wnba.csv")
+head(wnba)
+```
+
+## Sampling Error
+
+For every statistical question we want to answer, we should try to use the population. In practice, that's not always possible because the populations of interest usually vary from large to extremely large. Also, getting data is generally not an easy task, so small populations often pose problems, too.
+
+We can solve these problems by sampling from the population that interests us. Although this isn't as accurate as working with the entire population, working with a sample is the next best thing we can do.
+
+When we sample, the data we get might be similar to the data in the population. For instance, let's say we know that the average number of games played per season is 24 for all players in the WNBA. The average number of total points scored per season is 202. We take two samples and find these results:
+
+![](https://dq-content.s3.amazonaws.com/393/Same_data_different_samples.svg)\
+
+As you can see, the metrics of the two samples are different than the metrics of the population. A sample is an incomplete dataset for the question we're trying to answer. For this reason, there's almost always some difference between the metrics of a population and the metrics of a sample. We can see this difference as an error, and because it's the result of sampling, we call it sampling error.
+
+A metric specific to a population is a parameter, while one specific to a sample is a statistic. In our example above, the average number of games played per season for all WNBA players is a parameter because it's a metric that describes the entire population. The average number of total points scored per season from our two samples are examples of statistics because they only describe the samples.
+
+Another way to think of the concept of the sampling error is as the difference between a parameter and a statistic:
+
+$$sampling\ error = parameter - statistics$$
+
+Let's take a random sample from the dataset and calculate the difference between our sample (statistic) and the population (parameter). We will do this for the `Games_Played` variable.
+
+We will take a random sample from the `Games_Played` variable using the `sample()` function. This function requires two arguments, (1) `x`, a vector (or single column) to sample from, and (2) `size`, which is the number of observations (an integer) to include in the sample. The syntax for randomly sampling n values from a specific column looks like this:
+
+```{r}
+# sample(df$col, size = n)
+```
+
+To make our random sample results reproducible, we'll use the `set.seed()` function. This function takes an integer as an argument and uses this number to generate random numbers in a reproducible manner. We'll discuss more about the `set.seed()` function on the next screen. This also helps with the answer checking.
+
+```{r}
+set.seed(1)
+parameter <- max(wnba$Games_Played)
+parameter
+sample <- sample(wnba$Games_Played, size = 30)
+statistic <- max(sample)
+statistic
+sampling_error <- parameter - statistic
+sampling_error
+```
+
+## Simple Random Sampling
+
+When we sample, we want to minimize the sampling error as much as possible because we want our sample to represent the population as closely as possible.
+
+If we sample to measure the mean height of adults in the U.S., we'd like our sample statistic (sample mean height) to get as close as possible to the population's parameter (population mean height). To do this, we need the individuals in our sample to form a group that is similar in structure to the group forming the population.
+
+The U.S. adult population is diverse; the individuals in the population all have different heights. If we sampled 100 individuals from various basketball teams, then we'd almost certainly get a sample with a structure significantly different from the population. As a consequence, we should expect a large sampling error (a large discrepancy between our sample's statistic (sample mean height) and the population's parameter (population mean height)).
+
+In statistical terms, we want our samples to be representative of their corresponding populations. If a sample is representative, then the sampling error is low. The more representative a sample is, the smaller the sampling error. The less representative a sample is, the greater the sampling error.
+
+![](https://s3.amazonaws.com/dq-content/393/Samples.svg)\
+
+To make our samples representative, we can try to give every individual in the population an equal chance at being selected in our samples. We want a very tall individual to have the same chance of being selected as a short individual. To give every individual an equal chance of being picked, we need to sample randomly.
+
+One way to perform random sampling is to generate random numbers and use them to select a few sample units from the population. In statistics, this sampling method is called simple random sampling (often abbreviated as SRS).
+
+![](https://s3.amazonaws.com/dq-content/393/s1m1_Simple_random_sampling_v2.svg)\
+
+In our previous exercise, we used the `sample()` function to sample randomly. This function performs simple random sampling by taking a sample of the specified size from the elements of `x`, either with or without replacement. The default argument for the function is `replace = FALSE`, which means that a particular sample cannot be drawn more than once during a sampling event. We can also use this function to randomly select columns when we have a table instead of a single vector. The `sample_n()` function from `dplyr` is useful for sampling rows from a table.
+
+When we use the `set.seed()` function like we did in the previous exercise, we make the generation of random numbers predictable. This is because `set.seed()` uses a pseudorandom number generator. A pseudorandom number generator uses an initial value to generate a sequence of numbers that has properties similar to those of a sequence that is truly random. The purpose of this is to start a random sequence that can be reproduced later. With `set.seed()`, we specify that initial value used by the pseudorandom number generator. For example, if we specify the following code, we'd get the same random sample result whenever we run the command for the first time:
+
+```{r}
+set.seed(1) 
+sample(wnba$Games_Played, size = 5)
+```
+
+Each time after that, when we repeat `sample(wnba$Games_Played, size = 5)`, we will get a different sample result from the previous replication, but the results will always be repeatable, because we set `set.seed(1)`. That means, we only need to establish `set.seed()` once, no matter how many replications we require.
+
+Pseudorandom number generators are helpful in scientific research where reproducible work is necessary. In our case, pseudorandom number generators allow us to work with the same samples as you do in the exercises, and this enables meaningful answer-checking.
+
+Let's practice simple random sampling and make each sample reproducible with `set.seed()`. In the previous exercise, we generated a sample with the following code:
+
+```{r}
+sample <- sample(wnba$Games_Played, size = 30)
+```
+
+If, instead, we want to calculate the average value for the sample, we wrap the `mean()` function around the sample call:
+
+```{r}
+sample <- mean(sample(wnba$Games_Played, size = 30))
+```
+
+For this exercise, we will work with the `PTS` column, which is the total number of points scored per season by each player. We will calculate the mean for each random sample.
+
+```{r}
+set.seed(1)
+sample_1 <- mean(sample(wnba$PTS, size = 10))
+sample_2 <- mean(sample(wnba$PTS, size = 10))
+sample_3 <- mean(sample(wnba$PTS, size = 10))
+```
+
+## Generating Numerous Random Samples
+
+The results vary widely and can be used for further investigation on which particular sample is more representative of the population. It is also important to note that the `PTS` variable records the number of total points scored per season for each player regardless of how many games they played. Some players played 30 or more games in the season, while others played 10 or fewer. We'll explore this later in more detail; for now, let's investigate how sample means vary from the population mean when generating a greater number of random samples.
+
+On the previous screen, we repeated our code for three random samples. Of course, we don't want to repeat this process if, for example, we want to generate 100 random samples! How do we scale up our analysis to replicate 100 random samples? If we find ourselves cutting and pasting, or otherwise repeating code, it may be time to use a functional.
+
+To generate numerous random samples, we'll use the base R `replicate()` function. The `replicate()` function is a common tool for random sampling and repeated evaluation of an expression. For our purposes, we need to provide two arguments:
+
+```{r}
+# replicate(n, expr)
+```
+
+-   `n` is the number of replications (random samples).
+-   `expr` is a function call or formula.
+
+So what exactly is `expr`? It's whatever we want to estimate for each random sample. In the previous exercise, this was the average value of points scored from a random sample of 10 players:
+
+```{r}
+mean(sample(wnba$PTS, size = 10))
+```
+
+For this exercise, we'll generate 100 random samples of the `PTS` column and calculate the `mean()` from that sample. This will return a numeric vector of length 100 that we can use to analyze and visualize the data. This diagram illustrates how we can use `replicate()` to generate multiple random samples:
+
+![](https://s3.amazonaws.com/dq-content/393/replicate.svg)\
+
+Let's practice using `replicate()` to generate 100 random samples!
+
+```{r}
+set.seed(1)
+mean_points <- replicate(n = 100, 
+          expr = mean(sample(wnba$PTS, size = 10)))
+minimum <- min(mean_points)
+minimum
+maximum <- max(mean_points)
+maximum
+```
+
+## Visualizing Random Samples
+
+We now have a vector called `mean_points` that contains the average number of points scored per season for 100 random samples of size 10. Looking at the minimum and maximum values we calculated on the previous screen, we see that the results vary widely from 117.5 to 302.1. If we print the `mean_points` vector, we see that there is a lot of variation:
+
+```{r}
+mean_points
+```
+
+But looking at this output, it's difficult to recognize the magnitude of variation. One way to visualize the variation between these random samples is with a scatterplot. To build a scatterplot in `ggplot2`, we need to provide a DataFrame as input with variables specified for the x-axis and y-axis. Our data is currently in the form of a single vector, `mean_points`, which we will visualize on the y-axis.
+
+What will we represent on the x-axis? We want the x-axis to represent the sample number so that we can view all 100 random samples without overlap. We can create this vector like this:
+
+```{r}
+sample_number <- 1:100
+```
+
+We can combine these two vectors into a DataFrame with the `tibble()` function from the tidyverse `tibble` package, like this:
+
+```{r}
+df <- tibble(sample_number, mean_points)
+```
+
+Once we have a DataFrame, we can pass the data into `ggplot()` to build a scatterplot. Remember, the x-axis of the scatterplot will represent the sample number. The y-axis will represent the mean score calculated for each random sample. To visualize random samples spread around the mean we will add a horizontal line to the diagram that represents the mean value for the `PTS` column from the `wnba` DataFrame. Finally, let's establish a high and low range for the y-axis of 90 and 310 respectively. We've selected this upper y-limit value to ensure that our maximum value of 302.1 is in the plot. The code structure for the scatterplot we're going to make looks like this:
+
+```{r}
+df <- tibble(x = sample_number, y = mean_points)
+ggplot(data = df, 
+       aes(x = sample_number, y = mean_points)) +
+    geom_point() +
+    geom_hline(yintercept = mean(wnba$PTS), 
+               color = "blue") +
+    ylim(90, 310)
+```
+
+## The Importance of Sample Size
+
+From the scatterplot on the previous screen, we can see that the sample means vary a lot around the population mean. With a minimum sample mean of 117.5 points, a maximum of 302.1, and a population mean of roughly 201.8, we can tell that the sampling error is quite large for some of the cases.
+
+![](https://s3.amazonaws.com/dq-content/393/Graphic_1.png)\
+
+Because sample means vary a lot around the population mean, there's a good chance we get a sample that isn't representative of the population:
+
+![](https://s3.amazonaws.com/dq-content/393/Graphic_2.png)\
+
+We can solve this problem by increasing the sample size. As we increase the sample size, the sample means vary less around the population mean, and the chances of getting an unrepresentative sample decrease.
+
+In our previous exercise, we took 100 samples, and each had a sample size of 10 units. This is what happens when we repeat the procedure but increase the size of the samples:
+
+![](https://s3.amazonaws.com/dq-content/393/grid.png)\
+
+We can see how sample means vary less around the population mean as we increase the sample size. From this observation we can make two conclusions:
+
+-   Simple random sampling isn't a reliable sampling method when the sample size is small. Because sample means vary a lot around the population mean, there's a good chance we'll get an unrepresentative sample.
+-   When we do simple random sampling, we should try to get as large a sample as possible. A large sample decreases the variability of the sampling process, which, in turn, decreases the chances that we'll get an unrepresentative sample.
+
+![](https://s3.amazonaws.com/dq-content/393/Graphic_3.png)\
+
+# 2. Stratified Sampling and Cluster Sampling
+
+## Stratified Sampling
+
+In the last lesson, we practiced simple random sampling, which can be a good option in certain cases when the data is relatively uniform. Simple random sampling is the process of generating random numbers and using them to select a few sample units from the population. In certain cases, simple random sampling enables the data analyst to use a small set of data to answer questions about a much larger set of data. But because simple random sampling is entirely random, it can exclude certain individuals from the population that are relevant to analysis questions we may have.
+
+For example, players in basketball play in different positions on the court. The metrics of a player (number of points, number of assists, etc.) may depend, in part, on their position. We might want to analyze the patterns for each individual position. If we perform simple random sampling, there's a chance that some categories won't be included in our sample. In other words, it's not guaranteed that we'll have a representative sample that includes observations for every player position we want to analyze.
+
+In this lesson, we will continue to work with the dataset used in the previous lesson that describes female professional basketball players and their performance in the Women's National Basketball Association (WNBA) 2016-2017 season.
+
+There are five unique positions in our dataset:
+
+```{r}
+unique(wnba$Pos)
+```
+
+Let's decipher quickly each abbreviation:
+
+| **Abbreviation** | **Full name**  |
+|------------------|----------------|
+| F                | Forward        |
+| G                | Guard          |
+| C                | Center         |
+| G/F              | Guard/Forward  |
+| F/C              | Forward/Center |
+
+The downside of simple random sampling is that it can leave out individuals playing in a certain position on the field. Visually, and on a smaller scale, this is what could happen:
+
+![](https://s3.amazonaws.com/dq-content/394/s1m1_srs_down.svg)\
+
+To ensure we end up with a sample that has observations for all the categories of interest, we can change the sampling method. We can organize our dataset into different groups, and then do simple random sampling for every group. We can group our dataset *by player position*, and then sample randomly from each group.
+
+Visually, and on a smaller scale, we need to do this:
+
+![](https://s3.amazonaws.com/dq-content/394/s1m1_stratified_sampling_v3.svg)
+
+This sampling method is called **stratified sampling**. Each individual stratified group is also known as a **stratum**, and multiple groups are known as **strata**.
+
+In upcoming exercises, we will learn how to perform stratified sampling. But first, let's discuss how to divide datasets into multiple strata.
+
+## Sampling Rows
+
+Before we attempt to create individual strata and perform random samples, let's learn about the `sample_n()` function from `dplyr.` This function allows us to sample rows from a dataframe, so we can work with an entire dataframe of randomly sampled data. The function takes two arguments: (1) a table of data or a dataframe, and (2) size, which is the number of samples we want. For example, the syntax to sample 10 players from the `wnba` dataframe looks like this:
+
+```{r}
+set.seed(1)
+wnba_sampled <-  sample_n(wnba, size = 10)
+head(wnba_sampled)
+```
+
+When we estimate the average total points scored for this 10-player sample, we get these results:
+
+```{r}
+mean(wnba_sampled$PTS)
+```
+
+If we specify `set.seed(1)`, we get the same results when we randomly sample only the `PTS` vector using the `sample()` function:
+
+```{r}
+set.seed(1)
+wnba_sampled <-  sample(wnba$PTS, size = 10)
+mean(wnba_sampled)
+```
+
+Let's practice working with the `sample_n()` function by estimating average values for two variables from a random sample.
+
+```{r}
+set.seed(1)
+thirty_samples <-  sample_n(wnba, size = 30)
+mean_age <- mean(thirty_samples$Age)
+mean_age
+mean_games <- mean(thirty_samples$Games_Played)
+mean_games
+```
+
+## Creating and Analyzing Strata with dplyr
+
+Recall from earlier lessons that we worked with the split-apply-combine workflow. The data is split into groups, a function is performed on each group, and the results are summarized. This workflow is very powerful with stratified random sampling. Let's learn how.
+
+When data is split with the `group_by()` function, this effectively creates strata. Once the data is split, we can apply one or more functions to each strata. Simple random sampling --- specifically the function `sample_n()` from `dplyr` --- is one of the functions we will perform on each group after the data is split, or stratified.
+
+The next step is to apply one or more functions to each stratum. Finally, the results are combined into a single dataframe that summarizes the results for each stratum. Here's an example showing how to calculate average points scored per season by position, with a sample size of 10 for each stratum:
+
+```{r}
+set.seed(1)
+wnba %>% 
+  # Split: stratify by player position
+  group_by(Pos) %>% 
+  # Apply: sample 10 observations for each player position stratum
+  sample_n(10) %>%
+  # Apply & combine: calculate average points scored for each stratum, combine results
+  summarize(mean_pts = mean(PTS))
+```
+
+These results indicate that the total points scored per season vary by position, on average. But this statistic could also be affected by the total number of games each player plays per season. Players who play more games are likely to have more points per season than players that play fewer games in a season.
+
+Recall that a benefit of `sample_n()` is that it allows the analyst to work with an entire dataframe of randomly sampled data. When we group by position, all variables in the dataframe are still available for analysis. We don't have to make estimations only on a single variable at one time --- we can make estimations on many variables at once! We do this within the `summarize()` function by declaring the estimations we want to perform.
+
+Let's practice what we've learned about stratified sampling by building out the split-apply-combine workflow from above to
+
+1.  estimate the average number of points per season
+2.  estimate the average number of points per game, for each player position.
+
+```{r}
+set.seed(1)
+wnba <- wnba %>%
+  mutate(pts_game = PTS/Games_Played) 
+
+total_points_estimates <- wnba %>%
+  group_by(Pos) %>%
+  sample_n(10) %>% 
+  summarise(mean_pts_season = mean(PTS),
+            mean_pts_game = mean(pts_game)) %>% 
+  arrange(Pos)
+total_points_estimates
+```
+
+## Proportional Stratified Sampling
+
+In the previous lesson, we performed simple random sampling 100 times on the original dataset, and for each sample, we computed the mean number of total points a player scores in a season. The problem is that the number of total points is influenced by the number of games played, which ranges from 2 to 32:
+
+```{r}
+min(wnba$Games_Played)
+max(wnba$Games_Played)
+```
+
+The range between the minimum and maximum is 30 games played. How would the distribution of points look we stratified the players into three bins spanning approximately 10 games played? Calling the base R function `cut()` inside a `mutate()` function call is one method of establishing these strata. The `breaks` argument specifies how many intervals we want to split our data into.
+
+With the analysis below, we observe that approximately 72.7% of the players played 23 or more games during the 2016-2017 season. This means that the average of the total points is probably influenced by this category of players who played a lot of games. Let's take a look at the other percentages:
+
+```{r}
+wnba %>% 
+  mutate(games_stratum = cut(Games_Played, breaks = 3)) %>%
+  group_by(games_stratum) %>% 
+  summarize(n = n()) %>% 
+  mutate(percentage = n / sum(n) * 100) %>% 
+  arrange(desc(percentage))
+# to visualise
+wnba %>% ggplot(aes(x = Games_Played, fill = Pos))+
+  geom_histogram(bins = 5)
+```
+
+As a side note on the output above, `(1.97, 12]`, `(12, 22]`, and `(22, 32]` are number intervals. The`(`character indicates that the number at the beginning of the interval is not included, and the `]` indicates that the endpoint is included. For example, the bin `(22, 32]`means that 22.0 isn't included, while any number between 23 and 32 is. This bin contains this array of numbers: [23, 24, 25, 26, 27, 28, 29, 30, 31, 32].
+
+Getting back to our discussion, when we compute the mean of the total points using the population (the entire dataset), the mean will probably be significantly influenced by those 72.7% players who played 23 or more games. However, when we sample randomly, we can end up with a sample where the proportions are different than in the population.
+
+For instance, we might end up with a sample where only 2% of the players played more than 23 games. This will result in a sample mean which underestimates the population mean. Or we could have a sample where more than 95% of the players had 23 games in the 2016-2017 season. This will result in overestimating the population mean. This scenario of under or over estimation is common for small samples.
+
+![](https://s3.amazonaws.com/dq-content/394/over_underestimate.png)\
+
+One solution to this problem is to use stratified sampling while being mindful of the proportions in the population. We can stratify our dataset by the number of games played, and then sample randomly from each stratum a proportional number of observations.
+
+![](https://s3.amazonaws.com/dq-content/394/s1m1_quota_sampling_v2.svg)\
+
+In the diagram above, we can see that from a population of 20 individuals:
+
+-   14 individuals played more than 22 games.
+-   4 individuals played between 13 and 22 games.
+-   2 individuals played below 13 games. Transforming these figures to percentages, 70% of the individuals played more than 22 games, 20% played between 13 and 22 games, and 10% played below 13 games. Because we sampled proportionally, the same percentages (70%, 20%, 10%) are preserved in the sample (even though the absolute values are different): 70% played more than 22 games, 20% played between 13 and 22 games, and 10% played below 13 games. Let's use these percentages to establish the strata we need to perform random sampling stratified by games played. In this exercise we will get more practice using the `sample_n()` function from `dplyr`. Define the games played strata using the following approach:
+
+```{r}
+# stratum_1 <- df %>% 
+#               filter(condition) %>% 
+#               sample_n(n)
+```
+
+In the example above, `condition` refers to the number of games played within each stratum, and n refers to the number of random samples to take for that stratum. After the random sampling has been performed, multiple stratum can be combined into a single dataframe with the `dplyr` function `bind_rows()`. With `bind_rows()` multiple dataframes can be provided as arguments separated by commas, like this:
+
+```{r}
+# new_df <- bind_rows(df_1, df_2, df_3)
+```
+
+Establish three strata for `Games_Played` and sample randomly from each strata using the specific proportion defined for each stratum. Combine the results of the random samples from each stratum and calculate the mean points scored per season for the combined group of random samples.
+
+```{r}
+set.seed(1)
+under_12 <- wnba %>% 
+  filter(Games_Played <= 12) %>% 
+  sample_n(1)
+btw_13_22 <- wnba %>% 
+  filter(Games_Played > 12 & Games_Played <= 22) %>% 
+  sample_n(2)
+over_22 <- wnba %>% 
+  filter(Games_Played > 22) %>% 
+  sample_n(7)
+
+combined <- bind_rows(under_12, btw_13_22, over_22)
+mean(combined$PTS)
+```
+
+## Many Proportional Stratified Samples
+
+On the previous screen, we used stratified random sampling to calculate the average number of points scored for a sample size of 10 WNBA players. Let's replicate this process and visualize the spread of samples from the mean, like we did in the previous lesson with simple random sampling.
+
+In the previous lesson, we generated 100 simple random samples with the base R `replicate()` function. We called a formula at each replication that calculated the mean points scored per season for all players in the sample. We plotted the data on a scatterplot to better understand the spread around the mean. The code looked like this:
+
+```{r}
+set.seed(1)
+mean_points <- replicate(n = 100, 
+          expr = mean(sample(wnba$PTS, size = 10)))
+
+sample_number <- 1:100
+df <- tibble(x = sample_number, y = mean_points)
+
+ggplot(data = df, 
+       aes(x = sample_number, y = mean_points)) +
+    geom_point() +
+    geom_hline(yintercept = mean(wnba$PTS), 
+               color = "blue") +
+    ylim(90, 310)
+```
+
+Important reminder: In code structure above the `aes()` function call is nested within the `ggplot` call. Aesthetics supplied to `ggplot()` are used as defaults for every layer. Please use the structure above for all lessons in this course so that your answer passes the answer checker.
+
+Let's generate a similar scatterplot of 100 random samples with the proportional random sampling approach we developed on the previous screen. The coding approach will be similar to what we did in the previous lesson except we will input a custom function into the `map_dbl()` function from the `purrr` package instead of using `replicate()`. If you need a refresher on the `map()` family of functions, this screen may be useful.
+
+Recall that the `map()` functions are used to apply a function to each element of a vector. The `map()` functions require two arguments, (1) an vector to iterate over, and (2) a function to apply to each element of a vector. In our case, we want a numeric vector in return, so we will use `map_dbl()`:
+
+```{r}
+# map_dbl(vector, custom_function)
+```
+
+The vector to iterate over will be the `sample_number` vector shown above, which is a vector of numbers from 1 to 100.
+
+What does the function need to calculate in order to generate the scatterplot we want? The average points scored per season across all players included in the proportional stratified sample. This is exactly what we calculated on the previous screen! The code we developed in the last screen can be used as-is, in the body of the function that we will call `sample_mean()`. This `map_dbl()` call will output a single value for each element of the `sample_number` vector, mean points scored per season, that we will represent on the y-axis of our scatterplot. This diagram illustrates what we are trying to do with `map_dbl()`:
+
+![](https://s3.amazonaws.com/dq-content/394/purrr_map.svg)\
+
+Build a scatterplot of 100 proportional stratified random samples. Follow the `ggplot2` code structure provided above so that your answer passes the answer checker. We've loaded the required packages for you. `set.seed(1)` has been specified for you. Here is the answer code from the previous screen to use in the function body:
+
+```{r}
+set.seed(1)
+sample_mean <- function(x){
+under_12 <- wnba %>% 
+  filter(Games_Played <= 12) %>% 
+  sample_n(1)
+btw_13_22 <- wnba %>% 
+  filter(Games_Played > 12 & Games_Played <= 22) %>% 
+  sample_n(2)
+over_22 <- wnba %>% 
+  filter(Games_Played > 22) %>% 
+  sample_n(7)
+
+combined <- bind_rows(under_12, btw_13_22, over_22)
+mean(combined$PTS)
+}
+
+sample_number <- 1:100
+
+# leveraging on the map function to iterate the sample mean calculation for unit 1 to unit 100.
+mean_points_season <- map_dbl(sample_number, sample_mean)
+
+df <- tibble(sample_number, mean_points_season)
+
+head(df)
+
+ggplot(data = df) + 
+    aes(x = sample_number, y = mean_points_season) +
+    geom_point() +
+    geom_hline(yintercept = mean(wnba$PTS), color = "blue") +
+    ylim(80, 320)
+```
+
+## [Alternative Approach]{color="red"}
+
+We have been working with the `sample_n()` function from `dplyr` in this lesson because it returns randomly sampled rows from a dataframe. This can be useful when we are interested in analyzing more than one variable from a random sample. The dplyr package also offers the `sample_frac()` function that returns a dataframe of randomly sampled rows. Instead of sampling a specified number of rows, `sample_frac()` randomly samples a specified fraction or proportion of rows. For example, if we wanted to randomly sample a quarter, or 25%, of all WNBA players who played more than 22 games in a season, we would input:
+
+```{r}
+over_22 <- wnba %>% 
+  filter(Games_Played > 22) %>% 
+  sample_frac(0.25)
+```
+
+`sample_frac()` is useful with proportional stratified random sampling **because we do not need to calculate the number of samples to perform on each individual stratum!** We only need to specify the fraction of the population that we would like to sample, and `sample_frac()` will return the number of rows for each stratum that is proportional to their share of the population.
+
+Here's an example showing how to calculate average points scored per season by position, with a sample size of 10 for each stratum:
+
+```{r}
+set.seed(1)
+wnba %>% 
+  # Stratify by player position  
+  group_by(Pos) %>% 
+  # Sample 10 observations for each player position stratum
+  sample_n(10) %>%
+  # Calculate average points scored for each stratum
+  summarize(mean_pts = mean(PTS))
+```
+
+The sample size of 10 that we have been using frequently throughout this lesson represents 0.07 of the WNBA dataset, which contains 143 observations. If we input the proportion 0.07 as an argument to the `sample_frac()` function, we will end up with a random sample of 10 total samples. [But the number of samples returned for each stratum will be proportional to the total number of observations in the population for each stratum.]{color="red"} For example, running this code results in 10 total samples:
+
+```{r}
+set.seed(1)
+wnba %>% 
+  # Stratify by player position
+  group_by(Pos) %>%
+  # Ten samples (0.07% of 143 observations) for each stratum
+  sample_frac(0.07) %>% 
+  # Calculate average points scored for each stratum
+  summarize(mean_pts = mean(PTS))
+```
+
+For this particular proportional stratified random sample of size 10, a total of four players were guards. But there was only one forward/center, and one guard/forward, respectively. These proportions reflect the breakdown by player position for population, or the entire WNBA dataset.
+
+Using this approach for proportional stratified random sampling requires that we have a variable in the dataset that represents the strata to sample from proportionally. Earlier in the lesson, we used the base R `cut()` function in a `mutate()` call to establish strata representing bins of 10 games. We've applied this approach to the `wnba` dataset to create a new column called `games_stratum` that we will use later in this exercise:
+
+```{r}
+wnba <- wnba %>%
+  mutate(games_stratum = cut(Games_Played, breaks = 3))
+```
+
+Let's give it a try in this exercise. The variable `games_stratum` will be what we want to `group_by()` in order to proportionally sample by games played. The code will be very similar to the previous exercise, but we will swap out the body of the function to reflect the use of `sample_frac()`.
+
+Build a scatterplot of 100 proportional stratified random samples. Follow the `ggplot2` code structure used on the previous screen so that your answer passes the answer checker. We've loaded the required packages and added the `games_stratum` variable to the `wnba` dataframe.
+
+```{r}
+set.seed(1)
+sample_mean <- function(x) {
+  sample <- wnba %>% 
+  group_by(games_stratum) %>% 
+  sample_frac(.07)
+
+  mean(sample$PTS)
+}
+
+sample_number <- 1:100
+
+mean_points_season <- map_dbl(sample_number, sample_mean)
+
+df <- tibble(sample_number, mean_points_season)
+ggplot(data = df) + 
+    aes(x = sample_number, y = mean_points_season) +
+    geom_point() +
+    geom_hline(yintercept = mean(wnba$PTS), color = "blue") +
+    ylim(80, 320)
+```
+
+## Choosing the Right Strata
+
+The results using `sample_frac()` are identical to our approach with `sample_n()`! But you may not have been very impressed by just sampling proportionally. The variability of the sampling was quite large, and many sample means were unrepresentative, being far from the population mean. In fact, this sampling method doesn't seem to perform better than simple random sampling:
+
+![](https://s3.amazonaws.com/dq-content/394/proportional_SRS_grid.png)\
+
+The poor performance is caused by the choice of strata. We stratified the data by the number of games played, but this isn't a good approach. A player is considered as having played one game even if she only played for one or two minutes. But others play 30 or 40 minutes, and they're still considered as having played one game.
+
+It makes more sense to stratify the data by number of minutes played, rather than by number of games played. The minutes played are a much better indicator of how much a player scored in a season than the number of games played.
+
+Our dataset contains the total amount of minutes a player had for the entire season. If we make strata based on minutes played, and then sample proportionally using stratified sampling, we get something visibly better than simple random sampling (especially in terms of variability):
+
+![](https://s3.amazonaws.com/dq-content/394/Stratified_grid.png)\
+
+We increased the sample size to 12 so that we can do a better proportional sampling for the strata organized by minutes played.
+
+Here are a few guidelines for choosing good strata:
+
+**1. Minimize the variability within each stratum.**
+
+For instance, avoid having a player that has scored 10 points and a player that has scored 500 in the same stratum. If the variability is high, it might be a sign that we either need a more granular stratification (need more strata), or we need to change the criterion of stratification (an example of criterion is minutes played).
+
+**2. Maximize the variability between strata.**
+
+Good strata are different from one another. If we have strata that are similar to one another with respect to what we want to measure, we may need a more granular stratification, or to change the stratification criterion. On the previous screen, stratifying the data by games played resulted in strata that weren't too different from each other with respect to the distribution of the total points. We managed to increase the variability between strata by changing the criterion of stratification to minutes played.
+
+**3. The stratification criterion should be strongly correlated with the property you're trying to measure.**
+
+For instance, the column describing minutes played (the criterion) should be strongly correlated with the number of total points (property we want to measure). We've briefly covered the concept of correlation in earlier courses, and we'll cover it again later in these statistics courses, so don't worry if the concept of correlation doesn't make much sense to you now.
+
+We've left the code editor open for you to try to experiment with the different sampling methods we've learned so far. One thing you can try is to replicate the last graph above. You can then play with sample sizes, and try to get insights into how variability and sampling error change.
+
+## Cluster Sampling
+
+The dataset we've been working with was scraped from the WNBA's website. The website centralizes data on basketball games and players in the WNBA. Let's suppose for a moment that such a site didn't exist, and the data were instead scattered across each individual team's website. There are 12 unique teams in our dataset, which means we'd have to scrape 12 different websites, each requiring its own scraping script.
+
+This scenario is quite common in the data science workflow: We want to answer some questions about a population, but the data is scattered in such a way that data collection is either time-consuming or close to impossible. For instance, let's say we want to analyze how people review and rate movies as a function of movie budget. There are a lot of websites out there that can help with data collection, but how can you go about it so that you can spend one day or two on getting the data you need, rather than one month or two?
+
+One way is to list all the data sources you can find, and then randomly pick only a few of them from which to collect data. Then you can sample individually each of the sources you've randomly picked. This sampling method is called cluster sampling, and each of the individual data sources is called a cluster.
+
+![](https://s3.amazonaws.com/dq-content/394/s1m1_cluster_sampling_v2.svg)\
+
+In our case, we'd first list all the possible data sources. Assuming that all the teams in our dataset have a website from which we can collect data, we end up with this list of clusters (each team's website is considered a cluster):
+
+```{r}
+unique(wnba$Team)
+```
+
+Then we need to find a way to randomly pick a few clusters from our listing. There are many ways to do that, but the important thing to keep in mind is that we should avoid picking a cluster twice. Here's one way to sample four clusters randomly:
+
+```{r}
+set.seed(1)
+unique(wnba$Team) %>% sample(size = 4)
+```
+
+Once we pick the clusters, we move to collecting the data. We can collect all the data from each cluster, but we can also perform sampling on each. It's actually possible to use different sampling methods for different clusters. For instance, we can use stratified sampling on the first two clusters, and simple random sampling on the other two.
+
+```{r}
+set.seed(10)
+clusters <-  unique(wnba$Team) %>% sample(size = 4)
+
+sample <- wnba %>% filter(Team %in% clusters)
+
+# %in% membership operator that is used to identify if elements in one vector or list are present in another. It returns a logical vector indicating whether each element of the first vector exists in the second vector or not.
+
+
+sampling_error_height <- mean(wnba$Height) - mean(sample$Height)
+sampling_error_age <- mean(wnba$Age) - mean(sample$Age)
+sampling_error_games <- mean(wnba$Games_Played) - mean(sample$Games_Played)
+sampling_error_points <- mean(wnba$PTS) - mean(sample$PTS)
+
+sampling_error_age
+sampling_error_games
+sampling_error_points
+sampling_error_height
+```
+
+## Sampling in Data Science Practice
+
+So far, we've explored a few scenarios where sampling can be useful. There are more situations, however, where a data scientist can use sampling, and we discuss a few in this section.
+
+Let's say you work for an e-commerce company that has a table in a database with more than 10 million rows of online transactions. The marketing team asks you to analyze the data and find categories of customers with a low buying rate, so that they can target their marketing campaigns at the right people. Instead of working with more than 10 million rows at each step of your analysis, you can save a lot of code running time by sampling several hundred rows, and perform your analysis on the sample. You can do a simple random sampling, but if you're interested in some categories beforehand, it might be a good idea to use stratified sampling.
+
+Let's consider a different situation: you need to collect data from an API that either has a usage limit, or is not free. In this case, you are more or less forced to sample. Knowing how and what to sample can be of great use.
+
+Another common use case of sampling is when the data is scattered across different locations (different websites, different databases, different companies, etc.). As we've discussed on the previous screen, cluster sampling would be a great choice in such a scenario.
+
+Sampling is a vast topic in statistics, and there are other sampling methods besides what we've discussed so far in our course. Here's a good starting point to read about other potentially useful sampling methods.
+
+## Descriptive and Inferential Statistics
+
+Practical statistical analysis revolves entirely around the distinction between a population and a sample. When we're doing statistics in practice, our goal is either to describe a sample or a population, or to use a sample to draw conclusions about the population to which it belongs (or a mix of these two goals).
+
+When we describe a sample or a population --- measuring averages, proportions, and other metrics, visualizing properties of the data through graphs, etc. --- we do descriptive statistics.
+
+When we try to use a sample to draw conclusions about a population, we do inferential statistics (we infer information from the sample about the population).
+
+![](https://s3.amazonaws.com/dq-content/394/s1m1_descriptive_inferential_v2.svg)\
+
+# 3. Variables in Statistics
+
+## Introduction
+
+Previously, we discussed the details around collecting data for our analysis. In this lesson, we'll focus on understanding the structural parts of a dataset, and how they're measured.
+
+Whether a sample or a population, a dataset is generally an attempt to correctly describe a relatively small part of the world. The dataset we worked with in the previous lesson describes basketball players and their performance in the 2016-2017 season.
+
+Other datasets might attempt to describe the stock market, patient symptoms, stars from galaxies other than ours, movie ratings, customer purchases, and all sorts of other things.
+
+The things we want to describe usually have a myriad of properties. For instance, a human --- besides the property of being a human --- can have properties like height, weight, age, name, hair color, gender, nationality, whether they're married or not, whether they have a job or not, etc.
+
+In practice, we limit ourselves to the properties relevant to the questions we want to answer, and to the properties that we can actually measure. Let's consider three rows at random from the basketball dataset we've previously worked with:
+
+```{r}
+head(wnba, 3)
+```
+
+Each row describes an individual having a series of properties: name, team, position on the field, height, etc. For most properties, the values vary from row to row. All players have a height, for example, but the height values vary from player to player.
+
+We call properties with varying values variables. The height property in our dataset is an example of a variable. In fact, all the properties described in our dataset are variables.
+
+A row in our dataset describes the actual values that each variable takes for a given individual.
+
+Notice that this particular meaning of the "variable" concept is restricted to the domain of statistics. A variable in statistics is not the same as a variable in programming, or other domains.
+
+## Quantitative and Qualitative Variables
+
+Variables in statistics can describe either quantities or qualities.
+
+For instance, the `Height` variable in our dataset describes how tall each player is. The `Age` variable describes how much time has passed since each player was born. The `MIN` variable describes how many minutes each player played in the 2016-2017 WNBA season.
+
+Generally, a variable that describes how much there is of something describes a quantity, and, for this reason, it's called a **quantitative variable**.
+
+Usually, quantitative variables describe a quantity using real numbers, but there are also cases when words are used instead. Height, for example, can be described using real numbers, like in our dataset, but it can also be described using labels like "tall" or "short."
+
+A few variables in our dataset clearly don't describe quantities. The `Name` variable, for instance, describes the name of each player. The `Team` variable describes what team each player belongs to. The `College` variable describes what college each player goes or went to.
+
+The `Name`, `Team`, and `College` variables describe a quality for each individual --- a property that is not quantitative. Variables that describe qualities are called **qualitative variables or categorical variables**. Qualitative variables describe what or how something is.
+
+**Usually, qualitative variables use words to describe qualities, but you can also use numbers.** For instance, the number of a player's shirt or the number of a racing car are described using numbers. The numbers don't bear any quantitative meaning though, they are just names, not quantities.
+
+In the diagram below, we do a head-to-head comparison between qualitative and quantitative variables:
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_qualit_quantit.svg)\
+
+We've selected a few variables from our dataset. We've loaded the dataset for you. For each of the variables selected, indicate whether it's quantitative or qualitative. We've already created a character vector named variables that lists the `variables` in alphabetical order.
+
+```{r}
+# variables <- c("Three_PA", "Age", "AST", "Birth_Place", "Birthdate", "BMI", "College", 
+#                "DREB", "Experience", "FGA", "FGM", "FT_perc", "FTA", "FTM", "Games_Played", 
+#                "Height", "MIN", "Name", "OREB", "Pos", "PTS", "REB", "Team", "Weight")
+qualitative_vars <- c("Birth_Place", "College", "Name", "Pos", "Team")
+
+quantitative_vars <- c("Three_PA", "Age", "AST", "Birthdate", "BMI", "DREB", "Experience", 
+                       "FGA", "FGM", "FT_perc", "FTA", "FTM", "Games_Played", "Height", 
+                       "MIN", "OREB", "PTS", "REB", "Weight")
+
+qualitative_vars <- sort(qualitative_vars)
+quantitative_vars <- sort(quantitative_vars)
+```
+
+## Scales of Measurement
+
+The amount of information a variable provides depends on its nature (whether it's quantitative or qualitative), and on the way it's measured.
+
+For instance, if we analyze the `Team` variable for any two individuals:
+
+-   We can tell whether or not the two individuals are different from each other with respect to the team they play.
+-   But if there's a difference:
+-   We can't tell the size of the difference.
+-   We can't tell the direction of the difference - we can't say that team A is greater or less than team B.
+
+On the other side, if we analyze the `Height` variable:
+
+-   We can tell whether or not two individuals are different.
+-   If there's a difference:
+-   We can tell the size of the difference. If player A is 190 cm and player B is 192 cm, then the difference between the two is 2 cm.
+-   We can tell the direction of the different from each perspective: player A is 2 cm less than player B, and player B is 2 cm more than player A.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_height_team.svg)\
+The `Team` and `Height` variables provide different amounts of information because they have a different nature (one is qualitative, the other quantitative), and because they are measured differently.
+
+The system of rules that define how each variable is measured is called scale of measurement or, less often, level of measurement.
+
+[On the next few screens, we'll learn about a system of measurement made up of four different scales of measurement]{color="red"}: nominal, ordinal, interval, and ratio. As we'll see, the characteristics of each scale pivot around three main questions:
+
+-   Can we tell if two individuals are different?
+-   Can we tell the direction of the difference?
+-   Can we tell the size of the difference?
+
+## The Nominal Scale
+
+On the previous screen, we discussed the `Team` variable and said that by examining its values, we can tell whether two individuals are different or not, but we can't indicate the size and the direction of the difference.
+
+The `Team` variable is an example of a variable measured on a nominal scale. For any variable measured on a nominal scale:
+
+-   We can tell whether two individuals are different or not (with respect to that variable).
+-   We can't say anything about the direction and the size of the difference.
+-   We know that it can only describe qualities.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_nominal.svg)\
+
+When a qualitative variable is described with numbers, the principles of the nominal scale still hold. We can tell whether there's a difference or not between individuals, but we still can't say anything about the size and the direction of the difference.
+
+If basketball player A has the number 5 on her shirt, and player B has 8, we can tell they're different with respect to shirt numbers, but it doesn't make any sense to subtract the two values and quantify the difference as a 3. Nor does it make sense to say that B is greater than A. The numbers on the shirts are just identifiers here, they don't quantify anything.
+
+Let's look at a specific example using the `wnba` dataset. We've added a new variable named `Height_labels` with the code below. Instead of showing the height in centimeters, the new variable shows labels like "short," "medium," or "tall." Here is the code to create the new variable:
+
+```{r}
+wnba <- wnba %>%
+  mutate(Height_labels = case_when(
+    Height <= 170 ~ "short",
+    Height > 170 & Height <= 180 ~ "medium",
+    Height > 180 ~ "tall"
+  ))
+```
+
+Let's inspect this new `Height_labels` variable alongside the `Height` variable:
+
+```{r}
+wnba %>% 
+  select(Height, Height_labels) %>% 
+  head(10)
+```
+
+The `dplyr` `case_when()` function used above is a control structure that allows us to vectorize the `dplyr` `if_else()` statement. We learned about the base R if else function in an earlier lesson and the dplyr `if_else()` function here. The `case_when()` statement is comprised of a series of two-sided formulas. The left side of the `~` (pronounced "til-deh") determines which values match this case. The right side of the `~` provides the replacement value.
+
+The left side must evaluate to a logical vector. Beware that any conditions not met in the `case_when()` statement are silently recorded as `NA`!
+
+Inspect the dataset, and find the variables measured on a nominal scale. The variables to inspect are provided in the variables vector in the display code.
+
+```{r}
+# variables <- c("Three_PA", "Age", "AST", "Birth_Place", "Birthdate", 
+#                "BMI", "College", "DREB", "Experience", "FGA", 
+#                "FGM", "FT_perc", "FTA", "FTM", "Games_Played", 
+#                "Height", "MIN", "Name", "OREB", "Pos", 
+#                "PTS", "REB", "Team", "Height_labels")
+nominal_scale <- sort(c("Name", "Team", "Pos", "Birth_Place", "College"))
+```
+
+## The Ordinal Scale
+
+In our last exercise, the new `Height_labels` variable showed labels like "short," "medium," or "tall." By examining the values of this new variable, we can tell whether two individuals are different or not. But, unlike in the case of a nominal scale, we can also tell the direction of the difference. Someone who is assigned the label "tall" has a bigger height than someone assigned the label "short."
+
+However, we still can't determine the size of the difference. This is an example of a variable measured on an ordinal scale.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_ordinal_intervals.svg)\
+
+Generally, for any variable measured on an ordinal scale, we can tell whether individuals are different or not. We can also tell the direction of the difference, but we still can't determine the size of the difference.
+
+Variables measured on an ordinal scale are generally qualitative, but can be quantitative if the intervals between the categories are treated as equal and continuous. Quantitative variables, however, can be measured on other scales, as we'll see next in this lesson.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_ordinal_v2.svg)\
+
+Common examples of variables measured on ordinal scales include ranks: ranks of athletes, of horses in a race, of people in various competitions, etc.
+
+For example, let's say we only know that athlete A finished second in a marathon, and athlete B finished third in the same race. We can immediately tell their performance is different --- we know that athlete A finished faster, but we don't know how much faster. The difference between the two could be half a second, 12 minutes, half an hour, etc.
+
+Other common examples include measurements of subjective evaluations that are generally difficult or near to impossible to quantify with precision. For instance, when answering a survey about how much they like a new product, people may have to choose a value 1-5 for the following:
+
+```{r}
+# 1. "I hate it" 
+# 2. "I don't like it" 
+# 3. "I don't like or dislike it" 
+# 4. "I like it"
+# 5. "I love it"
+```
+
+This is an example of a quantitative variable measured on an ordinal scale because the intervals between categories can be considered equal, and mathematical operations such as finding the mean and median can be used meaningfully.
+
+The values of the variables measured on an ordinal scale can be both words and numbers. When the values are numbers, they are usually ranks. But we still can't use the numbers to compute the size of the difference. We can't say how much faster an athlete was than another by simply comparing their ranks.
+
+1.  The Interval and Ratio Scales
+
+We've seen in the case of the `Height` variable that the values have direction when measured on an ordinal scale. The downside is that we don't know the size of each interval between values, and because of this, we can't determine the size of the difference.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_intervals_not_known.svg)\
+
+An alternative here is to measure the `Height` variable using real numbers, which will result in having well-defined intervals, allowing us to determine the size of the difference between any two values.
+
+A variable measured on a scale that preserves the order between values and has well-defined intervals using real numbers is an example of a variable measured either on an interval scale, or on a ratio scale.
+
+In practice, variables measured on interval or ratio scales are very common, if not the most common. Examples include:
+
+-   Height measured with a numerical unit of measurement (inches or centimeters).
+-   Weight measured with a numerical unit of measurement (multiples and submultiples of grams).
+-   Time measured with a numerical unit of measurement (multiples and submultiple of seconds).
+-   The price of various products measured with a numerical unit of measurement (dollars, pounds, etc.).
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_interval_ratio.svg)\
+
+## The Difference Between Ratio and Interval Scales
+
+What sets apart ratio scales from interval scales is the nature of the zero point.
+
+On a ratio scale, the zero point means no quantity. For example, the `Weight` variable is measured on a ratio scale, which means that 0 grams indicate the absence of weight.
+
+On an interval scale, however, the zero point doesn't indicate the absence of a quantity. It actually indicates the presence of a quantity.
+
+To exemplify this case using our dataset, we've used the `Weight` variable (measured on a ratio scale), and created a new variable `Weight_deviation` that is measured on an interval scale:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(Weight_deviation = Weight - mean(Weight, na.rm = TRUE))
+```
+
+The new variable describes by how many kilograms the weight of a player is different than the average weight of the players in our dataset. Here's a random sample that includes values from the new variable named `Weight_deviation`:
+
+```{r}
+wnba %>% 
+    select(Name, Weight, Weight_deviation) %>% 
+    sample_n(size = 5)
+```
+
+If a player had a value of 0 for our `Weight_deviation` variable (which is measured on an interval scale), that wouldn't mean the player has no weight. Rather, it'd mean that her weight is exactly the same as the mean. The mean of the `Weight` variable is roughly 78.98 kg, which means that the zero point in the `Weight_deviation` variable is equivalent to 78.98 kg.
+
+On the other side, a value of 0 for the `Weight` variable, which is measured on a ratio scale, indicates the absolute absence of weight.
+
+Another important difference between the two scales is given by the way we can measure the size of the differences.
+
+On a ratio scale, we can quantify the difference in two ways. One way is to measure a distance between any two points by simply subtracting one from another. The other way is to measure the difference in terms of ratios.
+
+For example, by doing a simple subtraction using the data in the table above, we can tell that the difference (the distance) in weight between Clarissa dos Santos and Alex Montgomery is 5 kg. In terms of ratios, however, Clarissa dos Santos is roughly 1.06 (the result of 89 kg divided by 84 kg) times heavier than Alex Montgomery. To give a straightforward example, if player A had 90 kg and player B had 45 kg, we could say that player A is two times (90 kg divided by 45 kg) heavier than player B.
+
+On an interval scale, however, we can measure meaningfully the difference between any two points only by finding the distance between them (by subtracting one point from another). If we look at the weight deviation variable, we can say there's a difference of 5 kg between Clarissa dos Santos and Alex Montgomery. However, if we took ratios, we'd have to say that Clarissa dos Santos is two times heavier than Alex Montgomery, which is not true.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_interval_vs_ratio.svg)\
+
+Examine the selected quantitative variables (`quantitative_vars`) from the dataset. We have displayed these variables for you. Define whether each variable is measured on an interval or ratio scale.
+
+```{r}
+# quantitative_vars <- c("Three_PA", "Age", "AST", "Birthdate", "BMI", "DREB", "Experience", 
+#                        "FGA", "FGM", "FT_perc", "FTA", "FTM", "Games_Played", "Height", 
+#                        "MIN", "OREB", "PTS", "REB", "Weight", "Weight_deviation")
+interval_scale <- sort(c("Birthdate", "Weight_deviation"))
+ratio_scale <- sort(c("Three_PA", "Age", "AST", "BMI", "DREB", "Experience", "FGA", "FGM", "FT_perc", "FTA", "FTM", 
+                "Games_Played", "Height", "MIN", "OREB", "PTS", "REB", "Weight"))
+```
+
+## Common Examples of Interval Scales
+
+In practice, variables measured on an interval scale are relatively rare. Below, we discuss two examples that are more common.
+
+Generally, points in time are indicated by variables measured on an interval scale. Let's say we want to indicate the point in time of the first manned mission on the Moon. If we want to use a ratio scale, our zero point must be meaningful and denote the absence of time. For this reason, we'd basically have to begin the counting at the very beginning of time.
+
+There are many problems with this approach. One of them is that we don't know with precision when time began (assuming time actually has a beginning), which means we don't know how far away in time we are from that zero point.
+
+To overcome this, we can set an arbitrary zero point, and measure the distance in time from there. Customarily, we use the Anno domini system where the zero point is arbitrarily set at the moment Jesus was born. Using this system, we can say that the first manned mission on the Moon happened in 1969. This means that the event happened 1968 years after Jesus' birth (1968 because there's no year 0 in the Anno domini system).
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_anno_domini.svg)\
+
+Another common example has to do with measuring temperature. In day-to-day life, we usually measure temperature on a Celsius or a Fahrenheit scale. These scales are examples of interval scales.
+
+Because temperature is measured on an interval scale, we need to avoid quantifying the difference in terms of ratio. For example, 0°C or 0°F are arbitrarily set zero points and don't indicate the absence of temperature. If 0°C or 0°F were meaningful zero points, temperatures below 0°C or 0°F wouldn't be possible. But we know that we can go way below 0°C or 0°F.
+
+If yesterday was 10°C, and today is 20°C, we can't say that today is twice as hot as yesterday. We can say, however, that today's temperature is 10°C more compared to yesterday.
+
+Temperature can be measured on a ratio scale too, and this is done using the Kelvin scale. 0 K (0 degrees Kelvin) is not set arbitrarily, and it indicates the lack of temperature. The temperature can't possibly drop below 0 K.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_temperature.svg)\
+
+## Discrete and Continuous Variables
+
+Previously in this lesson, we divided variables into two big categories: quantitative and qualitative. We've seen that quantitative variables can be measured on ordinal, interval, or ratio scales. On this screen, we zoom in on variables measured on interval and ratio scales.
+
+We've learned that variables measured on interval and ratio scales can only take real numbers as values. Let's consider a small random sample of our dataset and focus on the `Weight` and `PTS` (total points) variables, which are both measured on a ratio scale.
+
+|     | **Name**            | **Weight** | **PTS** |
+|-----|---------------------|------------|---------|
+| 77  | Kayla Thornton      | 86.0       | 32      |
+| 16  | Asia Taylor         | 76.0       | 31      |
+| 80  | Kia Vaughn          | 90.0       | 134     |
+| 137 | Tierra Ruffin-Pratt | 83.0       | 225     |
+| 12  | Amanda Zahui B.     | 113.0      | 51      |
+
+The first two players scored 32 and 31 points, respectively. Between 32 and 31 points, there's no possible intermediate value. Provided the measurements are correct, it's impossible to find a player having scored 31.5 or 31.2 points. In basketball, players can only score 1,2 or 3 points at a time, so the points variable can only be expressed in integers when measured on an interval or ratio scale.
+
+Generally, if there's no possible intermediate value between any two adjacent values of a variable, we call that variable discrete.
+
+Common examples of discrete variables include counts of people in a class, a room, an office, a country, a house etc. For instance, if we counted the number of people living in each house of a given street, the results of our counting could only be integers. For any given house, we could count 1, 3, 7, 0 people, but we could not count 2.3 people, or 4.1378921521 people.
+
+In the table above, we can also see that the first player weighs 86 kg, and the second 76 kg. Between 86 kg and 76 kg, there's an infinity of possible values. In fact, between any two values of the `Weight` variable, there's an infinity of values.
+
+This is strongly counter-intuitive, so let's consider an example of two values that are relatively close together: 86kg and 87kg. Between these values we can have an infinity of values: 86.2 kg, 86.6 kg, 86.40 kg, 86.400001 kg, 86.400000000000001 kg, 86.400000000000000000000000000000000000000000001 kg, and so on.
+
+In the diagram below, we consider values between 86 and 87 kg, and break down the interval in five equal parts. Then we take two values (86.2 and 86.8) from the interval 86 - 87, and break down the interval between these values (86.2 and 86.8) in five equal parts. Then we repeat the process for the interval 86.2 - 86.8. In fact, we could repeat the process infinitely.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_infinity_in_finity.svg)\
+
+In practice, we limit ourselves to rounding the weights to a couple of decimal places either for practical purposes or because the instruments we use to measure weight are imperfect.
+
+Generally, if there's an infinity of values between any two values of a variable, we call that variable continuous.
+
+Whether a variable is discrete or continuous is determined by the underlying nature of the variable being considered, and not by the values obtained from the measurement. For instance, we can see in our dataset that height only takes integer values:
+
+```{r}
+head(wnba$Height)
+```
+
+For every variable, indicate whether it is continuous or discrete. In the code editor, we've displayed the names of select variables that are measured on the ratio scale.
+
+```{r}
+# ratio_scale <- sort(c("Three_PA", "Age", "AST", "BMI", "DREB", "Experience", "FGA", "FGM", "FT_perc", "FTA", "FTM", 
+#                 "Games_Played", "Height", "MIN", "OREB", "PTS", "REB", "Weight"))
+continuous <- sort(c("Age", "BMI", "Experience", "FT_perc", "Height", "MIN", "Weight"))
+discrete <- sort(c("Three_PA", "AST", "DREB", "FGA", "FGM", "FTA", "FTM", "Games_Played", "OREB", "PTS", "REB"))
+```
+
+## Real Limits
+
+Let's consider these ten rows where players are recorded as having the same weight:
+
+|     | **Name**          | **Weight** |
+|-----|-------------------|------------|
+| 9   | Allison Hightower | 77         |
+| 19  | Breanna Stewart   | 77         |
+| 21  | Bria Holmes       | 77         |
+| 33  | Chelsea Gray      | 77         |
+| 56  | Glory Johnson     | 77         |
+| 65  | Jessica Breland   | 77         |
+| 70  | Kaela Davis       | 77         |
+| 102 | Nia Coffey        | 77         |
+| 117 | Seimone Augustus  | 77         |
+| 132 | Tamera Young      | 77         |
+
+Do all these players really have the exact same weight? Most likely, they do not. If the values were measured with a precision of one decimal, we'd probably see that the players have different weights. One player may weigh 76.7 kg, another 77.2 kg, another 77.1 kg.
+
+An important side note: in R, integers and double vectors are collectively known as numeric vectors. Numeric vectors are stored as double type by default. This is likely the reason that the `Weight` variable, `Age` variable, and other variables recorded as integers were loaded into R as double types. In fact, there are currently no integer vectors in the `wnba` dataframe. If desired, we can convert the `Weight` variable to an integer numeric type without error and then check the variable type. Here's an example:
+
+```{r}
+wnba$Weight <- as.integer(wnba$Weight)
+head(wnba$Weight)
+```
+
+```{r}
+typeof(wnba$Weight)
+```
+
+Returning to our discussion, if we measure the weight with zero decimals precision (which we do in our dataset), a player weighing 77.4 kg will be assigned the same weight (77 kg) as a player weighing 76.6 kg. So, if a player is recorded to weigh 77 kg, we can only tell that her actual weight is somewhere between 76.5 kg and 77.5 kg. The value of 77 is not really a distinct value here. Rather, it's an interval of values.
+
+This principle applies to any possible numerical weight value. If a player is measured to weigh 76.5 kg, we can only tell that her weight is somewhere between 76.45 kg and 76.55 kg. If a player has 77.50 kg, we can only tell that her weight is somewhere between 77.495 kg and 77.505 kg. Because there can be an infinite number of decimals, we could continue this breakdown infinitely.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_any_value_interval.svg)\
+
+Generally, every value of a continuous variable is an interval, no matter how precise the value is. The boundaries of an interval are sometimes called real limits. The lower boundary of the interval is called lower real limit, and the upper boundary is called upper real limit.
+
+![](https://s3.amazonaws.com/dq-content/395/s1m2_real_limits.svg)\
+
+For example, in the figure above, we can see that 88.5 is halfway between 88 and 89. If we got a measurement of 88.5 kg in practice, but we want only integers in our dataset (hence zero decimals precision), we may wonder whether to assign the value to 88 or 89 kg. The answer is that 88.5 kg is exactly halfway between 88 and 89 kg, and it doesn't necessarily belong to any of those two values. The assignment only depends on how we choose to round numbers: if we round up, then 88.5 kg will be assigned to 89 kg; if we round down, then the value will be assigned to 88 kg.
+
+Find the real limits for five values of the BMI (body mass index) variable. We've already extracted the first five BMI values in the dataset and rounded each off to a precision of three decimal places. We stored the values as vector names in a list named `bmi`.
+
+```{r}
+# bmi <- list(
+#   "21.201" = c(, ),
+#   "21.329" = c(, ),
+#   "23.875" = c(, ),
+#   "24.543" = c(, ),
+#   "25.469" = c(, ))
+bmi <- list(
+  "21.201" = c(21.2005, 21.2015),
+  "21.329" = c(21.3285, 21.3295),
+  "23.875" = c(23.8745, 23.8755),
+  "24.543" = c(24.5425, 24.5435),
+  "25.469" = c(25.4685, 25.4695))
+
+bmi
+```
+
+# 4. Frequency Distributions
+
+Previously, we focused on the details around collecting data, on understanding its structure and how it's measured. Collecting data is just the starting point in a data analysis workflow. We rarely collect data only for the sake of collecting it. We collect data to analyze it, and we analyze it for different purposes:
+
+-   To describe phenomena in the world (science).
+-   To make better decisions (industries).
+-   To improve systems (engineering).
+-   To describe different aspects of our society (data journalism), etc.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_workflow.svg)\
+
+Our capacity to understand a dataset only by looking at it in a table format is limited, and it decreases dramatically as the size of the dataset increases. To be able to analyze data, we need to find ways to simplify it.
+
+The WNBA dataset we've been working with has 143 rows and 32 columns. This might not seem like much compared to other datasets, but it's still extremely difficult to find any patterns just by eyeballing the dataset in a table format. With 32 columns, even five rows would take us a couple of minutes to analyze:
+
+One way to simplify this dataset is to select a variable, count how many times each unique value occurs, and represent the frequencies (the number of times a unique value occurs) in a table. This is how such a table looks for the `Pos` (player position) variable:
+
+Because 60 of the players in our dataset play as guards, the frequency for guards is 60. Because 33 of the players are forwards, the frequency for forwards is 33, and so on.
+
+With the table above, we simplified the `Pos` variable by transforming it to a comprehensible format. Instead of having to deal with analyzing 143 values (the length of the `Pos` variable), now we only have five values to analyze. We can make a few conclusions now that would have been difficult and time consuming to reach at just by looking at the list of 143 values:
+
+-   We can see how the frequencies are distributed:
+-   Almost half of the players play as guards.
+-   Most of the players are either guards, forwards or centers.
+-   Very few players have combined positions (like guard/forward or forward/center).
+-   We can make comparisons with ease:
+-   There are roughly two times more guards than forwards.
+-   There are slightly less centers that forwards; etc.
+
+Because the table above shows how frequencies are distributed, it's often called a frequency distribution table, or, shorter, frequency table or frequency distribution. Throughout this lesson, our focus will be on learning the details behind this form of simplifying data.
+
+## Frequency Distribution Tables
+
+A frequency distribution table is commonly represented as two columns. One column records the unique values of a variable, and the other column presents the frequency of each unique value.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_freq_table_anatomy.svg)\
+
+To generate a frequency distribution table using R, we can use the base R `table()` function. Let's try it on the `Pos` column, which describes the position on the court of each individual.
+
+```{r}
+pos_freq <- table(wnba$Pos)
+pos_freq
+```
+
+The output is an object of class "table" and can be converted to a dataframe like this:
+
+```{r}
+as.data.frame(pos_freq)
+```
+
+We will not use the base R `table()` function moving forward, but it is worth knowing about because it is an efficient way to quickly generate a frequency distribution. Instead, we will use the split-apply-combine workflow with tidyverse tools to generate frequency tables. The split-apply-combine approach will be useful for preparing data for visualization and it will allow us to generate many summary statistics at once, such as frequency, proportion, and percentage. We'll get into more details on that later. For now, here is the `dplyr` code to generate the frequency table above:
+
+```{r}
+wnba %>%
+  group_by(Pos) %>%
+  summarize(Freq = n())
+```
+
+The `n()` function from dplyr takes no arguments and can only be implemented from within `summarize()`,`mutate()` and `filter()`. Recall that `n()` counts the number of observations in each group.
+
+```{r}
+freq_dist_pos <- wnba %>%
+  group_by(Pos) %>%
+  summarize(Freq = n())
+            
+freq_dist_height <- wnba %>%
+  group_by(Height) %>%
+  summarize(Freq = n())
+```
+
+## Arranging Frequency Distribution Tables
+
+As you might have noticed, `dplyr` sorts the tables by default in the ascending order of the variable that the data has been grouped by. Let's consider again the frequency distribution table for the `Pos` variable, which is measured on a nominal scale:
+
+What is the default order here? The `Pos` column is sorted alphabetically. This default is harmless for variables measured on a nominal scale because the unique values, although different, have no direction (we can't say, for instance, that centers are greater or lower than guards). The default is not very helpful because we can't immediately see which values have the greatest or lowest frequencies.
+
+For variables measured on ordinal, interval, or ratio scales, this default display behavior makes the analysis of the tables easier because the unique values have direction (some uniques values are greater or lower than others). Let's consider the table for the `Height` variable, which is measured on a ratio scale:
+
+Because the `Height` variable has direction, we might be interested to find:
+
+-   How many players are under 170 cm?
+-   How many players are very tall (over 185)?
+-   Are there any players below 160 cm?
+
+These questions can be answered without much effort using the table above.
+
+To see which unique values are most common we can sort the table by the `Freq` column in descending order by adding the `arrange()` function to the end of our pipe operation. Refer to this screen if you would like a refresher on `arrange()` and the pipe operator. We specify that we want to order by `Freq` in descending order, like this:
+
+```{r}
+wnba %>%
+  group_by(Height) %>%
+  summarize(Freq = n()) %>% 
+  arrange(desc(Freq))
+```
+
+```{r}
+age_ascending <- wnba %>%
+  group_by(Age) %>%
+  summarize(Freq = n())
+
+age_descending <- wnba %>%
+  group_by(Age) %>%
+  summarize(Freq = n()) %>% 
+  arrange(desc(Age))
+age_descending
+```
+
+## Sorting Tables for Ordinal Variables
+
+The sorting techniques learned in the previous screen can't be used for ordinal scales where the measurement is done using words. We don't have a variable measured on an ordinal scale in our dataset currently, but in a previous lesson we created an ordinal variable called `Height_labels` Let's inspect this new `Height_labels` variable alongside the `Height` variable:
+
+```{r}
+wnba %>% 
+  select(Height, Height_labels) %>% 
+  head(10)
+```
+
+Let's examine the frequency distribution table for the `Height_labels` variable:
+
+```{r}
+wnba %>% 
+  group_by(Height_labels) %>% 
+  summarize(Freq = n()) %>% 
+  arrange(Height_labels)
+```
+
+We want to sort the labels in an ascending or descending order, but using `arrange(Height_labels)` doesn't work because the function can't infer quantities from words like "medium". `arrange(Height_labels)` can only order the index alphabetically in an ascending or descending order:
+
+```{r}
+wnba %>% 
+  group_by(Height_labels) %>% 
+  summarize(Freq = n()) %>% 
+  arrange(desc(Height_labels))
+```
+
+One solution is to convert the `Height_labels` variable to a factor type. In R, the factor variable type is used for categorical variables. Think of categories as discrete buckets, or bins. For our purposes we will need to provide two arguments to the `factor()` function: (1) `x`, a vector, and (2) `levels`, which is a character vector that specifies the order to sort the vector. The `dplyr` code to convert the `Height_labels` column to a factor looks like this:
+
+```{r}
+height_levels <- c("short", "medium", "tall")
+
+wnba_factor <- wnba %>%
+    mutate(Height_labels = 
+             factor(Height_labels, 
+                    levels = height_levels))
+```
+
+In this example, we only had three factor levels so it would have worked to specify the levels within the `mutate()` call as a character vector. But when working with many levels (for example, the name of each calendar month) it may be easier to define the levels as a vector beforehand, and then call the `levels` vector by name as the levels argument in the `factor()` function, like we did above.
+
+A word of caution: when creating factors be sure to specify all desired categorical values because any values not specified will be silently converted to `NA`!
+
+Now that the `Height_labels` variable is a factor with established levels, arranging our frequency table in ascending order will list the values from shortest to tallest:
+
+```{r}
+wnba_factor %>% 
+  group_by(Height_labels) %>% 
+  summarize(Freq = n()) %>% 
+  arrange(Height_labels)
+```
+
+Remember that by default dplyr will sort the grouped variable in ascending order, so we did not need to specify arrange() here, but we included it here to be explicit about our desired result (refer to this screen for a refresher).
+
+It is worth mentioning that we do not actually need to convert the `Height_labels` column to a factor in the first place! This is especially useful when we do not want to convert a character variable to a factor. We can call the `factor()` function call on the `Height_labels` variable and set factor levels within the `arrange()` call itself, like this:
+
+```{r}
+height_levels <- c("short", "medium", "tall")
+
+wnba %>% 
+  group_by(Height_labels) %>% 
+  summarize(Freq = n()) %>% 
+  arrange(factor(Height_labels, 
+                 levels = height_levels))
+```
+
+Notice that the `Height_labels` variable remains a character data type. For arrangement purposes R treated the `Height_labels` variable as if it is a factor type with defined levels, but this variable remains a character data type. Let's practice with this approach in the exercise.
+
+For this exercise we've created a new column called `Points_labels` that follows the ordinal scale defined in the table below. Generate a frequency distribution table for the transformed `Points_labels` column. Use this table for reference when building the ordinal scale levels:
+
+| **Condition**             | **Label**          |
+|---------------------------|--------------------|
+| points \<= 118.4          | well below average |
+| 118.4 \< points \<= 234.8 | below average      |
+| 234.8 \< points \<= 351.2 | average points     |
+| 351.2 \< points \<= 467.6 | above average      |
+| points \> 467.6           | well above average |
+
+```{r}
+
+wnba <- wnba %>%
+  mutate(Points_labels = case_when(
+    PTS <= 118.4 ~ "well below average",
+    PTS > 118.4 & PTS <= 234.8 ~ "below average",
+    PTS > 234.8 & PTS <= 351.2 ~ "average points",
+    PTS > 351.2 & PTS <= 467.6 ~ "above average",
+    PTS > 467.6 ~ "well above average"
+  ))
+
+points_levels <- c("well below average", "below average", "average points", "above average", "well above average")
+
+points_ordinal <- wnba %>% 
+  group_by(Points_labels) %>% 
+  summarize(Freq = n()) %>% 
+  arrange(factor(Points_labels, 
+                 levels = points_levels))
+
+points_ordinal
+```
+
+## Proportions and Percentages
+
+When we analyze distributions, we're often interested in answering questions about proportions and percentages. For instance, we may want to answer the following questions about the distribution of the `Pos` (player position) variable:
+
+-   What proportion of players are guards?
+-   What percentage of players are centers?
+-   What percentage of players have mixed positions? It's very difficult to answer these questions precisely just by looking at the frequencies:
+
+```{r}
+wnba %>%
+  group_by(Pos) %>%
+  summarize(Freq = n())  %>% 
+  arrange(desc(Freq))
+```
+
+We can see that almost half of the players are guards, but we need more granularity to answer the first question above. For that, we can transform frequencies to proportions.
+
+The proportion of each player position quantifies how many players play in a certain position relative to the total number of players. There are 60 guards and 143 players overall (including guards) so the proportion of guards is $\frac{60}{143}$
+
+In practical data analysis, it's much more common to express the fraction as a decimal between 0 and 1. So we'd say that 0.42 (the result of $\frac{60}{143}$ ) of the players are guards.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_proportions.svg)\
+
+In R, we can compute all the proportions at once with `dplyr` by dividing each frequency by the total number of players. Here we use `mutate()` to create a new column `Prop`. The total number of players is calculated with `nrow(wnba)`:
+
+```{r}
+wnba %>%
+  group_by(Pos) %>%
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>% 
+  arrange(desc(Freq))
+```
+
+To find percentages, we multiply the proportions by 100:
+
+```{r}
+wnba %>%
+  group_by(Pos) %>%
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>%
+  mutate(Percentage = Freq / nrow(wnba) * 100) %>% 
+  arrange(desc(Freq))
+```
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_percentages.svg)\
+
+Because proportions and percentages are relative to the total number of instances in some set of data, they are called relative frequencies. In contrast, the frequencies we've been working with so far are called absolute frequencies because they are absolute counts and don't relate to the total number of instances.
+
+What if we only want to calculate the frequency, proportion, and percentage distribution for a single value? For example, what if we only want the estimates for guards? We filter by the condition that we are interested in:
+
+```{r}
+wnba %>%
+  filter(Pos == "G") %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>%
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+```
+
+Notice that we did not use `group_by()` when filtering for a single value because `filter()` creates a subset of data that only includes players in the guard position. There is no need for grouping in this instance.
+
+A word of caution regarding NA values: In the examples above we determined proportions and percentages by dividing frequency by the total number of rows (players) in the `wnba` dataframe. We were able to do this because there are not any `NA` values in the `Pos` variable. If the variable that we are estimating proportions or percentages for contains `NA` values, we will need to divide the frequency by the `length()` of the column (vector) after the `NA` values have been removed.
+
+```{r}
+age_25 <- wnba %>%
+  filter(Age == 25) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>%
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+
+age_23_or_under <- wnba %>%
+  filter(Age <= 23) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>%
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+
+age_30_or_older <- wnba %>%
+  filter(Age >= 30) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Prop = Freq / nrow(wnba)) %>%
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+```
+
+## Percentiles and Percentile Ranks
+
+In the previous exercise, we found that the percentage of players age 23 years or younger is 19% (rounded to the nearest integer). This percentage is also called a percentile rank.
+
+A percentile rank of a value $x$ in a frequency distribution is given by the percentage of values that are equal or less than $x$. **In our last exercise,** $x = 23$, , and the fact that 23 has a percentile rank of 19% means that 19% of the values are equal to or less than 23.
+
+In this context, the value of 23 is called the 19th percentile. If a value $x$ is the 19th percentile, it means that 19% of all the values in the distribution are equal to or less than $x$.
+
+When we're trying to answer questions similar to "What percentage of players are 23 years or younger?", we're trying to find percentile ranks. In our previous exercise, our answer to this question was 18.881%. We can arrive at the same answer faster by using the base R function `mean()` like this:
+
+```{r}
+# Proportion
+mean(wnba$Age <= 23)
+```
+
+```{r}
+# Percentage
+mean(wnba$Age <= 23) * 100
+```
+
+We need to use`<=`to indicate that we want to find the percentage of values that are less than or equal to the total number of values in the `x` argument. In this case the x argument is the `Age` vector from the `wnba` dataframe.
+
+Another question we had was what percentage of players are 30 years or older. We can answer this question too using the `mean()` function. First we need to find the percentage of values equal to or less than 29 years (the percentile rank of 29). The rest of the values must be 30 years or more.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_difference.svg)\
+
+In our exercise the answer we found was 26.573%. This is what we get using the technique we've just learned:
+
+```{r}
+mean(wnba$Age >= 30) * 100
+```
+
+This is a powerful use of a commonly used function in R. So what exactly is going on in the calculation? R is essentially adding up the number of observations (players) greater than or equal to age 30, and then dividing that sum by the total number of players in the dataset. Each player that meets the condition `>= 30` counts as `1`, and players age 29 or younger (that do not meet the condition) count as 0.
+
+In the next screen, we'll learn how to find quickly any percentile using R and `dplyr`. For now, let's practice with percentile ranks.
+
+```{r}
+percentile_50_or_less <- mean(wnba$Games_Played <= 17) * 100
+percentile_50_or_less
+percentile_above_50 <- mean(wnba$Games_Played > 17) * 100
+percentile_above_50
+```
+
+## Finding Percentiles with R
+
+To find percentiles for the Age variable, we can use the built in `summary()` function which returns by default the 25th, the 50th, and the 75th percentiles:
+
+```{r}
+summary(wnba$Age)
+```
+
+We can also use another base R function `quantile()` to display similar information, but presented in a slightly different way. Note that the `quantile()` function does not return the mean:
+
+```{r}
+quantile(wnba$Age)
+```
+
+The 25th, 50th, and 75th percentiles R returns by default are the scores that divide the distribution into four equal parts.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_quantiles_v2.svg)\
+
+The three percentiles that divide the distribution in four equal parts are also known as quartiles (from the Latin quartus which means four). Note that the term quartile is different than quantile. Quantiles provide us with the value of a random variable for a specified probability. For example, as described in this stackoverflow post, the median is the value of the random variable at the quantile probability value of 0.5. If you'd like to learn more about quantiles enter `?quantile` into the optional pop-up console and read the official R Documentation.
+
+There are three quartiles in the distribution of the `Age` variable:
+
+-   The first quartile (also called lower quartile) is 24 (note that 24 is also the 25th percentile).
+-   The second quartile (also called the middle quartile) is 27 (note that 27 is also the 50th percentile).
+-   And the third quartile (also called the upper quartile) is 30 (note that 30 is also the 75th percentile).
+-   The upper quartile is the value of the quantile at probability 0.75.
+
+We may be interested to find the percentiles for percentages other than 25%, 50%, or 75%. For that, we can use the `probs` argument of the `quantile()` function. This argument requires us to pass the percentages we want as proportions between 0 and 1.
+
+```{r}
+quantile(wnba$Age, 
+         probs = c(0, 0.1, 0.25, 0.33, 0.5, 0.66, 0.75, 0.9, 1))
+```
+
+What if we want to calculate age percentiles for each player in the `wnba` dataframe? The `dplyr` package offers a convenient function `cume_dist()` for calculating percentiles for each value in a column. The `cume_dist()` function takes one argument, a vector, which in the example below is the `Age` variable. In the following example, we calculate the cumulative distribution, which returns the proportion of players the same age as, or younger than, each entry in the dataframe. Below we've displayed the first 15 rows of the dataframe for the `Name`, `Age` and `cume_dist_age` variables:
+
+```{r}
+wnba %>% 
+  mutate(cume_dist_age = cume_dist(Age)) %>% 
+  select(Name, Age, cume_dist_age) %>% 
+  head(n = 15)
+```
+
+Percentiles don't have a single standard definition, so don't be surprised if you get very similar (but not identical) values if you use different functions (especially if the functions come from different packages).
+
+```{r}
+age_upper_quartile <- quantile(wnba$Age, probs = 0.75)
+age_middle_quartile <- quantile(wnba$Age, probs = 0.50)
+age_95th_percentile <- quantile(wnba$Age, probs = 0.95)
+
+wnba_age_percentiles <- wnba %>% 
+  mutate(cume_dist_age = cume_dist(Age)) %>% 
+  select(Name, Age, cume_dist_age) %>% 
+  arrange(Age)
+```
+
+## Grouped Frequency Distribution Tables
+
+With frequency tables, we're trying to transform relatively large and incomprehensible amounts of data to a table format we can understand. However, not all frequency tables are straightforward:
+
+```{r}
+wnba %>%
+  group_by(Weight) %>%
+  summarize(Freq = n()) %>% head
+```
+
+There's a lot of granularity in the table above, but for this reason it's not easy to find patterns. The table for the `Weight` variable is a relatively straight-forward case, but the frequency tables for variables like `PTS`, `BMI`, or `MIN` are even more daunting.
+
+If the variable is measured on an interval or ratio scale, a common solution to this problem is to group the values in equal intervals. For the `Weight` variable, the values range from 55 to 113 kg, which amounts to a difference of 58 kg. We can try to segment this 58 kg interval in ten smaller and equal intervals. This will result in ten intervals of 5.8 kg each:
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_ten_intervals.svg)\
+
+Fortunately, R can handle this process gracefully. We only need to make use of the `breaks` argument of the `cut()` function. We want ten equal intervals, so we need to specify `breaks = 10`. We use `mutate()` to create a new column called `weight_categories` that contains the ten intervals:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(weight_categories = 
+           cut(Weight, breaks = 10, dig.lab = 4))
+```
+
+The `dig.lab` argument determines the number of digits used in formatting the break numbers. We will use `dplyr` to create our frequency distribution table, and we will drop the single `NA` value with the `drop_na()` function from the `tidyr` package:
+
+```{r}
+wnba %>% 
+  group_by(weight_categories) %>% 
+  summarize(Freq = n()) %>% 
+  drop_na()
+```
+
+Recall from an earlier lesson that `(54.94, 60.8]`, `(60.8, 66.6]` or `(107.2, 113.1]` are number intervals. The `(` character indicates that the starting point is not included, while the`]` indicates that the endpoint is included. `(54.94, 60.8]` means that 54.94 isn't included in the interval, while 60.8 is. The interval `(54.94, 60.8]` contains all real numbers greater than 54.94 and less than or equal to 60.8.
+
+We can see above that there are 10 equal intervals, 5.8 each. The first interval, `(54.94, 60.8]` is confusing, and has to do with how R shows the output. One way to understand this is to convert 54.94 to 1 decimal point, like all the other values are. Then the first interval becomes `(54.9, 60.8]`. 54.9 is not included, but the minimum value of 55 in the Weight variable is included.
+
+Because we group values in a table to get a better sense of frequencies in the distribution, the table we generated above is also known as a grouped frequency distribution table. Each group (interval) in a grouped frequency distribution table is also known as a class interval. `(107.2, 113.1]`, for instance, is a class interval.
+
+Using the grouped frequency distribution table we generated above for the `Weight` variable, we can find patterns easier in the distribution of values:
+
+-   Most players weigh somewhere between 70 and 90 kg.
+-   Very few players weigh over 100 kg.
+-   Very few players weigh under 60 kg; etc.
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = cut(PTS, breaks = 10, dig.lab = 4))
+
+pts_freq_table <- wnba %>% 
+  group_by(PTS) %>% 
+  summarize(Freq = n())
+
+pts_freq_table %>% head()
+
+pts_grouped_freq_table <- wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Percentage = Freq / nrow(wnba) * 100) %>% 
+  arrange(desc(points_categories))
+
+pts_grouped_freq_table
+```
+
+## Information Loss
+
+When we generate grouped frequency distribution tables, there's an inevitable information loss. Let's consider this table:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = 
+           cut(PTS, breaks = 10, dig.lab = 4))
+
+wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n())
+```
+
+Looking at the first interval, we can see there are 30 players who scored between 2 and 60 points (2 is the minimum value in our dataset, and points in basketball can only be integers). However, because we grouped the values, we lost more granular information like:
+
+-   How many players, if any, scored exactly 50 points.
+-   How many players scored under 10 points.
+-   How many players scored between 20 and 30 points, etc. To get back this granular information, we can increase the number of class intervals. However, if we do that, we end up again with a table that's lengthy and very difficult to analyze.
+
+On the other hand, if we decrease the number of class intervals, we lose even more information:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = cut(PTS, breaks = 5, dig.lab = 4))
+
+wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n())
+```
+
+There are 54 players that scored between 2 and 118 points. We can get this information from the first table above too, but there's some extra information there: among these 54 players, 30 scored between 2 and 60 points, and 24 scored between 61 and 118 points. We lost this information when we decreased the number of class intervals from 10 to 5.
+
+We can conclude there is a trade-off between the information in a table, and how comprehensible the table is.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_info_comp.svg)\
+
+When we increase the number of class intervals, we can get more information, but the table becomes harder to analyze. When we decrease the number of class intervals, we get a boost in comprehensibility, but the amount of information in the table decreases.
+
+As a rule of thumb, 10 is a good number of class intervals to choose because it offers a good balance between information and comprehensibility.
+
+![](https://s3.amazonaws.com/dq-content/396/s1m3_tradeoff.svg)\
+
+```{r}
+wnba <- wnba %>% 
+  mutate(min_categories = cut(MIN, breaks = 5, dig.lab = 4))
+
+wnba %>% 
+  group_by(min_categories) %>% 
+  summarize(Freq = n())
+```
+
+## Readability for Grouped Frequency Tables
+
+R helps a lot when we need to quickly explore grouped frequency tables. However, the intervals R outputs are confusing at first sight:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = cut(PTS, breaks = 5, dig.lab = 4))
+
+wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n())
+```
+
+Imagine we'd have to publish the table above in a blog post or a scientific paper. The readers will have a hard time understanding the intervals we chose. They'll also be puzzled by the decimal numbers because points in basketball can only be integers.
+
+To fix this, we can define the intervals ourselves. For the table above, we can define six intervals of 100 points each, and then count how many values fit in each interval. We'd like to end with a table like this:
+
+```{r}
+# points_categories   Freq
+# <fctr>             <int>
+# (0,100]               49
+# (100,200]             28
+# (200,300]             32
+# (300,400]             17
+# (400,500]             10
+# (500,600]              7
+```
+
+We can define intervals ourselves by providing a numeric vector to the breaks argument, instead of simply providing the number of breaks we want. The code to establish the breaks we observe in the table above, and generate the associated grouped frequency table, looks like this:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = cut(PTS, 
+               breaks = c(0, 100, 200, 300, 400, 500, 600), 
+               dig.lab = 4))
+
+wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+```
+
+Note that we're not restricted by the minimum and maximum values of a variable when we define intervals. The minimum number of points is 2, and the maximum is 584, but our intervals range from 1 to 600 (remember, zero is not included).
+
+```{r}
+wnba <- wnba %>% 
+  mutate(min_categories = 
+           cut(MIN, 
+               breaks = c(0, 150, 300, 450, 600, 750, 900, 1050), 
+               dig.lab = 4))
+
+min_grouped_freq_table <- wnba %>% 
+  group_by(min_categories) %>% 
+  summarize(Freq = n()) %>% 
+  mutate(Percentage = Freq / nrow(wnba) * 100)
+min_grouped_freq_table
+```
+
+## Frequency Tables and Continuous Variables
+
+Remember from the previous lesson that a height of 175 cm is just an interval bounded by the real limits of 174.5 cm (lower real limit) and 175.5 (upper real limit). When we build frequency tables for continuous variables, we need to take into account that the values are intervals.
+
+The height of 175 cm has a frequency of 16 in the distribution of the `Height` variable:
+
+```{r}
+sum(wnba$Height == 175)
+```
+
+This doesn't mean that there are 16 players that are all exactly 175 cm tall. It means that there are 16 players with a height that's somewhere between 174.5 cm and 175.5 cm. Standard rounding rules determine that, for example, a player whose height is 174.6 should be recorded as having a height of 175.
+
+Continuous variables also affect the way we read percentiles. For instance, the 50th percentile (middle quartile) in the distribution of the `Height` variable is 185 cm:
+
+```{r}
+quantile(wnba$Height)
+```
+
+This means that 50% of the values are less than or equal to 185.5 cm (the upper limit of 185 cm), not equal to 185 cm.
+
+# 5. Visualizing Frequency Distributions
+
+## Visualizing Distributions
+
+To find patterns in a frequency table, we have to look up the frequency of each unique value or class interval and at the same time compare the frequencies. This process can get time consuming for tables with many unique values or class intervals, or when the frequency values are large and hard to compare against each other.
+
+We can solve this problem by visualizing the data in the tables with the help of graphs. Graphs make it much easier to scan and compare frequencies, providing us with a single picture of the entire distribution of a variable.
+
+Because they are easy to grasp and also eye-catching, graphs are a better choice over frequency tables if we need to present our findings to a non-technical audience.
+
+In this lesson, we'll learn about four kinds of graphs:
+
+-   Bar charts
+-   Stacked bar charts
+-   Pie charts
+-   Histograms By the end of the lesson, we'll know how to generate the graphs below, and we'll know when it makes sense to use each:
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_graphs.png)\
+
+We've already learned about bar charts and histograms in the Data Visualization in R course. In this lesson we build upon that knowledge and discuss the graphs in the context of statistics by learning for what kind of variables each graph is most suitable for.
+
+## Bar Charts
+
+For variables measured on a nominal or an ordinal scale, it's common to use a bar chart to visualize their distribution. To generate a bar chart for the distribution of a variable, we only need to provide one set of values:
+
+-   A single variable from a dataframe containing the unique values. We pass this variable to a `ggplot` call as the x-axis aesthetic, and specify `geom_bar()` to generate a bar chart. Using the same WNBA dataset we've been working with for the past lessons, this is how we'd do that for the `Pos` (player position) variable:
+
+```{r}
+ggplot(data = wnba,
+       aes(x = Pos)) +
+  geom_bar()
+```
+
+The `geom_bar()` geom generates a vertical bar chart with the frequencies on the y-axis, and the unique values on the x-axis. On the y-axis `count` is displayed, but `count` is not a variable within the `wnba` dataframe. The `count` value is calculated by `ggplot2` before the information is presented. We did not need to build a frequency table first and then pass this information to `ggplot2`, this information was calculated for us.
+
+We can improve the aesthetics of the plot by setting the `fill` aesthetic to give each bar a distinct color based on unique categories in the data. In this case, we would like the bars to have distinct colors by position, so we set `fill = Pos`.
+
+Setting the fill aesthetic also creates a legend that describes how the fill colors map to each player position. In this case, player position is also described on the x-axis so having a legend does not add value. We can hide the legend to improve the bar chart:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Pos, fill = Pos)) +
+  geom_bar() + 
+  theme(legend.position = "none")
+```
+
+To generate a horizontal bar chart in the same style as above, we add the `coord_flip()` geom:
+
+```{r}
+ggplot(data = wnba,
+       aes(x = Pos, fill = Pos)) +
+  geom_bar() + 
+  coord_flip() + 
+  theme(legend.position = "none")
+```
+
+We've taken information from the Experience column, and created a new column of data type factor named Exp_ordinal, which is measured on an ordinal scale. The new column has five ordered levels, and each one corresponds to a number of years a player has played in the WNBA:
+
+| Years in WNBA | Label             |
+|---------------|-------------------|
+| 0             | Rookie            |
+| 1-3           | Little experience |
+| 4-5           | Experienced       |
+| 6-10          | Very experienced  |
+| \>10          | Veteran           |
+
+```{r}
+wnba <- wnba %>%
+  mutate(Exp_ordinal = case_when(
+    Experience == "R"  ~ "Rookie",
+    Experience >= 1 & Experience <= 3 ~ "Little experience",
+    Experience >= 4 & Experience <= 5 ~ "Experienceds",
+    Experience >= 6 & Experience <= 10 ~ "Very experiencedge",
+    Experience > 10 ~ "Veteran"
+  ))
+
+ggplot(data = wnba, 
+       aes(x = Exp_ordinal, fill = Exp_ordinal)) +
+  geom_bar() + 
+  theme(legend.position = "none")
+
+ggplot(data = wnba, 
+       aes(x = Exp_ordinal, fill = Exp_ordinal)) +
+  geom_bar() + 
+  coord_flip() +  
+  theme(legend.position = "none")
+```
+
+## Proportions with Bar Charts
+
+On the previous screens we used bar charts to display frequencies. Bar charts can also be used to display proportions and percentages. By default, the `geom_bar()` geom of the `ggplot2` package displays `count` on the y-axis. If instead of a frequency count we prefer to display the proportion of observations within each category, we supply the argument `..prop..` to the y-axis. We also need to specify the argument `group = 1`, like this:
+
+```{r}
+ggplot(data = wnba,
+       aes(x = Pos, 
+             y = after_stat(prop), 
+             group = 1)) +
+  geom_bar() + 
+  theme(legend.position = "none")
+```
+
+
+This displays the proportion of totals for each player position. `geom_bar()` supports only the two computed variables that we have seen so far: count (the default) and groupwise proportions with `..prop...` If we prefer to display percentage instead of proportion, we multiply the proportions by 100 like this:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Pos, 
+             y = ..prop.. * 100, 
+             group = 1)) +
+  geom_bar() + 
+  theme(legend.position = "none") +
+  labs(x = "Position",
+       y = "Percentage")
+```
+
+Now the percentages are displayed instead of proportion. The x and y-axis labels are customized with the `labs` argument. Finally, to color the bars uniquely by player position we need to supply the argument `fill = factor(..x..)` within the `aes()` call:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Pos, 
+             y = ..prop.. * 100, 
+             group = 1, 
+             fill = factor(..x..))) +
+  geom_bar() + 
+  theme(legend.position = "none") +
+  labs(x = "Position",
+       y = "Percentage")
+```
+Note that with each of the bar charts above, the height of the bars are proportional to the number of players in each group. Do you think this representation of data conveys proportions in a meaningful way?
+
+
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Exp_ordinal, 
+           y = ..prop.. * 100, 
+           group = 1, 
+           fill = factor(..x..))) +
+  geom_bar() + 
+  theme(legend.position = "none") +
+  labs(x = "Experience Level",
+       y = "Percentage")
+```
+
+## Stacked Bar Charts
+
+The side-by-side style of bar chart that we built on the previous screen is one method to convey proportions. Another method using bar charts is to stack the bars together into one single bar. This is known, intuitively, as a stacked bar chart. An advantage of the stacked bar chart is that, collectively, the bars stacked on top of one-another add up to represent the entirety of the data. In other words, the stacked bar displays the "whole" representation of the data.
+
+To build a stacked bar chart, it is useful to summarize the data for the variable we are interested in by creating a summary table of proportions by category. We learned to do this in the previous lesson when generating frequency distribution tables. Here is how we calculate the distribution of players by position:
+
+
+```{r}
+pos_prop <- wnba %>% 
+  group_by(Pos) %>% 
+  summarize(Prop = n() / nrow(wnba))
+pos_prop
+```
+To generate a stacked bar from this data, we need the `Prop` variable, or proportions, to be displayed on the y-axis. To fill in the color of the bar by player position, we set `fill = Pos` within the `aes()` call. So what argument do we provide to the x-axis? We don't need to represent anything here other than the width of the bar itself, so we set the value of x to equal `""`, an empty string:
+
+```{r}
+ggplot(data = pos_prop, 
+              aes(x = "", y = Prop, fill = Pos)) + 
+  geom_bar(stat = "identity")
+```
+
+
+Within the `geom_bar()` geom, we set the statistic to "identity" because, in this case, we do not need `ggplot2` to calculate anything for us. We have already provided the proportions, we only need the identity of those proportions. 
+
+It is typical to see stacked bar charts displayed horizontally. It is also common for the bar itself to be narrower. We can improve our stacked bar chart by flipping the coordinates and adjusting the width:
+
+```{r}
+ggplot(data = pos_prop, 
+              aes(x = "", y = Prop, fill = Pos)) + 
+  geom_bar(stat = "identity", width = 0.25) +
+  coord_flip()
+```
+
+From this bar chart, it is clear that the most common player position in the WNBA is the guard position. We can also see that the least common player positions are forward/center and guard/forward. The bar chart in it's current form is useful for exploratory data analysis. We are able to study the stacked bar chart and make conclusions about the distribution of players by position. What style of bar chart do you find more useful: side-by-side or stacked bar charts?
+
+The bar chart we generated above still needs some work if we want to make it more presentable. The code below provides a template for making this stacked bar chart more presentable. Learn about the specifications below in the `ggplot2` function reference. This code can be easily adapted to work with other variables:
+
+
+
+```{r}
+ggplot(data = pos_prop, 
+              aes(x = "", y = Prop, fill = Pos)) + 
+  geom_bar(stat = "identity", width = 0.25) +
+  coord_flip() +
+  geom_text(aes(label = str_c(round(Prop * 100), "%")), 
+            position = position_stack(vjust = 0.5)) + 
+  labs(x = NULL, 
+       y = NULL, 
+       fill = NULL, 
+       title = "Player Distribution by Position") + 
+  theme_classic() + 
+  theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank())
+```
+
+Let's practice building stacked bar charts by working with the `Exp_ordinal` variable created earlier in this lesson that categorizes players by experience level.
+
+
+```{r}
+exp_prop <- wnba %>% 
+  group_by(Exp_ordinal) %>% 
+  summarize(Prop = n() / nrow(wnba))
+
+ggplot(data = exp_prop, 
+       aes(x = "", y = Prop, fill = Exp_ordinal)) + 
+  geom_bar(stat = "identity", width = 0.25) +
+  coord_flip() +
+  geom_text(aes(label = str_c(round(Prop * 100), "%")), 
+            position = position_stack(vjust = 0.5)) + 
+  labs(x = NULL, 
+       y = NULL, 
+       fill = NULL, 
+       title = "Player Distribution by Experience Level") + 
+  theme_classic() + 
+  theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank())
+```
+
+## Pie Charts
+
+Another kind of graph we can use to visualize the distribution of nominal and ordinal variables is a pie chart. Pie charts have a bad reputation in the world of data visualization, but there are advocates of pie charts as well. We'll leave it up to you to decide whether pie charts provide a meaningful way to display distributions. But whether you like them or not, your boss or your client may request a pie chart from you someday. We'll show you how to built pie charts in `ggplot2` so that you are prepared.
+
+As the name suggests, a pie chart is structured pretty much like a regular pie: it takes the form of a circle and is divided in wedges. Each wedge in a pie chart represents a category (one of the unique labels or levels), and the size of each wedge is given by the proportion (or percentage) of that category in the distribution.
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_pie.svg)\
+
+We can generate pie charts with `ggplot2` using the `coord_polar()` geom. In `ggplot2` pie charts are stacked bar charts displayed in polar coordinates. To create a pie chart we add the `coord_polar()` geom to the same code we used to develop the stacked bar chart. This is how we'd do that for the `Pos` variable:
+
+```{r}
+pos_prop <- wnba %>% 
+  group_by(Pos) %>% 
+  summarize(Prop = n() / nrow(wnba))
+
+ggplot(data = pos_prop, 
+              aes(x = "", 
+                  y = Prop, 
+                  fill = Pos)) + 
+  geom_bar(stat = "identity") +
+  coord_polar(theta = "y")
+```
+Some people argue that the main advantage of pie charts over bar charts is that they provide a much better sense for the relative frequencies (proportions and percentages) in the distribution. Looking at a bar chart, we can see that categories are more or less numerous than others, but some say it's really hard to tell what proportion in the distribution each category takes. What do you think?
+
+With pie charts, we get a visual sense for the proportion each category takes in a distribution. We know from the summary table of proportions that the distribution by player position is as follows:
+
+- Guards ("G") take about two fifths (2/5) of the distribution.
+- Forwards ("F") make up roughly a quarter (1/4) of the distribution.
+- Nearly one fifth (1/5) of the distribution is made of centers ("C").
+- Combined positions ("G/F" and "F/C") together make up roughly one fifth (1/5) of the distribution.
+- Do you think this pie chart is intuitive? Do the proportions you see in the pie chart align with the proportions we know are true from the summary table? Let's take a look at how well a pie chart represents the `Exp_ordinal` variable.
+
+```{r}
+exp_prop <- 
+  wnba %>% 
+  group_by(Exp_ordinal) %>% 
+  summarize(Prop = n() / nrow(wnba))
+ggplot(data = exp_prop, 
+       aes(x = "", y = Prop, fill = Exp_ordinal)) + 
+  geom_bar(stat = "identity", width = 0.25) +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = str_c(round(Prop * 100), "%")), 
+            position = position_stack(vjust = 0.5)) + 
+  labs(x = NULL, 
+       y = NULL, 
+       fill = NULL, 
+       title = "Player Distribution by Experience Level") + 
+  theme_classic() + 
+  theme(axis.line = element_blank(),
+          axis.text = element_blank(),
+          axis.ticks = element_blank())
+```
+
+## Histograms
+
+Because of the special properties of variables measured on interval and ratio scales, we can describe distributions in more elaborate ways. Let's examine the `PTS` (total points) variable, which is discrete and measured on a ratio scale:
+
+
+```{r}
+summary(wnba$PTS)
+```
+
+We can see that the lower 75% of the values are distributed within a relatively narrow interval (between 2 and 277), while the remaining upper 25% are distributed in an interval that's slightly larger.
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_interval.svg)\
+
+
+To visualize the distribution of the `PTS` variable, we need to use a graph that allows us to see immediately the patterns outlined above. The most commonly used graph for this scenario is the histogram.
+
+To generate a histogram for the `PTS` variable, we can use the `geom_histogram()` geom directly on the `PTS` column. We don't have to generate a frequency table beforehand, because like with `geom_bar()` the `ggplot2` package will perform the calculations:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = PTS)) +
+  geom_histogram()
+```
+
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Games_Played)) +
+  geom_histogram()
+```
+
+## Binning for Histograms
+
+To modify the number of class intervals used for a histogram, we can use the `bins` parameter of `geom_histogram()`. Recall that the term class interval refers to catch group (interval) in a grouped frequency distribution table. A bin is the same thing as a class interval, and, when it comes to histograms, the term "bin" is used much more often. The default number of bins displayed in a `ggplot2` histogram is 30. In the previous lesson, we learned that 10 is a good number of class intervals to choose for frequency distributions because it offers a good balance between information and comprehensibility.
+
+![](https://s3.amazonaws.com/dq-content/397/s1m3_tradeoff.svg)\
+
+
+But with histograms, visualizing a picture is much easier than reading a grouped frequency table, so a larger number of class intervals can be used. However, once the number of class intervals goes over 30 or so, the granularity increases so much that for some intervals the frequency will be zero. This will result in a discontinued histogram from which is hard to discern patterns. Upon display of the plot ggplot2 provides the message "`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.". To change the number of bins, specify the number of `bins` in the bins argument within `geom_histogram()` like this:
+
+```{r}
+ggplot(data = wnba,
+       aes(x = PTS)) +
+  geom_histogram(bins = 10)
+```
+
+
+Below, we can see how the histogram of the `PTS` variable changes as we vary the number of class intervals.
+
+![](https://s3.amazonaws.com/dq-content/397/bins_grid.png)\
+On the next screen, we'll explain the statistics happening under the hood when we run the code to generate histograms and discuss the histogram in more detail. We'll also check our results to see if they make sense. Until then, let's practice generating the histogram with varying numbers of bins.
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = Games_Played)) +
+  geom_histogram(bins = 4)
+
+ggplot(data = wnba, 
+       aes(x = Games_Played)) +
+  geom_histogram(bins = 60)
+```
+## The Statistics Behind Histograms
+
+For each histogram we generated on the last screen, `geom_histogram()`:
+
+- Generated a grouped frequency distribution table for the selected variable with thirty class intervals, by default, or a custom number of classes when `bins` is specified.
+- Plotted a bar with a height corresponding to the frequency of the interval for each class interval.
+Let's examine the grouped frequency distribution table of the `PTS` variable with the number of bins set to 10 to see if our histogram aligns with the table:
+
+```{r}
+wnba <- wnba %>% 
+  mutate(points_categories = cut(PTS, breaks = 10, dig.lab = 4))
+
+wnba %>% 
+  group_by(points_categories) %>% 
+  summarize(Freq = n())
+```
+
+And here is the histogram we generated:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = PTS)) +
+  geom_histogram(bins = 10)
+```
+
+
+Each bar in the histogram corresponds to one class interval. Do the class intervals in our histogram align exactly with our grouped frequency table? No, they do not. In this case the default behavior of `ggplot2` does not match the class intervals calculated for the grouped frequency table. To ensure that the histogram bins match our desired class intervals we need to specify two arguments to `geom_histogram()`: (1) `boundary` and (2) `binwidth.`
+
+The `boundary` argument specifies the boundary between two bins. In our case we want the left-most (lower bin) to start at the minimum value present in the `wnba$PTS` variable. We cannot have any values lower than the minimum value, 2 points, so we do not want the bin to go lower than the minimum. The second argument we need to provide is `binwidth.`
+
+In a histogram, all bins cover the same width. In our case, we want 10 bins, so the `binwidth` is equal to the total range of the `PTS` variable, divided by 10. The range is the difference between the minimum and maximum value for a variable. This is calculated as the maximum value of the `PTS` column, minus the minimum value. The range divided by 10 has been saved to a variable called `pts_binwidth` below:
+
+```{r}
+pts_binwidth <- (max(wnba$PTS) - min(wnba$PTS)) / 10
+
+ggplot(data = wnba, 
+       aes(x = PTS)) +
+  geom_histogram(boundary = min(wnba$PTS), 
+                 binwidth = pts_binwidth)
+```
+
+```{r}
+wnba <- wnba %>% 
+  mutate(games_categories = cut(Games_Played, breaks = 10, dig.lab = 4))
+games_binwidth <- (max(wnba$Games_Played) - min(wnba$Games_Played)) / 10
+
+ggplot(data = wnba, 
+       aes(x = Games_Played)) +
+  geom_histogram(boundary = min(wnba$Games_Played), 
+                 binwidth = games_binwidth)
+```
+
+
+## Improving Axis Tick Marks
+
+The default x-axis tick marks in the points histogram shown on the last screen are not very useful because labels are provided in 200-point intervals:
+
+We can customize the x-axis tick marks so that tick mark labels appear in 50-point intervals by setting the `breaks` argument within the `scale_x_continuous()` geom, like this:
+
+
+```{r}
+pts_binwidth <- (max(wnba$PTS) - min(wnba$PTS)) / 10
+
+ggplot(data = wnba, 
+       aes(x = PTS)) +
+  geom_histogram(boundary = min(wnba$PTS), 
+                 binwidth = pts_binwidth) +
+  scale_x_continuous(breaks = seq(0, 600, by = 50))
+```
+
+We used the base R `seq()` function to generate a sequence from 0 to 600, in intervals of 50. Looking on the histogram above, we can extract the same information as from the grouped frequency table. We can see that there are 20 players in the interval (176.6, 234.8], 10 players in the interval (351.2, 409.4], etc.
+
+More importantly, we can see the patterns we wanted to see on the last screen when we examined the output of `summary(wnba$PTS)`.
+
+```{r}
+summary(wnba$PTS)
+```
+
+From the output of `summary(wnba$PTS)` we can see that most of the values (75%) are distributed within a relatively narrow interval (between 2 and 277). This tells us that:
+
+- The values are distributed unevenly across the 2 - 584 range (2 is the minimum value in the `PTS` variable, and 584 is the maximum).
+- Most values are clustered in the first (left) part of the the distribution's range.
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_interval.svg)\
+
+
+We can immediately see the same two patterns on the histogram above:
+
+- The distribution of values is uneven, with each class interval having a different frequency. If the distribution was even, all the class intervals would have the same frequency.
+- Most values (roughly three quarters) are clustered in the left half of the histogram.
+While it's easy and fast to make good estimates simply by looking at a histogram, it's always a good idea to inspect the percentile values we get from `summary()`, or compare the results to a grouped frequency distribution table.
+
+For this exercise, examine the distribution of the 10-bin histogram generated in the previous exercise, using the image below.
+
+Does this histogram represent the counts generated in the grouped frequency distribution?
+
+```{r}
+wnba <- wnba %>% 
+  mutate(games_categories = cut(Games_Played, breaks = 10, dig.lab = 4))
+
+wnba %>% 
+  group_by(games_categories) %>% 
+  summarize(Freq = n())
+```
+
+
+```{r}
+games_binwidth <- (max(wnba$Games_Played) - min(wnba$Games_Played)) / 10
+ggplot(data = wnba, 
+       aes(x = Games_Played)) +
+  geom_histogram(boundary = min(wnba$Games_Played), 
+                 binwidth = games_binwidth) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5))
+```
+
+
+## Histograms as Modified Bar Charts
+
+
+It should now be clear that a histogram is basically the visual form of a grouped frequency table. Structurally, a histogram can also be understood as a modified version of a bar chart. The main difference is that, in the case of a histogram, there are no gaps between bars, and each bar represents an interval, not a single value.
+
+The main reason we remove the gaps between bars in case of a histogram is that we want to show that the class intervals we plot are adjacent to one another. With the exception of the last interval, the ending point of an interval is the starting point of the next interval, and we want that to be seen on the graph.
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_start_end.svg)\
+
+
+We add gaps for bar charts because, in most cases, we don't know whether the unique values of ordinal variables are adjacent to one another in the same way as two class intervals are. It's safer to assume that the values are not adjacent, and add gaps.
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_gap.svg)\
+
+
+Values can't be numerically adjacent in principle for nominal variables, and we add gaps to emphasize that the values are fundamentally distinct.
+
+
+Below we summarize what we've learned so far:
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_table_summary.svg)\
+
+
+## Skewed Distributions
+
+
+There are a couple of histogram shapes that appear often in practice. So far, we've met two of these shapes:
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_hist_shapes.png)\
+
+
+In the histogram on the left, we can see that:
+
+- Most values pile up toward the endpoint of the range (32 games played).
+- There are less and less values toward the opposite end (0 games played).
+On the right histogram, we can see that:
+
+- Most values pile up toward the starting point of the range (0 points).
+- There are less and less values toward the opposite end.
+Both these histograms show skewed distributions. In a skewed distribution:
+
+- The values pile up toward the end or the starting point of the range, making up the body of the distribution.
+- Then the values decrease in frequency toward the opposite end, forming the tail of the distribution.
+
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_body_tail.svg)\
+
+If the tail points to the left, then the distribution is said to be left skewed. When it points to the left, the tail points at the same time in the direction of negative numbers, and for this reason the distribution is sometimes also called negatively skewed.
+
+If the tail points to the right, then the distribution is right skewed. The distribution is sometimes also said to be positively skewed because the tail points in the direction of positive numbers.
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_skewed_distros_v2.svg)\
+
+## Symmetrical Distributions
+
+Besides skewed distributions, we often see histograms with a shape that is more or less symmetrical. If we draw a vertical line exactly in the middle of a symmetrical histogram, then we'll divide the histogram in two halves that are mirror images of one another.
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_symmetry.svg)\
+
+
+If the shape of the histogram is symmetrical, then we say that we have a symmetrical distribution.
+
+A very common symmetrical distribution is one where the values pile up in the middle and gradually decrease in frequency toward both ends of the histogram. This pattern is specific to what we call a normal distribution (also called Gaussian distribution).
+
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_normal.svg)\
+
+
+Another common symmetrical distribution is one where the values are distributed uniformly across the entire range. This pattern is specific to a uniform distribution.
+
+
+![](https://s3.amazonaws.com/dq-content/397/s1m4_uniform.svg)\
+
+
+We rarely see perfectly symmetrical distributions in practice. However, it's common to use perfectly symmetrical distributions as baselines for describing the distributions we see in practice. For instance, we'd describe the distribution of the `Weight` variable as resembling closely a normal distribution:
+```{r}
+ggplot(data = wnba, 
+       aes(x = Weight)) +
+  geom_histogram(bins = 15)
+```
+
+
+When we say that the distribution above resembles closely a normal distribution, we mean that most values pile up somewhere close to the middle and decrease in frequency more or less gradually toward both ends of the histogram.
+
+A similar reasoning applies to skewed distributions. We don't see very often clear-cut skewed distributions, and we use the left and right skewed distributions as baselines for comparison. For instance, we'd say that the distribution of the `BMI` variable is slightly right skewed:
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = BMI)) +
+  geom_histogram(bins = 15)
+```
+
+
+There's more to say about distribution shapes, and we'll continue this discussion in the next course when we'll learn new concepts. Until then, let's practice what we've learned.
+
+# 6. Comparing Frequency Distributions
+
+## Introduction
+
+In the previous lesson, we learned what graphs we can use to visualize the frequency distribution of any kind of variable. In this lesson, we'll learn about the graphs we can use to compare multiple frequency distributions at once.
+
+
+Notice in the table above that we've kept the `Exp_ordinal` variable we created in the previous lesson. To remind you, this variable is measured on an ordinal scale and describes the level of experience of a player according to the following labeling convention:
+
+Let's say we're interested in analyzing how the distribution of the Pos variable (player position) varies with the level of experience. In other words, we want to determine, for instance, what are the positions on the court that rookies play the most, and how do rookies compare to veterans with respect to positions on the field.
+
+Here's a series of steps we can take to achieve that:
+
+- Segment the players in the dataset by level of experience.
+- For each segment, generate a frequency distribution table for the Pos variable.
+- Analyze the frequency distributions comparatively.
+
+
+In previous lessons we have used the `group_by() %>% summarize()` workflow to generate a frequency distribution for a single variable. A useful feature of this workflow is to expand the `group_by()` operation to two variables. For example, grouping by experience level and then position will generate a frequency distribution table of count by position for each experience level. To group by two (or more) variables, separate each variable with a comma, like this:
+
+```{r}
+# group_by(var1, var2)
+```
+
+
+```{r}
+exp_by_pos <- wnba %>% 
+  group_by(Pos, Exp_ordinal) %>% 
+  summarize(Freq = n())
+
+pos_by_exp <- wnba %>% 
+  group_by(Exp_ordinal, Pos) %>% 
+  summarize(Freq = n())
+
+exp_by_pos %>% head
+pos_by_exp %>% head
+```
+
+
+## Grouped Bar Charts
+
+
+The purpose of the previous exercise was to give us a sense about how cumbersome really is to compare multiple distributions at once using frequency tables. Fortunately, we can make the comparison much quicker and more efficiently using graphs.
+
+All the frequency tables we wanted to compare were for the `Pos` variable, which is measured on a nominal scale. Remember that one kind of graph we can use to visualize the distribution of a nominal variable is a bar plot. A simple solution to our problem is to generate a bar plot for each table, and then group all the bar plots on a single figure.
+
+This is where we'd like to arrive:
+
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_gr_barplot.png)\
+
+
+Because we grouped all the bar plots together, the graph above is called a grouped bar plot. We can generate a grouped bar plot just like the one above using the `geom_bar()` geom from the `ggplot2` package. In the code snippet below, we will:
+
+- Load the `ggplot2` package.
+- Generate the plot with `geom_bar()`. We'll use the following arguments for this function:
+data - specifies the name of the variable which stores the dataset. We stored the data in a variable named `wnba`.
+- `x` — specifies the name of the column we want on the x-axis. We'll place the `Exp_ordinal` column on the x-axis.
+- `fill` — specifies the name of the column we want the bar plots generated for. We want to generate the bar plots for the `Pos` column.
+- `position = "dodge"` - specifies that we want the bars for the position column side-by-side (not stacked).
+- `labs` - specifies the axis-labels to use for `x` and `y`.
+
+
+```{r}
+  ggplot(data = wnba,
+         aes(x = Exp_ordinal, fill = Pos)) +
+  geom_bar(position = "dodge") +
+  labs(x = "Experience Level",
+       y = "Frequency")
+```
+Comparing the five distributions is now easier, and we can make a couple of observations:
+
+- There's only one rookie playing on a combined position (F/C). This is significantly less compared to more experienced players, which suggests that combined positions (F/C and G/F) may require more complex skills on the field that rookies rarely have.
+- Rookies are the only category where we don't find players on all positions. We can see there are no rookies who play on a G/F position.
+- Guards predominate for every level of experience. This probably means that most players in a WNBA basketball team are guards. It's worth examining the distributions of a couple of teams to find whether this is true. If it's true, it might be interesting to find out why teams need so many guards.
+Note that `ggplot` generated this bar chart from the `wnba` dataframe directly, not from one of the frequency distribution tables we generated on the last screen. We can generate the same bar chart using data from the frequency distribution table. In the code snippet below, we see three differences in the code that result in the same chart:
+
+- Data is sourced from the `exp_by_pos` frequency distribution table.
+- The `Freq` variable from the frequency distribution table is called for the y-axis.
+- The `stat`, or statistical method, is changed from the default `count` to `identity`. This is because the `exp_by_pos` dataframe contains summary data, so `ggplot2` only needs to use the "identity" of the data rather than counting the frequencies first.
+
+```{r}
+exp_by_pos <- wnba %>% 
+  group_by(Pos, Exp_ordinal) %>% 
+  summarize(Freq = n())
+
+
+ggplot(data = exp_by_pos,
+         aes(x = Exp_ordinal, y = Freq, fill = Pos)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  labs(x = "Experience Level",
+       y = "Frequency")
+```
+Generate two identical grouped bar plots similar to the ones above except group the bars by position on the x-axis (not experience level), and specify experience level as the `fill` argument that creates the colored bars. Generate one plot using the `wnba` dataframe, and the second plot using the `pos_by_exp` frequency table dataframe we generated on the last screen. The `ggplot2` package and both dataframes have been loaded and are ready for use.
+
+
+
+
+```{r}
+ggplot(data = wnba, 
+         aes(x = Pos, fill = Exp_ordinal)) +
+  geom_bar(position = "dodge", stat = "count") +
+  labs(x = "Position",
+       y = "Frequency")
+
+ggplot(data = pos_by_exp,
+         aes(x = Pos, y = Freq, fill = Exp_ordinal)) +
+  geom_bar(position = "dodge", stat = "identity") +
+  labs(x = "Position",
+       y = "Frequency")
+```
+
+
+## Challenge: Do Older Players Play Less?
+
+When players get past a certain age, they become less and less physically fit as they get older. Intuitively, the fitness level of a player should directly affect how much she plays in a season. On average, a WNBA player played approximately 497 minutes in the 2016-2017 season:
+
+```{r}
+mean(wnba$MIN)
+```
+
+
+Let's hypothesize that older players generally play less than this average of 497 minutes, while younger players generally play more. As a benchmark to distinguish between younger and older players, we'll take the mean age of players in our sample, which is approximately 27:
+
+```{r}
+mean(wnba$Age)
+```
+
+
+To test our hypothesis, we can generate a grouped bar plot to examine the frequency distribution of younger and older players that played under the average or as much as the average or above. Our hypothesis predicts that we should see a grouped bar plot that looks similar to this:
+
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_avg_young_old.svg)\
+
+
+To generate a graph like the one above, we'll first need to create two new variables:
+
+- An ordinal variable which labels each player as "young" or "old". If the player is 27 or over, we'll label her "old", otherwise the label is "young". This variable will be of data type "factor" with levels established so that the variables are ordered from "young" to "old".
+- An ordinal variable which describes whether the minutes played is below or above average (or equal to the average). If a player played 497 minutes or more, we'll assign her the label "average or above", otherwise we'll assign "below average". This variable will be of data type "factor" with levels established so that the variables are ordered from "below average" to "average or above".
+
+
+
+In the code below, we'll use the `if_else()` function from `dplyr` to apply the labeling logic above and `mutate()` to create the `age_relative` and `min_relative` columns. And then we use mutate to convert each of the new columns to a factor and apply factor levels for ordering these ordinal variables.
+
+```{r}
+wnba <- wnba %>% 
+  mutate(age_relative = 
+         if_else(Age >= 27, "old", "young")) %>% 
+  mutate(age_relative = 
+         factor(age_relative, 
+                levels = c("young", "old")))
+
+wnba <- wnba %>% 
+  mutate(min_relative = 
+         if_else(MIN >= 497, "average or above", "below average")) %>% 
+  mutate(min_relative = 
+         factor(min_relative,
+                levels = c("below average", "average or above")))
+```
+
+This is a short extract including the new columns:
+
+```{r}
+wnba %>% select(Name, Age, age_relative, MIN, min_relative) %>% head()
+```
+
+```{r}
+ggplot(data = wnba, 
+       aes(x = age_relative, fill = min_relative)) +
+  geom_bar(position = "dodge")
+
+result <- 'reject'
+```
+
+
+
+Contrary to what our hypothesis predicted, the grouped bar plot we built showed that among old players the "average or above" category is the most numerous. Among young players we saw an opposite pattern: there are more players who played below the average number of minutes.
+
+
+A shortcoming of our analysis so far is that the `min_relative` variable doesn't show much granularity. We can see that more old players belong to the "average or above" category than to "below average", but we can't tell, for instance, whether old players generally play much more than the average. For all we know, they could have all played exactly 497 minutes (which is the average).
+
+The `min_relative` variable is ordinal, and it was derived from the `MIN` variable, which is measured on a ratio scale. The information provided by the `MIN` variable is much more granular, and we can plot the distribution of this variable instead. Because the `MIN` variable is measured on a ratio scale, we'll need to use histograms instead of bar plots. Here is the code to generate a histogram with `MIN` on the x-axis. The `geom_histogram()` default position is to stack the bars on top of each other, so when we set `fill = age_relative` the bars for each category are stacked on top of each other:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, fill = age_relative)) +
+  geom_histogram(bins = 10)
+```
+With the stacked bar charts it is difficult to compare the distribution of the two age categories. An easy way to compare two histograms is to superimpose one on top of the other. Specifying `position = "identity"` will cause the histograms to overlap, so we set `alpha = 0.5` to make each histogram transparent:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, fill = age_relative)) +
+  geom_histogram(bins = 10, 
+                 position = "identity", 
+                 alpha = 0.5)
+```
+
+We can now infer that most of the old players that belong to the "average or above" category play significantly more than average. But this graphic could be improved by adding a vertical line to show the average number of minutes played. We'll learn how to do that on the next screen.
+
+## Visualizing the Mean with Histograms
+
+
+On the last screen, we saw that most of the older players that belong to the "average or above" category play significantly more than average. Adding a vertical line to show the average number of minutes played will be useful to visualize minutes played by age category relative to the mean. Earlier in the course we used `geom_hline()` to add a horizontal reference line. To add a vertical reference line we use the `geom_vline()`:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, fill = age_relative)) +
+  geom_histogram(bins = 10, 
+                 position = "identity", 
+                 alpha = 0.5) +
+  geom_vline(aes(xintercept = mean(wnba$MIN), 
+                 linetype = "Average minutes"), 
+             color = "black")
+```
+
+Another way to compare histogram distributions that we learned about in an earlier course is to use the` facet_wrap()` geom to display plots side-by-side or in a grid pattern. Facet wrap is suitable in this case because we are comparing only two distributions, but this approach becomes less effective when comparing many distributions. To facet wrap by the `age_relative` category, we simply add `+ facet_wrap(~ age_relative)` to the code snippet above:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, fill = age_relative)) +
+  geom_histogram(bins = 10, 
+                 position = "identity", 
+                 alpha = 0.5) +
+  geom_vline(aes(xintercept = mean(wnba$MIN), 
+                 linetype = "Average minutes"), 
+             color = "black") +
+  facet_wrap(~ age_relative)
+```
+If many older players that belong to the "average or above" category play significantly more than average, it is reasonable to hypothesize that this group will also dominate the upper end of the points scored distribution. Let's generate a superimposed histogram to find out.
+
+
+```{r}
+ggplot(data = wnba,
+         aes(x = PTS, fill = age_relative)) +
+  geom_histogram(bins = 10, 
+                 position = "identity", 
+                 alpha = 0.5) +
+  geom_vline(aes(xintercept = mean(wnba$PTS), 
+                 linetype = "Average points"), 
+             color = "black")
+
+
+ggplot(data = wnba,
+         aes(x = PTS, fill = age_relative)) +
+  geom_histogram(bins = 10, 
+                 position = "identity", 
+                 alpha = 0.5) +
+  geom_vline(aes(xintercept = mean(wnba$PTS), 
+                 linetype = "Average points"), 
+             color = "black") +
+  facet_wrap(~ age_relative)
+```
+
+ ## Frequency Polygons and Kernel Density Estimate Plots
+
+The overlaid histograms we built made it possible to see clearly both distributions. But the graph looked a bit overcrowded:
+
+
+If we added more histograms to the graph above, it would become highly unreadable, and it'd be difficult to see any clear patterns. One solution to this problem is to display counts with lines instead of bars. This is called a frequency polygon and in `ggplot2` this is implemented with the `geom_freqpoly()` geom. Frequency polygons may be more suitable when you want to compare distributions across levels of a categorical variable:
+
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, color = age_relative)) +
+  geom_freqpoly(bins = 10, 
+                 position = "identity") +
+  geom_vline(aes(xintercept = mean(MIN), 
+                 linetype = "Average minutes"), 
+             color = "black")
+```
+
+
+The code is nearly identical to that used to generate the overlaid bar charts, except we use `geom_freqpoly()` instead of `geom_histogram()`. Line color is specified with the `color` aesthetic, not `fill`. And we do not need to specify an `alpha` here.
+
+Another approach is to smooth out the shape of the histograms to make them look less dense on the graph. This is how a single histogram would look smoothed out:
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_hist_to_kde.svg)\
+
+
+We can smooth out our two histograms above for old and young players using the `geom_density(`) geom. The default `position` for density plots is "identity", or overlaid, so we do not need to specify an argument here:
+
+
+```{r}
+ggplot(data = wnba,
+         aes(x = MIN, color = age_relative)) +
+  geom_density() +
+  geom_vline(aes(xintercept = mean(wnba$MIN), 
+                 linetype = "Average minutes"), 
+             color = "black")
+```
+
+
+
+Each of the smoothed histograms above is called a kernel density estimate plot or, shorter, kernel density plot. These are also known as smoothed density estimates. Unlike histograms, kernel density plots display densities on the y-axis instead of frequencies. The density values are actually probability values — which we'll be able to understand more about after the probability courses. All you need to know for now is that we can use kernel density plots to get a much clear picture about the shape of a distribution.
+
+
+```{r}
+ggplot(data = wnba,
+         aes(x = PTS, color = age_relative)) +
+  geom_density() +
+  geom_vline(aes(xintercept = mean(PTS), 
+                 linetype = "Average points"), 
+             color = "black")
+```
+
+## Drawbacks of Kernel Density Plots
+
+As data scientists, we'll often need to compare more than two distributions. In fact, previously in this lesson we compared five distributions on a grouped bar plot:
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_gr_barplot.png)\
+Grouped bar plots are ideal for variables measured on nominal and ordinal scales. For variables measured on a ratio or interval scale, we learned that kernel density plots are a good solution when we have many distributions to compare. However, kernel density plots may become difficult to comprehend as we reach five distributions or more.
+
+Let's say we're interested in analyzing the distribution of player height as a function of player position. In other words, we want to figure out, for instance, whether centers are generally taller than forwards, whether forwards are generally shorter than guards, and so on. In the code below, we see that this can be generated easily with `ggplot2`:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = Height, color = Pos)) +
+  geom_density()
+```
+
+
+If we look very closely, we can see a couple of clear patterns: the shortest players are generally guards, the tallest players are generally centers, mid-height players are generally forwards or play in a combined position, etc.
+
+Having to look very closely to a graph to identify obvious patterns is far from ideal. If there's any pattern, we want to see it immediately. To overcome this problem, we can use other kinds of graphs, which present the same information in a more readable way. For the rest of this lesson, we'll explore two such alternatives.
+
+## Scatter Plots
+
+
+One alternative we can use to visualize the distribution of heights as a function of player position is this style of scatterplot where each category is represented independently on the x-axis:
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_scatter.png)\
+
+The `Pos` variable is represented on the x-axis, while `Height` is on the y-axis. Each of the five vertical lines made of distinctly colored bullets represents a distribution. These are the logical steps we'd take to build a plot like the one above:
+
+1. Segment the dataset by player position.
+2. For every segment:
+- List all the values in the `Height` variable.
+- For every value in that list, draw a bullet point on a graph. The x-coordinate of the bullet point is given by the player position, and the y-coordinate by the player's height.
+
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_scatter_plots.png)\
+
+
+Because we segment by player position, for every segment the player position values will be identical for every player while their heights will vary more or less. Because of the segmentation, the player position is also guaranteed to be different from segment to segment. After drawing all the bullet points for all the segments, we'll inevitably end up with five narrow vertical strips, one above each unique value on the x-axis. Because of this, this style of scatter plot is sometimes called a strip plot.
+
+To generate the first graph above with five strip plots, we can use the `geom_point()`  from `ggplot2`. We place the `Pos` variable on the x-axis, `Height` on the y-axis, and `color` by `Pos`:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = Pos, y = Height, color = Pos)) + 
+  geom_point()
+```
+Patterns are now immediately visible. We can see on the graph that the shortest players are guards — in fact, all players under 180 cm are guards. The tallest players are centers — this is the only category with players above 2 meters. Among combined positions, we can see that `F/C` has slightly taller representatives — most likely because it requires center qualities (and we've seen that the tallest players are generally centers).
+
+A downside of this scatter plot is that the bullet points overlap. We can fix this by adding a bit of jitter to each distribution. Jitter spreads the points out by applying a small amount of random noise to each point. We can do this by adding the `geom_jitter()` layer to the code:
+
+```{r}
+ggplot(data = wnba,
+       aes(x = Pos, y = Height, color = Pos)) + 
+  geom_point() +
+  geom_jitter()
+```
+
+
+As mentioned above, strip plots are a style of scatter plot. When one of the variables is nominal or ordinal (often referred to as categorical in R), a scatter plot will generally take the form of a series of narrow strips. The number of narrow strips will be the same as the number of unique categories in the nominal or ordinal variable.
+
+
+```{r}
+ggplot(data = wnba,
+       aes(x = Pos, y = Weight, color = Pos)) + 
+  geom_point() +
+  geom_jitter()
+```
+
+## Box Plots
+
+Besides scatter plots, there's another kind of graph we can use to display many distributions at once and make sure everything is still readable. Below, we use this kind of graph to plot again the distribution of player height as a function of player position:
+
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_boxplots.png)\
+
+
+Each individual plot above shows a distribution. Let's isolate the height distribution of guards and understand it by comparing it with a histogram showing the same distribution:
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_hist_to_boxplot.svg)\
+
+
+In a nutshell, the graph on the right shows the range of the distribution and its three quartiles (the 25th, the 50th and the 75th percentile). This allows us to get a good visual intuition about the proportion of values that fall under a certain quartile, between any two quartiles, or between a quartile and the minimum or the maximum value in the distribution:
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_boxplot_quartiles.png)\
+
+
+The two lines extending upwards and downwards out of the box in the middle look a bit like two whiskers, reason for which we call this plot a box-and-whisker plot, or, more convenient, just box plot.
+
+We can generate the five box plots above using the `geom_boxplot()`. On the x-axis we want the `Pos` variable, on the y-axis the `Height` variable, and we color by `Pos`:
+
+```{r}
+ggplot(data = wnba,
+         aes(x = Pos, y = Height, color = Pos)) + 
+  geom_boxplot()
+```
+
+
+You might wonder what is the meaning of those few dots for the box plots of centers and guards/forwards (`G/F`), and why some box plots seem to lack some of the quartiles. We'll discuss this on the next screen. Now, let's practice generating box plots.
+
+```{r}
+ggplot(data = wnba,
+         aes(x = Pos, y = Weight, color = Pos)) + 
+  geom_boxplot()
+```
+## Outliers
+
+The few dots we see for the box plots of centers and guards/forwards (`G/F`) represent values in the distribution that are much larger or much lower than the rest of the values. A value that is much lower or much larger than the rest of the values in a distribution is called an outlier.
+
+![](https://s3.amazonaws.com/dq-content/398/s1m6_boxplots_outlier.png)\
+
+A value is an outlier if:
+
+- It's larger than the upper quartile by 1.5 times the difference between the upper quartile and the lower quartile (the difference is also called the interquartile range).
+- It's lower than the lower quartile by 1.5 times the difference between the upper quartile and the lower quartile (the difference is also called the interquartile range).
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_interquartile_range.svg)\
+
+
+Probably this is not yet crystal clear, so let's walk through an example. Let's consider the box plot for centers:
+
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_centers_boxplot.png)\
+
+From the output of summary(centers$Height), we can see that the upper quartile (the 75th percentile) is 196 and the lower quartile (the 25th percentile) is 193. Hence, the interquartile range is 3.
+
+$$interquartile\ range\ = upper\ quartile\ - lower\ quartile\ = 196\ -193\ = 3$$
+Every value that is $3\times1.5$ bigger than the upper quartile is considered an outlier. $3\times1.5 = 4.5$, and the upper quartile is 196. This means that any value greater than $196\ + 4.5\ = 200.5$is considered an outlier.
+
+Similarly, every value that is $3\times1.5$ lower that the lower quartile is an outlier. $3\times1.5 = 4.5$, and the lower quartile is 193. his means that any value less than $196\ - 4.5\ = 188.5$is an outlier.
+
+![](https://s3.amazonaws.com/dq-content/398/s1m5_outliers_bounds.svg)\
+
+This formal definition of an outlier is arbitrary, and it could be changed if we wanted to. For any given distribution, the upper and lower quartiles, and the interquartile range remain constant. However, the 1.5 factor can vary. If the factor is increased, then the range outside which values are considered outliers increases as well. If the factor is decreased, the range outside which values are considered outlier decreases as well.
+
+When we generate boxplots, we can increase or decrease this factor by using the `coef` argument of the `geom_boxplot()` geom. This is the same height distribution for all positions without any outliers because `coef = 4`:
+```{r}
+ggplot(data = wnba,
+         aes(x = Pos, y = Height, color = Pos)) + 
+  geom_boxplot(coef = 4)
+```
+
+```{r}
+
+iqr <- 29 - 22
+lower_bound <- 22 - (1.5 * iqr)
+upper_bound <- 29 + (1.5 * iqr)
+outliers_low <- sum(wnba$Games_Played < lower_bound) # True values will count as 1 in the summation
+outliers_high <- sum(wnba$Games_Played > upper_bound)
+
+ggplot(data = wnba,
+         aes(x = "", y = Games_Played, group = 1)) + 
+  geom_boxplot()
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,1239 @@
+---
+title: "6. Machine Learning"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(broom)
+library(caret)
+library(class)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+
+
+# 1. Introduction to Machine Learning Concepts
+
+##  Introduction to Machine Learning
+
+Machine learning is an important aspect of artificial intelligence. It describes the process of systems learning from data and identifying patterns to make decisions without human control. Popular recommendation engines (like Netflix) and self-driving cars are just two high-profile examples of machine learning in action.
+
+Unlike humans, computers do not learn general principles before advancing to specific instances. Computers learn very specific tasks straight away We supply a computer with data, and it will begin deriving useful patterns from that data. This process of extracting patterns from data is machine learning.
+
+In this lesson, we'll begin exploring machine learning by working with the k-nearest neighbors algorithm. The machine learning workflow is a general process that we can use to perform many basic machine learning tasks.
+
+
+![](https://dq-content.s3.amazonaws.com/486/machine-learning-process.png)\
+
+The k-nearest neighbors algorithm is just one of many machine learning algorithms, but we can use the workflow with any algorithm. Learning this workflow now will make it easier to use more algorithms in the future. Here are a few takeaways you can expect by the end of this lesson:
+
+- How to use a workflow with machine learning
+- How to use the k-nearest neighbors algorithm
+- The importance of Euclidean distance in the k-nearest neighbors algorithm
+- To get the most out of this lesson, you'll need to be comfortable programming in R.
+
+Now, let's get started!
+
+
+## Exploring the Airbnb Dataset
+
+
+
+Airbnb is a marketplace for short term rentals that allows you to list your living space for others to rent. Users can rent everything from an apartment room to an entire house on Airbnb. Thanks to its short-term nature and widespread availability in multiple countries, Airbnb has become a popular alternative to hotels. The company itself has grown from its 2008 founding to a 30-billion dollar valuation in 2016 and is currently worth more than any hotel chain in the world.
+
+Airbnb produces an immense amount of data about rentals and its users. All this data is perfect for machine learning tasks. One challenge that Airbnb hosts face is determining the best nightly rent price. If their rent is too high, hosts risk discouraging potential customers. If the rent is too low, they risk not making enough profit to continue hosting their space. When looking for a rental, renters can browse a selection of listings, and they can filter their results based on criteria like location, price, number of bedrooms, room type, and more.
+
+![](https://dq-content.s3.amazonaws.com/482/airbnb.png)\
+
+Hosts also have access to all of this information. Can we somehow use this data to predict a reasonable price for our listing? This will be our machine learning task in this lesson. Since the characteristics of apartments and houses can vary widely, it might be beneficial to base our rent price on similar listings. By doing so, we can keep our price competitive.
+
+While Airbnb doesn't release any data on the listings in their marketplace, a separate group called [Inside Airbnb](http://insideairbnb.com/get-the-data.html) has extracted data from a sample of listings for many of the major cities on the website. Here's a link to a dataset of listings in Washington, D.C. that we'll be working with. Each row in the dataset represents a specific listing that was available for rent on Airbnb in the Washington, D.C. area.
+
+To make the dataset less cumbersome to work with, we've removed many of the columns in the original dataset and renamed the file to dc_airbnb.csv. Here are the columns we kept:
+
+- `host_response_rate`: the response rate of the host
+- `host_acceptance_rate`: number of requests to the host that convert to rentals
+- `host_listings_count`: number of the host's other listings
+- `latitude`: latitude of the geographic coordinates
+- `longitude`: longitude of the coordinates
+- `city`: the city where the living space is
+- `zipcode`: the zip code of the living space
+- `state`: the state of the living space
+- `accommodates`: the number of guests the rental can accommodate
+- `room_type`: the type of living space (Private room, Shared room, or Entire home/apt)
+- `bedrooms`: number of bedrooms included in the rental
+- `bathrooms`: number of bathrooms included in the rental
+- `beds`: number of beds included in the rental
+- `price`: nightly price for the rental
+- `cleaning_fee`: additional fee used for cleaning the living space after departure
+- `security_deposit`: refundable security deposit, in case of damages
+- `minimum_nights`: minimum number of nights a guest can stay
+- `maximum_nights`: maximum number of nights a guest can stay
+- `number_of_reviews`: number of reviews that previous guests have left
+
+
+
+Let's read the dataset using readr. Looking at your data should be the first thing that you do in the machine learning workflow. You want to explore the different types of data that are present — and the different values they have. You should also check for missing values, which can break some functionality.
+
+1. Read `dc_airbnb.csv` into a tibble named `dc_listings` using `read_csv()` from the readr library. We have already loaded readr for you.
+2. Check that the columns you see are what we have specified above.
+3. Is there missing data? Assign `TRUE` to the variable has_missing if so and `FALSE` if not.
+
+
+
+```{r}
+dc_listings <- read_csv('dc_airbnb.csv')
+colnames(dc_listings)
+has_missing <- TRUE
+```
+
+## The K-Nearest Neighbors Algorithm
+
+
+On the previous screen, we developed the problem statement that we want to solve using the Airbnb dataset: "How much should our nightly rent be to secure renters?" Another way we could phrase this is, "How should we determine a good price for our listing?" We decided that the appropriate strategy would be to base our price on similar listings. This gives us a reasonable price since we're using information on similar rentals.
+
+After establishing our machine learning problem, we typically try to pick a few algorithms to approach the problem. In this case, we're still learning the workflow, so we'll focus on the k-nearest neighbors algorithm. An algorithm in general is a pre-defined process for a computer to follow. More specifically, the k-nearest neighbors algorithm is a machine learning algorithm that gives us a set of steps to calculate a listing price for our rental, based on similar listings. We'll explore the intuition of the algorithm with some infographics.
+
+Imagine if we display each of the listings on an axis. Some combination of the columns in the dataset determine the positions of each listing, represented as dots. In the graphic below, you may think of each axis as a numerical column and each coordinate is just the two-number combination of the two columns:
+
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid.png)\
+
+The idea here is that we can represent each listing as a point on this axis. With each point on the axis, we can approximate how "close" two points are to each other, which represents the "similarity" of the two points. The diagram shows the points in a 2D-plane, but we can generalize the k-nearest neighbors algorithm to any number of dimensions. Now that we have each listing in space, we have a nightly rental price associated with those listings.
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices.png)\
+
+If we have a new listing for which we want to create a new price, we have some data that allows us to place it on the same grid as the other listings.
+
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices-and-new.png)\
+
+In this view, you can begin to see how the algorithm works. If we assume that similar listings should have the same rental rates, then it might be reasonable to base the price of this new listing on the rentals closest to it. That means we'll look at the "neighbors" to determine our rate. For this example, we'll look at the three closest neighbors and base the new price on the average of those three.
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices-and-new-and-predicted-price.png)\
+
+We've circled the new listing to highlight its closest neighbors. Throughout this lesson, we'll refer to the k-nearest neighbors algorithm as both "algorithm" and "model." This is because we are using the k-nearest neighbor algorithm as our machine learning model. Before we move on, we've provided another new listing. Using what you've learned on this screen, calculate a price for it.
+
+We have a new listing in the diagram below:
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices-and-new-and-unknown.png)\
+
+1. Using your visual judgment, calculate the rent for this new listing using the three closest neighbors. Assign this new price to the variable `predicted_rent`.
+
+
+
+```{r}
+predicted_rent <- mean(c(476, 750, 1128))
+```
+
+
+## A Numerical Description for Similarity
+
+On the previous screen, we described how the k-nearest neighbors algorithm works and how we can use it to predict a good nightly rental rate. We determined our rental rate based off the three neighbors that were the "closest" to the point for which we wanted to determine a rate, but. Rather than simply determining the closest neighbors visually, a numerical value to measure similarity would be more accurate. But what does it mean to be close or similar? In our diagram, anything within the circle was "closest."
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices-and-new-and-predicted-price.png)\
+
+
+On this screen, we'll define the similarity between two points. Once we have a numerical value, we can start ranking each of the neighbors in terms of their similarity to a given point.
+
+Recall that the first thing we did was to lay out all of the listings in our data onto an axis. In our example, we used a two-dimensional axis. Therefore, we could represent each listing somewhere on this axis, where the coordinates of each listing is the combination of those two numbers. Getting everything on a grid not only allows us to visualize each of the points, it also allows us to describe similarity numerically. Turning each listing into a point allows us to calculate a distance between points. The smaller the distance is between two points, the more "similar" those points are to each other. Visually, we would replace the orange circle with lines from the new listing to all the other listings.
+
+
+![](https://dq-content.s3.amazonaws.com/482/listings-as-grid-with-prices-and-new-with-lines.png)\
+
+For the purpose of this lesson, we'll use Euclidean distance. If we describe our two axes as $x$ and $y$ respectively, then we would describe the coordinates of two points as $(x_1, y_1)$ and $(x_2, y_2)$. To calculate the Euclidean distance between these two points, we would use the following formula:
+
+$$d = \sqrt{(x_1 - x_2)^2 + (y_1 - y_2)^2}$$ 
+ In this lesson, we'll use just one feature or column in the dataset to simplify the machine learning workflow. Using only one numerical value reduces space to one dimension: the number line. Putting each of the listings in space would be like placing them on a number line since each coordinate corresponds to a single value $x$. In this univariate case, the formula for Euclidean distance would simplify to the absolute difference between two points:
+
+$$d = |x_1 - x_2|$$
+
+Now we can start calculating distances between different points.
+
+[The living space that we want to rent out can accommodate three people.]{color='red'} The corresponding column in our dataset that contains this information is `accomodates`. Using what we've learned, let's calculate the distance between our three-person listing, the first living space in the dataset, and our own. (We've already loaded the `dc_listings` dataset.)
+
+1. Calculate the Euclidean distance between our 3-person living space and the first living space (the first row) in the `dc_listings` tibble. Assign the result to `first_distance`.
+
+```{r}
+first_row_acc_value <- dc_listings$accommodates[1]
+first_row_acc_value
+our_acc_value <- 3
+first_distance <- abs(our_acc_value - first_row_acc_value)
+first_distance
+```
+
+## Calculate Distance for All Observations
+
+The Euclidean distance between the first listing in `dc_listings` and our own living space was `1`. This information by itself doesn't tell us much; we actually need to know the distance between our three-room space and all the other listings in the dataset. After we calculate all of these distances, we'll be able to rank the distances and choose however many closest neighbors we want.
+
+
+1. Calculate the distance between each value in the `accommodates` column in `dc_listings` and the value `3`.
+2. Assign these distance values to a new column called `distance`.
+
+
+
+```{r}
+our_acc_value <- 3
+dc_listings <- dc_listings %>%
+  mutate(
+    distance = abs(accommodates - our_acc_value)
+  )
+```
+
+
+## Using Randomization
+
+On the previous screen, we used the `accommodates` column to create a new `distance` column for our hypothetical rental listing with three rooms. We are using a univariate version of the k-nearest neighbors algorithm, but there is a problem we have to deal with. Since rental pricing can depend on many factors other than the number of accommodations, it isn't likely that the predicted price we get will be very useful. We'll demonstrate why on this screen.
+
+If we were to look at the different values that were present in the `distance` column, we would see there are many listings that also have exactly three rooms (corresponding to a distance of 0).
+
+```{r}
+distances <- pull(dc_listings, distance)
+table(distances)
+```
+
+Many living spaces can accommodate three people just like ours. It's hard to really see if any of these 461 listings are truly similar to our own since they are essentially the same as our listing from an accommodation perspective. The best we can do in this situation is to randomly pick three of the "closest neighbors" since all of them technically are as close as they can get to our own rental listing. Randomization helps us since it will prevent any bias that may occur when there are many more candidate neighbors than we need. It frees us from having to make any arbitrary decisions that might bias the resulting rent prediction.
+
+For this exercise, perform the randomization, and pick three listings from which to calculate the new rental price. We've laid out a process for you below. Since we're dealing with random selections, we've also set a random seed, which will help with the answer-checking.
+
+Get a vector of all of the row indices where distance is 0. The which() function could be useful here.
+Use the `sample()` function to randomly pick three of these indices. Assign these three indices to the variable random_three_indices.
+
+
+
+
+1. Get a vector of all of the row indices where distance is `0`. The `which()` function could be useful here.
+2. Use the `sample()` function to randomly pick three of these indices. Assign these three indices to the variable `random_three_indices`.
+
+
+
+```{r}
+set.seed(1)
+zero_distance_indices <- which(dc_listings$distance == 0)
+random_three_indices <- sample(zero_distance_indices, 3, replace = FALSE)
+random_three_indices
+```
+
+## Cleaning the Price Column
+
+
+On the previous screen, we discovered a problem when there are many more "closest neighbors" than we need. To prevent ourselves from arbitrarily picking three, we used randomization to pick from these exact matches. Before we can compute the average price, we need to clean the price column.
+
+In its current state, the price column is actually a factor column. In its raw form, the price column also contains commas and dollar signs. We need to remove these values and convert the entire column to the double datatype. This is the next step in the machine learning workflow: after we get our first look at the data, we should spend some time cleaning the data and making sure that it's in a usable form.
+
+For this exercise, we'll need to clean the data before we can calculate the average rental price of the three random listings. Kindly ensure that the price column is a character to facilitate easy removal of unwanted characters.
+
+
+1. Remove the commas and dollar signs from the `price` column. Assign this tidied price column as a new column called `tidy_price` in `dc_listings`.
+2. Then, take the new `tidy_price` column, and convert it into a numeric column. Keep the name of the column `tidy_price`.
+
+```{r}
+dc_listings <- dc_listings %>%
+  mutate(
+    price = as.character(price),
+    tidy_price = str_replace_all(price, "\\$", ""),
+    tidy_price = str_replace_all(tidy_price, ",", ""),
+    tidy_price = as.numeric(tidy_price)
+  )
+```
+
+
+
+## Calculating Average Price
+
+
+On the previous screen, we helped transform the `price` column into a more usable form: `tidy_price`. Now that we have the outcome in the expected data type, we can finally calculate the average rental price of the three random listings. This average will be the model's "prediction" for a good price for our new three-room listing.
+
+
+1. Using `random_three_indices`, calculate the average price of these three random listings. Assign this value to the variable `mean_price`.
+
+
+
+```{r}
+mean_price <- mean(dc_listings$tidy_price[random_three_indices])
+mean_price
+```
+
+
+# 2. Evaluating Model Performance
+
+1. Introduction
+
+
+In the last lesson, we started learning the machine learning workflow. We did a bit of exploration of Airbnb's Washington D.C listing dataset and laid out the problem we wanted to solve with the data. That is, if we had a new listing, how could we use the data to predict an acceptable rental price for it? We ended the last lesson predicting a price for a single listing with three rooms. However, we currently have no way of knowing if this prediction was good or not.
+
+In this lesson, we'll follow up on this question and learn how to evaluate the performance of our k-nearest neighbors algorithm. We'll define what we mean by performance, and then look at how to calculate metrics to judge whether the model is "good" or not. We'll start learning an incredibly handy R library called `caret`, which is used for creating machine learning models and automating the process of evaluating their performance as well. Instead of having to code everything by hand, we'll learn how to use the `caret` library to perform the various steps of the machine learning workflow.
+
+![](https://dq-content.s3.amazonaws.com/486/machine-learning-process.png)\
+
+## Judging Performance
+
+We judge the performance of a machine learning algorithm by evalutating how well it predicts the outcomes of data it hasn't seen before. We can think of a machine learning algorithm as a function that takes in data and outputs predictions. If we feed in data that the algorithm hasn't seen yet, we can get predictions and then compare them to the actual outcomes contained in the data. This process is called holdout validation. Holdout validation is a form of cross-validation, which is the more general name for evaluating model performance. We'll learn about more involved forms of cross-validation later in the course.
+
+By using this process, we don't actually have to go out and collect more data to evaluate our algorithms. With a single dataset, we can divide it into parts and use each part to assess the performance of the model. On the next screen, we'll start learning the code to perform this process.
+
+## Introducing The caret Library
+
+On the last screen, we learned about train/test validation process. We could theoretically handcode the entire process and still be able to evaluate the performance of the k-nearest neighbors model. However, others have streamlined this process into functions in the caret library. For our lesson, you'll learn caret so that you can save time and effort to get actionable results from our machine learning workflow.
+
+The word caret is actually an acronym, short for **Classification And REgression Training**. Classification and regression are the official names of the tasks that machine learning models are typically responsible for. In our case, the k-nearest neighbors algorithm is attempting to predict a good rental price, so is a form of regression problem. As we've mentioned before caret streamlines the process of holdout validation, and it is capable of much more.
+
+On this screen, we'll hone in on the first step of holdout validation:
+
+1. Split a dataset into two separate sets:
+- a training set which contains the majority of the data, and
+- a test set which contains the rest of the data we will use to validate the model
+
+
+
+`caret` has a function that helps us with the first step: the `createDataPartition()` function. `createDataPartition()` is one of the functions in `caret` that helps us split the data into different groups, specifically with train/test splits.
+
+The code below is an example of how to use the `createDataPartition()` function:
+
+```{r}
+# train_indices <- createDataPartition(y = data[["tidy_price"]],
+#                                      p = 0.8,
+#                                      list = FALSE)
+```
+
+There are three parameters of interest here: `y`, `p`, and `list`. The first argument `y` is the variable of interest that we want to split on in the dataset. This is typically the outcome that we are interested in trying to predict, so in our case, it would be the `tidy_price` column.
+
+
+The second argument `p` describes a proportion and should be between `0` and `1`. The p argument describes what proportion of the original data should be allocated to the training set. In the example above, we are allocating 80% of the data to the training set. If you don't specify `p`, the function allocates half to each by default.
+
+The final argument helps with convenience. By default, the `createDataPartition()` function returns a list which contains the indices that we will use to split the data. By specifying `list = FALSE`, we are telling the function to return a vector of indices instead, which is more natural to pass into a tibble to split the data.
+
+
+With this in mind, take the `dc_listings` data and perform your own split of the data.
+
+
+
+The `dc_listings` data has already been loaded, and the `tidy_price` column is still present from the previous lesson.
+
+1. Load in the `caret` library.
+2. Use the `createDataPartition()` function to perform the train/test split on the `dc_listings` data. More specifically:
+- allocate 70% of the data to the training set,
+- make sure to return a vector instead of a list, and
+- assign the output to the name `train_indices`
+3. Use the `train_indices` variable to actually split the `dc_listings` data. Assign the training set to the variable `train_listings` and the test set to `test_listings`
+
+
+```{r}
+set.seed(1)
+train_indices <- createDataPartition(y = dc_listings[["tidy_price"]],
+                                     p = 0.7,
+                                     list = FALSE)
+train_listings <- dc_listings[train_indices,]
+test_listings <- dc_listings[-train_indices,]
+```
+
+## Setting Up For Training
+
+Now that we have our training set and test set, we need to "train" the algorithm and evaluate it against the test set. Before we can actually do the training, there is another step we need to take with the caret library. Holdout validation is actually one of many ways to do validation. Some of the other validation methods require setting particular parameters. We will cover these particulars later in the course, but for now we will still focus on holdout validation.
+
+caret conveniently provides us with a function to set these parameters for the validation process before we start training. This function is `trainControl()`. Below is an example of how we use the `trainControl()` function:
+
+
+```{r}
+# train_control <- trainControl(method = "none")
+```
+
+
+If it looks underwhelming to you, don't worry. Holdout validation is one of the simplest methods to evaluate the performance of a model, and as such, it is not always the best. What's important to grasp here is that we need to specify these parameters in `trainControl()` before training the algorithm with `caret`. The `method = "none"` argument here specifies that we don't want to do any special resampling or multiple-fold validation with our algorithm. We'll come back to this function when we start examining more sophisticated validation methods, but for now the above code works.
+
+## Training The Algorithm
+
+Now that we've covered `trainControl()` and the idea of setting up the parameters for training the algorithm, we're ready to tackle the second step of the holdout process:
+
+1. Split a dataset into two separate sets, a training and test set.
+2. "Train" the algorithm using the data from the training set.
+In terms of the k-nearest neighbors algorithm, the rows of the training set become the neighbors that we use to predict the prices of the data from the test set.
+
+
+`caret` provides us with another function for training machine learning models: `train()`. Whereas `trainControl()` is where we specify how the training will be done, the `train()` function is where we actually specify the algorithm we want to use and what data the algorithm should use for training.
+
+The code below is an example use of the `train()` function.
+
+
+```{r}
+# train_control <- trainControl(method = "none")
+# knn_model <- train(outcome ~ predictor1 + predictor2, 
+#                    data = training_data, 
+#                    method = "knn", 
+#                    trControl = train_control)
+```
+
+The first argument that we see in the `train()` example above is a formula. The formula, `outcome ~ predictor1 + predictor2`, is what we provide to the `train()` function to tell it what we are trying to predict (outcome) through two features in the data (`predictor1` and `predictor2`). In the last lesson, we only learned how to use one feature (accommodates) to predict `tidy_price`, so we might write this as `tidy_price` ~ accommodates. The ~ character is what we use to separate the outcome we'd like to predict from the features we're using to do so.
+
+The second argument is the `data = training_data` argument, which tells the `train()` function that it should use the fictional `training_data` variable as data to train the algorithm. All of the elements in the formula should also be present as columns in this dataset as well.
+
+Next, we have the `method` argument, which is where we specify what machine learning `method` algorithm would be used to perform the prediction. `method = "knn"` specifies that we want to use the k-nearest neighbors algorithm. Finally, we can see that we need to create a `trainControl()` instance before using the `train()` function and use it in the trControl argument.
+
+The output of the `train()` function is a list that essentially contains the trained machine learning model. With this trained model, we can move further with the holdout procss. Before we do so, you'll need to use the `train()` function on the `dc_listings` data.
+
+
+The training and test sets you created are also provided here, in addition to the trainControl instance. With these variables:
+
+1. Create a trained k-nearest neighbors model using the `train()` function. Assign this trained model to the `knn_model` variable.
+- Predict `tidy_price` from the `accommodates` and `maximum_nights` columns.
+
+
+```{r}
+set.seed(1)
+train_control <- trainControl(method = "none")
+knn_model <- train(tidy_price ~ accommodates + maximum_nights, 
+                   data = train_listings, 
+                   method = "knn", 
+                   trControl = train_control)
+```
+
+
+## Create Predictions On The Test Data
+
+
+On the last screen, we used the `train()` function to "train" version of the k-nearest neighbors algorithm. By "training an algorithm", we really mean that the rows of the training data will be used as the neighbors for new listings we want to predict the prices for. With a trained model, we can now start producing predictions on the test set! This is the next step in the holdout process.
+
+1. Split a dataset into two separate sets, a training and test set.
+2. "Train" the algorithm using the data from the training set.
+3. For each listing in the test set, we will calculate the average price of its nearest neighbors. These prices become the model's predictions.
+
+With the model on hand, we can use caret's `predict()` function to predict the listing prices of the test data. An example of the use of `predict()` function is below:
+
+```{r}
+# predictions <- predict(knn_model, newdata = test_data)
+```
+
+We need to provide two things to the `predict()` function to produce the predictions. The first argument is our trained k-nearest that we are trying to evaluate. The second argument is `newdata`, which contains the data we want to produce the predictions for. Above, we supply the `predict()` function with a hypothetical dataset called `test_data`.
+
+1. Using the example code above, create predictions for the `test_listings`. Assign your predictions to the variable `test_predictions`.
+- Use both the `accommodates` and `maximum_nights` as your features in this algorithm.
+
+```{r}
+test_predictions <- predict(knn_model, newdata = test_listings)
+```
+
+## Evaluating Predictions
+
+
+With the `predict()` function, we have model predictions for the test set, in addition to the actual prices for each of the listings. With these two pieces of information, we can calculate how well the model predicts the actual prices for each listing. This is the next step in the process:
+
+1. Split a dataset into two separate sets, a training and test set.
+2. Train the algorithm using the data from the training set.
+3. For each listing in the test set, we will calculate predictions for the rental price.
+4. Compare these predictions against the actual values of the listings as given in the `tidy_price` column.
+
+We typically quantify this in terms of `error`, or how much the predictions differ from the actual value. If the predicted price closely matches the actual price, then the error will be small. Conversely, if the predicted price is nowhere near the actual price, then we would see a large error. Using the results of the `predict()` function, we can actually create a new column in the test set that captures the error for each listing. Below is an example of how we might do this using hypothetical column names:
+
+```{r}
+# test_predictions <- predict(knn_model, newdata = test_listings)
+# test_listings <- test_listings %>%
+#     mutate(
+#         error = actual_price - test_predictions
+#     )
+```
+
+We're almost done with the holdout validation process! Before we can move on, you need to perform your own calculation of the errors for the test set.
+
+1. Create a new column in `test_listings` called `error` that captures how much the model predictions differ from the actual listing prices.
+
+```{r}
+test_listings <- test_listings %>%
+  mutate(
+    error = tidy_price - test_predictions
+  )
+```
+
+## Summarizing Errors Into a Single Metric
+
+We have one last problem. We have an `error` column that describes the errors of each listing, but we also have almost 1,000 individual errors. It is difficult to really assess how well the model performed based on looking at individual error, so we would prefer to have a single summary value that describes model performance. This is the last step in holdout validation.
+
+1. Split a dataset into two separate sets, a training and test set.
+2. Train the algorithm using the data from the training set.
+3. For each listing in the test set, we will calculate predictions for the rental price.
+4. Compare these predictions against the actual values of the listings as given in the `tidy_price` column.
+5. Create a single summary error metric that we can use to judge the performance of the model.
+
+
+There is a specific term for this summary value: the error metric. There are many types of error metrics, but for this lesson we'll focus on one metric: the root mean squared error (RMSE).
+
+The RMSE acts as summary of a model's performance, but there are small nuances to their usage. To understand these nuances, we need to look at the mathematical descriptions for each error metric. First, we'll look at RMSE.
+
+
+
+$$\begin{equation}
+RMSE = \sqrt{\frac{\sum^n_{i=1} (\hat{y}_i - y_i)^2}{n}}
+\end{equation}$$
+
+We'll start from the inside of the square root and work outward. Inside the equation is a difference $\hat{y}_i - y_i$. The first value $\hat{y}_i$ (called "y-hat") represents the predicted value of the $i^{th}$ observation. In code terms, we got each $\hat{y}_i$ through the `predict()` function. The second value $y_i$ represents the actual listing value. The difference represents the error itself.
+
+This difference is then squared. We square the difference between the predicted and actual value for multiple reasons that are out of scope for the course. In short, squaring the differences helps us convert all of the error into a positive value. If we just tried to sum up all of the error, we run into trouble. Some errors are positive while others are negative, so if we tried to sum them all up they would cancel each other out. This cancellation is undesirable, so we use squaring to prevent it.
+
+Each difference is squared, and then we calculate at the mean, or average, squared difference. Recall that the mean is useful for summarizing numerical data, which is why we use it here. After calculating the average squared difference, we take its square root. When we take the square root it helps put the error back in terms of the original outcome. In our case, taking the square of the difference of listing prices means that its unit is also squared (dollars squared). This doesn't make sense, so we convert it back into dollar amounts to make the RMSE interpretable again. All of these details together are why this error metric is named "root mean squared error".
+
+As a last note, you may see in some other places that omit the square-root step, leaving the error metric in terms of squared differences. This MSE is still technically an error metric, so it's important to be aware that it still has usage. For our purposes however, we'll use the RMSE.
+
+Now that you know about the RMSE, you can calculate it for our k-nearest neighbors model.
+
+1. First, calculate the squared `error` based on the original error column that you created on the last screen. Give this column the name `squared_error`.
+2. Using this new `squared_error` column, calculate the RMSE. Assign this to the variable `rmse`.
+
+```{r}
+test_listings <- test_listings %>%
+  mutate(
+    squared_error = error^2
+  )
+rmse <- sqrt(mean(test_listings$squared_error))
+rmse
+```
+
+# 3. Multivariate K-Nearest Neighbors
+
+## Generalizing The Distance Formula
+
+At the beginning of the course, we learned about the k-nearest neighbors algorithm and chose to use one feature to predict the rent price. As we learned the caret library, we actually used two features to predict `tidy_price`. We didn't go into the specifics of using two features, but in this lesson we'll explore how adding new features to the algorithm changes how it classifies new listings.
+
+Deciding a proper rental price for a listing is a complex task, requiring much more information than how many people a listing can accommodate. It could be helpful to incorporate more information into creating a prediction since rental listings have many qualities to them, qualities that could be shared. By adding more features, we hope to keep distances between similar listings small while increasing distances of listings that are not similar to ours. These two changes together help increase prediction quality.
+
+Adding an additional feature to the k-nearest neighbors algorithm corresponds to adding another dimension to space. When we used just the `accommodates` column, space was represented by a one-dimensional line. After we add `maximum_nights` to the algorithm, space becomes a two dimensional plane — as we saw in the first lesson. Adding yet another feature, a third, the "space" will become three dimensional, and so on. Using k features in the algorithm means that the "space" will be in `k`-dimensions. Past three dimensions, we aren't able to really visualize what this space looks like, but the intuition of the algorithm remains the same. The Euclidean distance formula can accommodate `k` features:
+
+
+$$\begin{equation}
+d = \sqrt{(x_{1(1)} - x_{1(2)})^2 + (x_{2(1)} - x_{2(2)})^2 + \ldots + (x_{k(1)} - x_{k(2)})^2}
+\end{equation}$$
+The notation has been adjusted here to make the formula generalizable. Looking at the first feature $x_{1(1)}$ there are two numbers that need explanation here. The first 1 corresponds to the first feature that we are comparing between two listings. The second 1 contained in the parentheses refers to the listings themselves. Distances are always calculated between two objects, so we always reference two items in the Euclidean distance formula. The squared differences are calculated for each of the k features.
+
+In practice, we won't have to deal with the distance formula at all since caret handles all of the calculations. The main point of this is to give you insight on how the k-nearest neighbors algorithm incorporates more features into its machine learning goal.
+
+## More Data Cleaning
+
+
+When we judge similarity between neighbors, we use Euclidean distance to give a numerical measure to similarity. Using Euclidean distance turns judging similarity between neighbors into a matter of comparing distances. However, using Euclidean distance also imposes limitations on the types of data that can be utilized in the k-nearest neighbors algorithm. Euclidean distance requires numerical features, which means that other types of features are barred form use. This includes factors, characters, and missing values.
+
+In its current state, the `dc_airbnb` dataset contains features that we won't be able to use in the k-nearest neighbors algorithm. For example, the following columns contain character values:
+
+
+
+- `room_type`: e.g. `Private room`
+- `city`: e.g. `Washington`
+- `state`: e.g. `DC`
+
+
+while these columns contain numerical values that can't be compared order-wise:
+
+
+- `latitude`: e.g. 38.913458
+- `longitude`: e.g. -77.031
+- `zipcode`: e.g. 20009
+
+
+
+Geographic values like these aren't ordinal because smaller values don't directly correspond to a smaller value in a meaningful way. For example, the ZIP code 20009 isn't smaller or larger than the zip code 75023, but rather both are unique, identifier values. Latitude and longitude value pairs describe a point on a geographic coordinate system and different distance equations are used in those cases.
+
+There are also numerical values that don't relate to the listing itself, but the host instead. Since a host could have many living spaces and we don't have enough information to uniquely group living spaces to the hosts themselves, we'll avoid using any columns that don't directly describe the living space or the listing itself:
+
+
+- `host_response_rate`
+- `host_acceptance_rate`
+- `host_listings_count`
+
+Let's remove these nine columns from the data.
+
+
+1. Remove the nine columns discussed above from `dc_listings`.
+
+2. Using the `colnames()` function, assign the remaining colum names to the variable `dc_columns`.
+
+```{r}
+dc_listings <- dc_listings %>%
+    select(-room_type, -city, -state, 
+           -latitude, -longitude, -zipcode, 
+           -host_response_rate, -host_acceptance_rate, -host_listings_count)
+dc_columns <- colnames(dc_listings)
+```
+
+## Handling Missing Values
+
+After successfully removing non-essential columns, our current dataset has no missing values. However, if you encounter a dataset with missing values, the following guidelines will help you to effectively clean it.
+
+- Begin by examining the dataset for potential issues. This includes checking for missing values, outliers, duplicate records, inconsistent formatting, and any other inconsistencies that may affect the analysis. In R, you can check for missing data in columns using various techniques. Here are a few commonly used methods: Use the `is.na()` function to check for missing values in a specific column. It returns a logical vector indicating `TRUE` for missing values and `FALSE` for non-missing values.
+
+
+```{r}
+# is.na(dataset[['column_name']])
+```
+
+Combine the `is.na()` function with the `sum()` function to count the number of missing values in a column. The `sum()` function treats `TRUE` as `1` and `FALSE` as `0`.
+
+```{r}
+# sum(is.na(dataset[['column_name']]))
+```
+
+Utilize the `summary()` function to get a summary of the dataset, including information about missing values.
+
+```{r}
+# summary(dataset)
+```
+Identify and handle outliers, which are extreme values that deviate significantly from the rest of the data. Depending on the context and analysis goals, you can choose to remove outliers, transform them, or handle them using specialized techniques.
+
+Ensure consistent formatting of data, such as dates, categorical variables, and numerical values. This step involves converting data into a unified format to facilitate analysis and avoid errors.
+
+Check for any inconsistencies in the data, such as conflicting values or contradictory information. It's important to resolve these inconsistencies by validating the data against external sources or applying domain knowledge.
+
+Verify the integrity of the cleaned dataset by performing sanity checks, cross-referencing with external data sources, or using statistical techniques to validate the relationships and distributions within the data.
+
+Keep track of all the changes made during the data cleaning process. This documentation helps ensure transparency, reproducibility, and enables other stakeholders to understand the data transformation steps undertaken.
+
+By following these general steps, you can effectively clean your data, ensuring its quality and reliability for subsequent analysis or machine learning tasks. Remember that the specific techniques and approaches may vary depending on the nature of the data and the analysis goals.
+
+
+## Normalization
+
+
+Before we start creating more trained algorithms, there's a small detail we have to consider. All of the columns we'll be using are numeric, but there are subtle differences between some of them. Columns like `accommodates` and `bedrooms` are relatively small values, whereas `maximum_nights` and `number_of_reviews` contain relatively large values such as 1,125 or 65.
+
+That is to say, some columns have different scales than the others.
+
+These scale differences have consequences on the k-nearest neighbors algorithm. Recall that the algorithm uses Euclidean distance to judge which of its neighbors are the closest. If we were to use accommodates, bedrooms and maximum_nights columns together as features in an algorithm, extreme differences in the maximum_nights column can outweigh any small distance differences in the other two features. The end result is that different scaled columns in the dataset can negatively affect how the algorithm perceives the closest neighbors to a given listing.
+
+Thankfully, there is a solution to our problem. To prevent any single column from having too much of an impact on the distance, we can normalize all of the columns to have a mean of 0 and a standard deviation of 1. When we normalize a column, we are subtracting the column mean from all the values and dividing each value by the standard deviation of the column. The term normalizing comes from the standard normal distribution, which has a mean of 0 and standard deviation of 1. Even though we are changing each of the individual values, we are changing them all in the same way which preserves the distribution or "shape" of the data.
+
+The always reliable caret provides a convenient way to normalize our data if we wanted, through an argument in the `train()` function called `preProcess`. The following is how we would perform normalization on a hypothetical dataset in a machine learning model.
+
+
+```{r}
+# knn_model <- train(outcome ~ predictor1 + predictor2,
+#                    data = train_data,
+#                    method = "knn",
+#                    trControl = train_control,
+#                    preProcess = c("center", "scale"))
+```
+
+
+The hypothetical code above is similar to what we showed in the last lesson. The only change that we've made here is that we've specified what we wanted in the `preProcess` argument. The words "center" and "scale" refer to subtracting the mean and dividing by the standard deviation, respectively.
+
+Now that you know the general syntax, create a new trained k-nearest neighbors model using the variables provided to you.
+
+1. Using the `train_listings` data, create a new k-nearest neighbors model and make sure to normalize the columns. Assign your trained model to the variable `knn_model`.
+- Predict `tidy_price` from `bedrooms` and `maximum_nights`
+
+```{r}
+summary(dc_listings)
+```
+
+```{r}
+set.seed(1)
+dc_listings <- dc_listings %>% drop_na()
+train_indices <- createDataPartition(y = dc_listings[["tidy_price"]],
+                                     p = 0.7,
+                                     list = FALSE)
+train_listings <- dc_listings[train_indices,]
+test_listings <- dc_listings[-train_indices,]
+train_control <- trainControl(method = "none")
+knn_model <- train(tidy_price ~ bedrooms + maximum_nights,
+                   data = train_listings,
+                   method = "knn",
+                   trControl = train_control,
+                   preProcess = c("center", "scale"))
+
+condition1 <- function() {
+    if (length(knn_model[["coefnames"]]) == 2) {
+        return(c(TRUE))
+    } else {
+        return(c(FALSE, "The model doesn't appear to have the correct number of features."))
+    }
+}
+
+print(condition1())
+```
+
+## Fitting Multiple Models
+
+We've learned about the multivariate k-nearest neighbors algorithm and did some more refined cleaning of the data. We needed to perform this data cleaning because some of the features were incompatible with the algorithm. Furthermore, we are also normalizing the training data in the `train()` function. The purpose of all these steps was to set us up to make multiple models and compare them against each other. The ultimate goal of the machine learning workflow is to create the best possible model given our data.
+
+![](https://dq-content.s3.amazonaws.com/486/machine-learning-process.png)\
+
+Thanks to `caret`, we have everything we need to easily create these models. For this screen, you'll need to create two models from the training data. These two models will use different features in the data, and we'll walk through how to compare them in the following screens.
+
+
+1. Create a trained k-nearest neighbors model using `accommodates` and bedrooms as features. Assign this model to the variable `two_feature_knn_model.`
+- Make sure to use the training data and normalize it in the training process
+2. Create another trained k-nearest neighbors model using the `accommodates`, `bedrooms` and `maximum_nights` columns. Assign this model to the variable `three_feature_knn_model`.
+- As with the two feature model, use the training data and normalize it in the training process
+
+
+
+```{r}
+two_feature_knn_model <- train(tidy_price ~ accommodates + bedrooms,
+                               data = train_listings,
+                               method = "knn",
+                               trControl = train_control,
+                               preProcess = c("center", "scale"))
+three_feature_knn_model <- train(tidy_price ~ accommodates + bedrooms + maximum_nights,
+                               data = train_listings,
+                               method = "knn",
+                               trControl = train_control,
+                               preProcess = c("center", "scale"))
+```
+
+
+## Comparing Model Performance
+
+
+We have two models on hand that both attempt to predict `tidy_price` from features in the Washington DC Airbnb listings dataset. The models are similar in that they both use `accommodates` and `bedrooms`, but one model uses `maximum_nights` as an extra feature. The question now is, "How do we figure out which one is better?"
+
+In the last lesson, we learned about RMSE and its role as an error metric. Recall that we use error metrics to evaluate the performance of a machine learning model. In the last lesson, we calculated an RMSE for a single model, but didn't really do anything with it. That's because there really wasn't anything we could do with it. Just having the RMSE for a single model only really tells you how much error the model has on average. Error metrics really shine when we are able to compare models against each other. Intuitively, we want model error to be as small as possible, which corresponds to having a smaller RMSE. So with multiple models, we can choose the best model based on which one has the smallest relative RMSE. Being able to compare RMSEs allows us to decide if adding additional features reduces the RMSE in a meaningful way.
+
+With this in mind, we are going to take the two models that you created and make a nice tibble for us to compare the two models. We'll be leveraging some useful functions in the tidyverse to do so. We could technically just calculate the RMSE for each model and compare it manually, but good presentation is also an important skill for any data scientist or analyst. We'll go through the process of creating this table on the next few screens.
+
+For this screen, we still need to calculate both the predictions and corresponding errors for each model.
+
+1. Create a new column in the `test_listings` test data that contains all of the predictions from the two feature model. Name this column `two_feature_predictions`.
+2. Similar to above, create a new column called `three_feature_predictions` that contains the predictions for the three feature model.
+3. Create a column in the `test_listings` data that contains the squared errors for each prediction of the two feature model. Call this column `two_feature_sq_error`.
+4. Do the same thing for the three feature model and create a new column for its squared errors. Call this column `three_feature_sq_error`.
+
+
+```{r}
+test_listings <- test_listings %>%
+  mutate(
+    two_feature_predictions = predict(two_feature_knn_model, newdata = test_listings),
+    three_feature_predictions = predict(three_feature_knn_model, newdata = test_listings),
+    two_feature_sq_error = (tidy_price - two_feature_predictions)^2,
+    three_feature_sq_error = (tidy_price - three_feature_predictions)^2
+  )
+```
+
+## Long Format Data
+
+In the last screen, we created the squared error columns needed to calculate the RMSE error metric. Before we can summarize everything into a neat table, we need to deal with a small issue in the data format. Both `two_feature_sq_error` and `three_feature_sq_error` contain the same type of information: squared error. In order to make a nice table programmatically, we prefer that all of this information be in the same column. Furthermore, we want to be able to distinguish which squared errors came from which model — either the two or three feature model. In short, we want to convert the test data into long format. "Long" refers to the fact that we are taking multiple columns and essentially "stacking" them on top of each other. In the interest of learning, the opposite of long format is wide format, where we can have different columns representing the same type of information. In general, long format data is more convenient for plotting, while wide format data is better for human viewing.
+
+Our test data is currently in wide format. On this screen, we'll learn about a function that performs the conversion from wide to long format. This function is called `pivot_longer()`, and it comes from the tidyr library. There are four arguments that you should provide to the `pivot_longer()` function, which we'll go through in an example below. Let's say that we want to take both of the prediction columns and convert into long format.
+
+
+![](https://dq-content.s3.amazonaws.com/484/long-wide-format.png)\
+
+
+```{r}
+# test_listings <- test_listings %>%
+#     pivot_longer(
+#         cols = two_feature_predictions:three_feature_predictions,
+#         names_to = "model",
+#         values_to = "predictions"
+#     )
+```
+
+
+The first argument is `cols`, where we need to specify which columns we want to "stack" on top of each other. In this case, `two_feature_predictions` and `three_feature_predictions` are next to each other in `test_listings`, so we can use the colon : as shorthand. Alternatively, you can provide a vector containing the column names that you want to stack. The names_to argument represents a new column in the `test_listings` data that will help us distinguish between the predictions once they're stacked. After `pivot_longer()` is executed, a model column is created, and its values will be the columns that were originally stacked. That is to say, each prediction value is associated with either `two_feature_predictions` or `three_feature_predictions`. The final argument `values_to` will be the column name that the stacked predictions values will take.
+
+Take some time to become familiar with the example code above and then apply it to the squared error columns.
+
+
+
+```{r}
+
+long_test_listings <- test_listings %>%
+  pivot_longer(
+    cols = two_feature_sq_error:three_feature_sq_error,
+    names_to = "model",
+    values_to = "sq_error"
+  )
+```
+
+
+## `group_by()` and `summarize()`
+
+Now that the data is in long format, we can transform it into a nicely organized table for viewing. To do this, we can use a combination of two other functions from the dplyr library: `group_by()` and `summarize()`. We'll learn how to use these functions on this screen.
+
+When we say a "nicely organized table", we're really aiming for something that is instantly readable and understandable from a human perspective. For example, if we were providing a summary of our two models to a supervisor, we wouldn't want to give them the data itself since its not intuitive what they're supposed to understand from it. We're trying to compare the performance of two models, so that should be immediately apparent. Using the new model column, we can differentiate between rows that contain information about the two- and three-feature models. We want to calculate a separate RMSE for both groups of rows, so we need to split the data somehow. This is where the `group_by()` function comes in handy. We can specify a column or set of columns in the `group_by()` function, and it will automatically split up the data by the different values contained in that column. For example:
+
+
+```{r}
+# test_listings_by_model <- test_listings %>%
+#     group_by(model)
+```
+
+There are only two values in the `model` column, so `group_by()` will take `test_listings` and divide it up into two datasets: one where the rows come from the two-feature model and another from the three-feature model. The diagram below illustrates how this works.
+
+![](https://dq-content.s3.amazonaws.com/484/group_by_viz.png)\
+`group_by()` only does the work of splitting the datasets by useful categories. In order to actually calculate the RMSE for each model, we'll need to use the `summarize()` function for this. The `summarize()` function takes each of the datasets that `group_by()` creates and calculates some summary value for each of them. The `summarize()` function is similar to the `mutate()` function in that it actually creates new columns, but the values contained from these columns come from each of the datasets produced by `group_by()`. For example, let's say that we wanted to calculate the average squared error for each model:
+
+```{r}
+# sq_error_by_model <- test_listings %>%
+#     group_by(model) %>%
+#     summarize(
+#         mse = mean(sq_error)
+#     )
+```
+
+![](https://dq-content.s3.amazonaws.com/484/group_by_summarize_viz.png)\
+
+When the original test_listings dataset is split by `group_by()`, it only divides it by rows, so both datasets still contain the same columns. `summarize()` works by calculating the average of the `sq_error` column in each dataset and assigning it to the new `avg_sq_error` column in the `sq_error_by_mode`l. Now, if we view `sq_error_by_model` in our R console, we would see something similar to:
+
+
+```{r}
+# test_listings_by_model
+# A tibble: 2 x 2
+#   model                  avg_sq_error
+#   <chr>                         <dbl>
+# 1 three_feature_sq_error        7067.
+# 2 two_feature_sq_error          7236.
+```
+
+The end result is a compact table that lets us immediately compare the two models. The table above already hints to which model performs better, but you should calculate the RMSE just to make sure. As a small note, `summarize()` uses the American spelling of the word, but R also recognizes `summarise()`.
+
+
+
+1. Using `group_by` and `summarize()`, calculate the RMSE for each model. Assign this new table to the variable `rmse_by_model`.
+
+2. After taking your own look at `rmse_by_model`, make a judgment as to which model performs better. If the two feature model is better, assign the word "two_feature" to the variable `better_model`. If not, assign "three_feature" model to `better_model`.
+
+
+
+```{r}
+rmse_by_model <- long_test_listings %>%
+  group_by(model) %>%
+  summarize(
+      rmse = sqrt(mean(sq_error))
+  )
+rmse_by_model
+better_model <- "three_feature"
+```
+## The Power of Piping
+
+
+The three feature model just barely edges out the two feature model, so we might conclude that adding `maximum_nights` as a feature for prediction is not very useful. As we wrap up this lesson, we feel it's important to take a step back to really showcase the power and utility of the tidyverse libraries. As you've worked through the exercises, you've created updated versions of the `test_listings` data set and reassigned it back to the `test_listings` variable. While there's nothing wrong with this in practice, we can use the `%>%` operator to essentially streamline the whole process. Doing so creates a large chunk of code, but it effectively puts all of the data cleaning and processing steps into one place. With some proper formatting, you can easily distinguish actions each part of the pipeline is performing and change code wherever you may need. 
+
+The `%>%` function allows us to take the output of one function and place it directly as input to another function. The above code is incredibly useful for producing quick, consumable summaries. If you were so inclined, you could actually start from the original `dc_listings` data and create a pipeline that produces the same result! You would only need to add more components to the pipeline to do the necessary data cleaning. As you move forward with your programming, we encourage you to try to incorporate the `%>%` pipe operator where you can.
+
+
+## Hypothetical Training with holdout validation
+
+```{r}
+# Example with a hypothetical dataset
+set.seed(123)  # for reproducibility
+train_data <- data.frame(
+  X1 = rnorm(100),
+  X2 = rnorm(100),
+  y = sample(c("ClassA", "ClassB"), 100, replace = TRUE)
+)
+set.seed(456)  # for reproducibility
+partition_indices <- createDataPartition(train_data$y, p = 0.7, list = FALSE)
+training_data <- train_data[partition_indices, ]
+testing_data <- train_data[-partition_indices, ]
+
+# Specify the number of neighbors (k)
+k_value <- 3
+
+# Train the KNN model
+knn_model <- knn(train = training_data[, c("X1", "X2")], 
+                 test = testing_data[, c("X1", "X2")], 
+                 cl = training_data$y, 
+                 k = k_value)
+# Evaluate accuracy
+accuracy <- mean(knn_model == testing_data$y)
+print(paste("Accuracy:", accuracy))
+
+# Example with new data
+new_data <- data.frame(X1 = c(0.5, -1.0), X2 = c(1.2, 0.8))
+
+# Make predictions
+predictions <- knn(train = training_data[, c("X1", "X2")], 
+                   test = new_data, 
+                   cl = training_data$y, 
+                   k = k_value)
+
+```
+
+
+
+
+# 4. Cross Validation
+
+## Weakness of Holdout Validation 
+
+In the second lesson of this course, we learned about holdout validation. Holdout validation allows us to test a machine learning model's accuracy on new data it hasn't seen before. Holdout validation is a good approach if you're starting out or testing the waters with different types of models, but there are more sophisticated forms of cross-validation that we can use.
+
+To demonstrate why we would use other forms of cross-validation, we'll use a small example to highlight the weaknesses of holdout validation. Let's say that we have an extremely small dataset of 10 listings. Eight of the listings have prices in a narrow range of $500$ to $550$, and the other two listings are luxurious and have prices of $1,000$ each.
+
+![](https://dq-content.s3.amazonaws.com/485/holdout-weakness-example.png)\
+
+
+Recall that in holdout validation, we normally randomize which rows we allocate for the training set and the test set. We give most of the data to the training set and use the test set to evaluate how well the model performs on unseen data. The chance is relatively small, but there is a possibility that only the average green dots are randomly allocated to the training set, and all of the outlier $1,000$ listings are in the test set. In this situation, the k-nearest neighbors algorithm can effectively only predict ranges of $500$ to $550$ because these are the only prices represented in the training set. If we try to use this model on the test set containing only outliers, we would see large errors that don't really represent the reality of our dataset. The model will look as if it performs worse on unseen data, purely by some unlucky randomization.
+
+
+![](https://dq-content.s3.amazonaws.com/485/hypothetical-split-1.png)\
+
+But for the sake of further discussion, let's say that both of the outliers are incorporated into the training set:
+
+
+![](https://dq-content.s3.amazonaws.com/485/hypothetical-split-2.png)\
+
+
+In this case, we don't run into the problem of large test errors, but we encounter yet another problem. Let's say that some of the average green listings are similar to the outliers in terms of features, which means the outliers will be used as neighbors in the calculation. The outliers will boost the average prediction price for the listings in the test set and create some unnecessary error there.
+
+In both of these cases, holdout validation suffers. The presence of outliers in the data can cause poor predictions whether they are in the training or test set. Since holdout validation uses randomization to allocate data to the training and test sets, we won't know which of the two situation happens without manual inspection of the data, which is undesirable and unscalable. This hypothetical example was also a situation where the dataset was small, which amplifies the effect that the outliers have on calculating predicitons.
+
+These weaknesses highlight why we should learn other ways to cross-validate the data. In this lesson, we'll focus on a more robust cross-validation technique called k-fold cross-validation.
+
+## K-Fold Cross-validation
+
+
+On the last screen, we highlighted some weaknesses of holdout validation. These weaknesses motivate why we should learn about k-fold cross-validation. Like holdout validation, k-fold cross-validation is a technique that allows us to measure how well our model will generalize to unseen data. It is important to distinguish between the k in the k-nearest neighbors algorithm and the k that appears in k-fold cross-validation. In the k-nearest neighbors algorithm, k refers to how many neighbors we used to predict the outcome of new data. In k-fold cross-validation, k refers to how many times we perform holdout validation!
+
+K-fold cross-validation is actually a natural extension of holdout validation. Instead of just doing one split of the original dataset, we create k sets of indices to split the data, which will create different training and test sets. From each of these indices, or folds, we calculate the error metric and average these metrics. What distinguishes k-fold cross-validation from holdout validation is that it ensures that each row in the dataset is used both in a training set and a test set. K-fold cross-validation also lends itself nicely to visualization, as illustrated below:
+
+![](https://s3.amazonaws.com/dq-content/kfold_cross_validation.png)\
+
+
+In the above example, we are using k = 5 folds, which correspond to five different training and test sets. For each fold, we calculate an RMSE, and then we take the average of these RMSEs. This final average represents the error metric that we use to compare against other models. Using multiple folds to averaging the error metrics allows us to "dilute" the effects of potential outliers in the dataset. This will give us some confidence that we can compare error metrics from different models, and that they will not be influenced terribly by outliers or chance.
+
+From a more programmatic perspective, the process of k-fold cross validation goes as follows:
+
+1. Decide what k should be, or how many different allocations of the training and test set we want. The most common numbers used for k-fold cross-validation is either five or 10.
+- The k value you choose will decide how much data is allocated to the training and test set.
+2. For each of these k sets of indices
+- split the full dataset into a training and test set
+- train the model on the training set
+- create predictions from the test set
+- and calculate the error metric (RMSE) for that fold
+3. Take the error metric from each fold and calculate their average
+
+Step 2 in the above process corresponds to a single round of holdout validation, but on a single fold of the data. The new steps here introduce the use of different folds and a final summary of the error metric. caret thankfully streamlines this entire process for us, but its crucial that we understand how k-fold cross-validation works.
+
+
+## Using k-fold Cross-validation
+
+On the last screen, we learned about the k-fold cross-validation and covered a rough process on how to implement it. On this screen, we'll learn about how to handle the first step in this process: Deciding what k should be. k defines how many folds, or allocations of the training data, we want to use in cross-validation. The most common numbers used for k-fold cross-validation are 5 and 10.
+
+The responsibility of handling this step belongs to the `trainControl()` function that we learned when we were first introduced to caret. We only gave brief comment of the `trainControl()` function, but now we can return to it and see how it's used in the machine learning workflow.
+
+In short, `trainControl()` helps us define how we want to perform the cross-validation for our model. Since we were using holdout validation originally, there wasn't much we needed from `trainControl()`. Now that we've shifted to k-fold cross-validation, `trainControl()` is now relevant. In order to specify that we want to use k-fold cross-validation, we need to set the method and number arguments in `trainControl()`. For example, if we wanted to do 10-fold cross-validation (`k = 10`), we would specify this as below:
+
+
+```{r}
+# train_control <- trainControl(method = "cv",
+#                               number = 10)
+```
+
+
+
+The cv word is a shortening of the word "cross-validation", and the number argument tells caret how many folds you want to use. This is really the only change that we need to make to indicate to caret that we'd like to use k-fold cross-validation! With this in mind, incorporate it into our workflow with the Airbnb dataset.
+
+
+1. A tidy version of the Airbnb Washington D.C. listings data has been loaded in the variable `dc_listings`. Take the data and split it 80-20 to a training and test set.
+- Assign the training set to `train_listings`.
+- Assign the test set to `test_listings`.
+2. In `trainControl()`, set the correct arguments so that caret will use 5-fold cross-validation. Assign this variable to `five_fold_control`.
+
+
+
+```{r}
+set.seed(1)
+train_indices <- createDataPartition(y = dc_listings[["tidy_price"]], 
+                                     p = 0.8, 
+                                     list = FALSE)
+train_listings <- dc_listings[train_indices,]
+test_listings <- dc_listings[-train_indices,]
+five_fold_control <- trainControl(method = "cv", number = 5)
+```
+
+
+## Checking the Output of 5-fold Cross-validation
+
+Now that we've learned how to set our model parameters to use 5-fold cross-validation instead of holdout validation, we can move forward and create any model we want. At the beginning of the lesson, we showed what an illustration of 5-fold cross-validation looks like. This illustration was a good way to get a mental model of what the process is like, but it's also important to know what you'll actually be dealing with on the programming side.
+
+To demonstrate this, we'll create our own model quickly, and then have a look at the resulting output if we try to look at the model in console.
+
+
+```{r}
+knn_model <- train(tidy_price ~ accommodates + bedrooms,
+                   data = train_listings,
+                   method = "knn",
+                   trControl = five_fold_control,
+                   preProcess = c("center", "scale"))
+```
+
+This is something we've seen before: training a model using two features and also normalizing the data. If we were to look at the knn_model in console, caret will output a useful summary about almost everything it's done in the machine learning workflow.
+
+```{r}
+knn_model
+```
+First, caret lists out the algorithm that was used in the training process: k-nearest neighbors. Next, it lists the dimensions of the training data that we used and how many features we used in the model: acccommodates and bedrooms. It also confirms to us that that it normalized (centered and scaled) the data and used 5-fold cross-validation!
+
+The next part is an interesting process that caret runs even without you specifying anything! You can see that there are different values for k, and each of them are associated with an RMSE, $R^2$ and MAE. We've only covered RMSE, but the other two are also error metrics we could refer to. What this section represents is that caret examined different values for k to use in the algorithm and chose the best one from the values it looked at! We'll cover this process more in the next lesson, but it's worth introducing this concept now. Finally, we see the results of the training, and caret concluded that k = 9 was the best amount of neighbors for this model and the data.
+
+What we're also interested in is seeing how the algorithm performed in each of the folds. This information is contained in the resample name of the knn_model list. The resample name contains a dataframe describing how the error metrics calculated for each fold:
+
+```{r}
+knn_model$resample
+```
+We can see that the error metrics for each fold actually have some discrepancies between them! One fold found an RMSE of 93, but another had a RMSE of 122! This highlights one of the potential problems that we could have run into just by using holdout validation. By looking at the RMSE of each of the folds, we can get a better idea of the presence of outliers in our training data.
+
+## To use less or more folds?
+
+We've previously mentioned that using five or 10 folds were popular choices when using k-fold cross-validation. On this screen, we'll discuss that idea in more detail.
+
+After some deliberation and discussion, researchers have decided that using either five or 10 folds was a good amount. To understand what they meant by "good", we need to understand an important idea in machine leaning called the bias-variance tradeoff. The bias-variance tradeoff appears in many different forms in machine learning, and k-fold cross-validation is once of those instances.
+
+Bias is a statement about accuracy. When we are trying to estimate or predict a value, we want to know how far the estimate is from the actual. The difference betwen the prediction and the actual value is called the bias. Variance, as you'll recall from the past statistics course, is a description of the spread of values. If we try to estimate a value and get many different values, then there's a high variance in the estimates. If all of them are close to the target value, then we would say the estimates have low variance.
+
+In the context of k-fold cross-validation, we are trying to estimate is the test error (RMSE), the error that we would get if we tried using our model to predict on data it hasn't seen before. Knowing how well the training data will estimate the test error can tell us ahead of time if the model performs well or not. When we use 5-fold cross-validation, we will produce five different "validation" sets, each with 20% of the training data. Since we are only using the training data for this, these "test" sets are more accurately called validation sets. As their name suggests, validation sets are used in cross-validation, and we use them to estimate is the test error. Having five validation sets means we can calculate five estimates of the test error.
+
+![](https://s3.amazonaws.com/dq-content/kfold_cross_validation.png)\
+
+
+Contrast this to 10-fold cross-validation. The increased number of folds means two things:
+
+each validation set will only represent 10% of the training data, and
+There will be 10 estimates of the test error.
+In 5-fold cross-validation, each validation set contains much more data compared to its 10-fold counterpart. What this means is that the resulting validation RMSE that is calculated for each fold is more likely to represent the "true" test RMSE. That is, there will be less bias in estimating the test error. Taking their average will also have less bias. However, because there's fewer validation RMSE to use in the average, they will have greater variance compared to 10-fold. This trend will become more apparent when there are outliers in the data that can greatly increase the RMSE
+
+The reverse is true for 10-fold cross-validation. Each validation set in 10-fold cross-validation contains less data, so each individual validation RMSE is more likely to be a poorer estimate of test error. This translates to more bias in the average validation RMSE. However, with 10 validation scores, their variance will be lower compared to 5-fold validation scores.
+
+Both bias and variance are important measures to consider in cross-validation. Low bias gives us security that the model will predict unseen data well. Low variance helps tell us that the data itself isn't subject to outlier influence. Before we move on, we'll test your understanding of the bias-variance tradeoff.
+
+1. A particularly extreme form of k-fold cross-validation is called **Leave One Out Cross-Validation (LOOCV)**, where all but one observation is used as training data, and the one left out is used as the test data. This is repeated for all the observations. Would you expect this method to have high bias or high variance? If you think bias, then assign "bias" to the variable `loocv_has_high`. Otherwise, assign "variance" to `loocv_has_high`.
+2. Consider the another extreme in 2-fold cross-validation. Would you expect this cross-validation method to have high bias or high variance? If you think bias, then assign "bias" to the variable `two_fold_has_high`. Otherwise, assign "variance" to `two_fold_has_high`.
+
+```{r}
+loocv_has_high <- "bias"
+two_fold_has_high <- "variance"
+```
+
+## Exploring Different k Values
+
+
+
+
+```{r}
+five_fold_control <- trainControl(method = "cv", number = 5)
+ten_fold_control <- trainControl(method = "cv", number = 10)
+five_fold_knn <- train(tidy_price ~ accommodates + bedrooms + bathrooms,
+                      data = train_listings,
+                      method = "knn",
+                      preProcess = c("center", "scale"),
+                      trControl = five_fold_control)
+ten_fold_knn <- train(tidy_price ~ accommodates + bedrooms + bathrooms,
+                      data = train_listings,
+                      method = "knn",
+                      preProcess = c("center", "scale"),
+                      trControl = ten_fold_control)
+
+five_fold_variance <- var(five_fold_knn$resample$RMSE)
+ten_fold_variance <- var(ten_fold_knn$resample$RMSE)
+
+cat("Variance of 5-fold RMSE:", five_fold_variance, "\n")
+cat("Variance of 10-fold RMSE:", ten_fold_variance, "\n")
+```
+
+
+
+
+
+# 5. Hyperparameter Optimisation
+
+## Hyperparameters
+
+In the last lesson, we learned how to incorporate k-fold cross-validation into our model creation in caret. We saw that caret actually does some extra work under the hood to figure out an optimal number of neighbors to use with the training data. All we need to do is supply the model with data, but it's important to understand what caret is doing in choosing this optimal number.
+
+In this lesson, we'll have a closer look at this process and learn how to manage it ourselves in caret. Up until now, we've mainly focused on cleaning the data and preparing it for the model, but here we will focus on how using different amounts of neighbors — the k of k-nearest neighbors — affects model performance. The number of neighbors, k, is a facet of the algorithm itself, which we call a hyperparameter or model parameter. In this course, we will refer to them as hyperparameters.
+
+A parameter is an aspect of the model that we estimate from the data. For example, R uses the data to estimate the different $\beta$ coefficients that will be used in a linear regression model. A hyperparameter is different because it cannot be learned from the data; it must be provided to the model before we start training it on data, but its value still has an impact on model performance. The k-nearest neighbors algorithm uses k to judge the number of neighbors to use and calculate an average price would be.
+
+The end goal of creating a machine learning model is to create a model that performs well on new data. In pursuit of this, our goal then is to pick a value of k that minimizes the test error. Throughout this short lesson, we'll learn how to perform the process of finding this optimal hyperparameter value.
+
+## Hyperparameter Optimization
+
+On the last screen, we were introducted to the idea of hyperparameters, values that affect the behavior and performance of a machine learning model but are unrelated to the data. Since we don't know which hyperparameter values are the best ahead of time, we need to figure that out. The process of finding the optimal hyperparameter value is known as hyperparameter optimization.
+
+There are different ways to approach hyperparameter optimization, but we'll use a technique known as grid search. Grid search involves:
+
+1. Selecting a set of the possible hyperparameter combinations to examine
+2. Training a model using each of these hyperparameter combination
+3. Evaluating the model's performance under each hyperparameter combination
+4. Choosing the hyperparameter combination that results in the lowest error metric
+
+Grid search is a lot like trial-and-error: we choose a set of "reasonable" hyperparameter values and see which one of these performs the best. Grid search is useful because it allows us to exhaustively check the performance of a set of values. However, if we have many hyperparameters to check, the number of sets will increase exponentially — and so will computation time.
+
+For this screen, we'll focus on the first step of grid search. In order for a caret model to perform grid search, we need to create a dataframe containing the different hyperparameter combinations. K-nearest neighbors has only one parameter —k— so we will just be choosing a range of k values to test out. caret offers a convenient function for us to create this data frame: the `expand.grid()` function. The `expand.grid()` function takes vectors of hyperparameters and creates a data frame containing every possible combination of these vectors. We have a use case below:
+
+
+```{r}
+expand.grid(hyperparam1 = 1:2, hyperparam2 = 1:3)
+```
+`expand.grid()` takes any number of vectors, but each of these vectors must be given names. After supplying these vectors, the function will create every possible combination between `hyperparam1` and `hyperparam2`.
+
+
+With this in mind, take the `expand.grid()` function and create a hyperparameter grid for a k-nearest neighbors model. The name of the hyperparameter that a `caret` k-nearest neighbors model is `k`, so take this into account.
+
+1. Create your hyperparameter grid and assign it to the variable `knn_grid`. Let `k` range from 1 to 20.
+
+
+```{r}
+knn_grid <- expand.grid(k = 1:20)
+```
+
+
+
+
+## Using our Hyperparameter Grid
+
+
+Now that we have our set of hyperparameter values to test, we need to supply them to the k-nearest neighbors models as we train them. In the last lesson, we didn't specify what hyperparameters to experiment with, so caret creates its own grid in the background to use. While this is convenient, we typically want to explicitly specify the hyperparameter combinations we want to use because it gives us greater control of the model training process.
+
+To specify our own hyperparameter training grid in model training, we need to supply it in the `train()` function in the tuneGrid parameter. Other than this small change, everything else we supply to the `train()` function will remain the same. We have an example below
+
+
+
+```{r}
+# train_control <- trainControl(method = "cv", number = 5)
+# hyperparam_grid <- expand.grid(k = 1:5)
+# model <- train(outcome ~ feature1 + feature2,
+#                data = training_data,
+#                method = "knn",
+#                trControl = train_control,
+#                preProcess = c("center", "scale"),
+#                tuneGrid = hyperparam_grid)
+```
+
+
+Once you specify your own hyperparameter grid, it's important to make sure that the column names match up with the hyperparameters used in the machine learning model it's being paired with. For example, if we were using another machine learning model like random forest, we would need to name the vectors differently in `expand.grid()`. Thankfully, the `train()` function automates the training and evaluation process for each hyperparameter. After this process, caret automatically chooses the best hyperparameter and the `train()` function uses this optimal value in the returned model.
+
+
+1. Using the above code as a guide, create a trained k-nearest neighbors model that uses your own hyperparameter grid. Use 5-fold cross-validation, normalize the data and assign the final model to the variable `knn_model`.
+- For this lesson, we'll be using the `accommodates`, `bedrooms` and `bathrooms` features
+
+```{r}
+train_control <- trainControl(method = "cv", number = 5)
+knn_model <- train(tidy_price ~ accommodates + bedrooms + bathrooms,
+                   data = train_listings,
+                   method = "knn",
+                   trControl = train_control,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = knn_grid)
+```
+
+## Visualizing Performance by Hyperparameter
+
+At the end of the training process, the `train()` function returns a model with a hyperparameter that best reduces error. Sometimes we're interested in seeing what the model performance was like across the different hyperparameter values. We can look at these values directly by inspecting the model itself. A shortened version of the output is shown below:
+
+```{r}
+knn_model
+```
+
+
+If your number of hyperparameter combinations is high, it would be better to visualize these values for direct inspection. Instead of looking at the model itself, you can put the caret model into the `plot()` function. The output would be a quick graph showing how each of the hyperparameters performs.
+
+
+```{r}
+plot(knn_model)
+```
+
+The information contained in the plot is the same as that presented when looking at the variable containing the caret model. We can see that most of the RMSEs are between 100 and 102. For the most part, hyperparameter optimization won't drastically change the resulting error, but it still represents a method for us to improve our models.
+
+
+## Experimenting with Hyperparameters
+
+
+
+It is good practice to choose a wide set of values when we start experimenting with sets of hyperparameters to use in our machine learning models. On the last screen, we learned how to use the `plot()` function with a trained caret model to see how each hyperparameter we chose performed.
+
+By examining the plot, it's easy to identify when the hyperparameters start to reach a minimum. The point where the plot reaches a minimum is the hyperparameter that is chosen for the final model. Let's say that when we first created our hyperparameter grid that we started with just a few values for k. Doing so will produce the following plot:
+
+![](https://dq-content.s3.amazonaws.com/486/short-plot.png)\
+
+
+In the plot above, notice that it quickly reaches a minimum, but then stops short. If we continue on with this information, we don't know if choosing more neighbors would result in lower error metrics. As a rule of thumb, you should choose a wide set of hyperparameter combinations so that a clear minimum or floor is created when you examine performance across different hyperparameters. In other words, you'll look for a clear U-shaped curve, with an identifiable minimum. You may find that the error instead reaches low floor and that's okay. It's just important to set your range of hyperparameters wide enough that you can see this minimum or floor.
+
+
+## Hyperparameters and Cross-validation
+
+Before we wrap up this lesson, it's a good idea to tie some of concepts together. Hyperparameter optimization takes a set of hyperparameters and tests our machine learning model performance using each of them. Each hyperparameter produces an error metric (RMSE, MAE, etc.) that is used to judge which one is optimal for the data and model. But it's important to really distinguish which dataset is being used to calculate the error metrics when we're choosing hyperparameters.
+
+To be clear, the test set we take away from the original dataset is not used to calculate the error metrics in hyperparameter optimization. The test set is used to calculate one last error metric after an optimized model is created. Instead, hyperparameter optimization takes the training data and further divides it into folds via k-fold cross-validation and calculates the error metrics from there. In cross-validation, we learned that we take the average error metrics of the k folds. This average becomes our validation error metric, and it is used to assess which hyperparameter to use. By contrast, the test error metric gives us an idea of how well our model performs on data it has never seen before. It is essential to distinguish between the roles of validation metrics and test metrics. We have provided a quick graphic to accompany this idea:
+
+
+
+![](https://dq-content.s3.amazonaws.com/486/hyperparam-mse.png)\
+
+
+
+
+Notice that the folds are all taken from just the training data. This is important because it prevents the model from using the test data at all during the training process. We still need an idea of what hyperparameters will work best with our data, so we can further subdivide the training data into folds to emulate the practice of "testing on data the model hasn't seen yet". Each of the points you see when you plot out the error metrics by hyperparameter is the average of the errors in the k folds.
+
+To reiterate, cross-validation helps us select the best hyperparameters to use in our machine learning model. Test error tells us if our model is generalizable or not. These concepts will help guide your programming as you learn more and more machine learning algorithms.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

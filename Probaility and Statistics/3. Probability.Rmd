@@ -1,0 +1,3036 @@
+---
+title: "3. Probability Theory"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: "--lua-filter=color-text.lua"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(scales)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+# 1. Estimating Probabilities
+
+## Introducing Outcomes & Sample Spaces
+
+
+Chance is a constant presence in our lives that we often take for granted. We look at weather forecasts and assume that what we see is what we'll get, only to be disappointed that a sunny day turned out to be overcast. What we don't appreciate is that these forecasts are more likely educated guesses rather than certainties. The most common place we encounter and interact with chance is the casino, where we hope that Lady Luck may be on our side at the blackjack table. There are some intrepid gamblers that have found a way to tame luck and maximize their potential profits. These few are those who have a solid grasp of dealing with uncertainty.
+
+Mathematicians of the past have figured out a mathematical framework in the study of chance and uncertainty, called probability. Understanding probability is crucial to understanding its more advanced applications, such as spam filters and weather prediction. We'll develop a basic understanding to different interpretations of probability and learn how to incorporate it into your development as a data scientist. To understand probability correctly, we need to start learning its most basic terms. The easiest way to grasp these terms is through example, so we'll use a coin flip as our mental model.
+
+A coin flip is the simplest example of a random experiment. A random experiment is not like a scientific experiment, but it can be thought of as a basic action. It's called "random" because this action can produce different results that we cannot predict before the experiment is "done". For a coin flip, a coin has two sides, which we will refer to as "heads" or "tails". We cannot know if a coin flip will land on the heads side or tails side before it hits the ground, so it qualifies as a random experiment.
+
+We mentioned that a coin flip can only result on heads or tails. The result of a random experiment is called an outcome, so both heads and tails are possible outcomes of the experiment. With random experiments, it is useful to understand all the outcomes than come out of it. For example, we know that a coin can only produce a heads or a tails. There is a special term for the collection of all the outcomes of a random experiment, and it is referred to as the sample space. We use a coin flip as an example because its sample space only has two outcomes.
+
+
+It's easy to get lost in all the jargon, so we've summarized them in a diagram below:
+![](https://dq-content.s3.amazonaws.com/405/visualizing-terms-as-coin.png)\
+
+Knowing these terms will make it easier for you to understand and calculate different probabilities. Don't get too caught up in memorizing them now, better understanding will come from more exposure to examples and problems in the lesson. If you get stuck on a question, take your time and remember what you have learned. In this course, we'll learn a lot, including:
+
+- How to estimate probabilities both theoretically and empirically
+- What the fundamental rules of probability are
+- How to count, which is more difficult than you'd might expect
+Now move onto the next screen and start your learning!
+
+## What is a probability?
+
+Now that we have a grasp of some basic probability terms, we can start discussing the idea of probability itself. Say you have a coin. How would you figure out how to calculate what the probability of getting a heads is? Intuitively, you know that there are only two possible outcomes and we will only see one side when we flip it. Assuming that the coin is fair, then there would be an equal chance of getting either heads or tails. The probability, denoted as $P(\text{heads})$, would be a simple calculation: we divide our one desired result -heads- by the total number of outcomes in the sample space.
+
+$$\begin{equation}
+P(heads) = \frac{1}{2} = 50\%
+\end{equation}$$
+This calculation gives us an insight on how to interpret probabilities. A probability is a numerical measure of how likely an outcome will happen. In order to calculate a probability, you need to know about the outcome you want to see and the size of the sample space. If you flip a fair coin, then you will get heads 50% of the time. To use a deck of cards as another example, we can calculate the probability of drawing any single card. Assuming this is a new deck of 52 cards and all cards are equally likely to be picked, we can calculate this probability:
+
+$$\begin{equation}
+P(\text{single card}) = \frac{1}{52} = 1.92\%
+\end{equation}$$
+
+The probabilities we have calculated so far are called theoretical probabilities. We say they are theoretical because we need to make an important assumption that each outcome in the sample space is equally likely. In practice, this assumption is often too strong, or unrealistic, to make. Consider picking a random fruit at the grocery store. Most people will take some time to examine the fruit to make sure it isn't rotten in anyway. This means that some fruit will be more likely to be picked than others, so the assumption of equal likelihood doesn't hold here.
+
+Nevertheless, the idea that a probability is a numerical measure of chance is still an important idea to grasp. If we know the size of sample space, we can calculate the probability of a single outcome within it.
+
+
+$$\begin{equation}
+P(outcome) = \frac{1}{\text{number of elements in sample space}} = 1.92\%
+\end{equation}$$
+
+
+However, calculating probabilities for single events can only get us so far. In the next screen, we'll expand our probability vocabulary.
+
+1. Find the theoretical probability of getting a 5 when rolling a six-sided die. Assign your answer to `p_5`.
+
+2. Consider a lottery where 350,000 tickets have been sold. What would be the theoretical probability of winning? Assign your answer to `p_lottery`.
+
+```{r}
+p_5 <- 1 / 6
+p_lottery <- 1 / 350000
+```
+
+## Outcomes vs Events
+
+So far, we have been careful in our use of the word "outcome". In probability terms, an outcome refers to a singular result in the sample space. From the previous screen, we saw that calculating the probability of an outcome was simple: all we need to know is the size of the sample space. To be able to calculate the probability of multiple outcomes simultaneously, we need to discuss the concept of an event.
+
+An event can refer to either a singular outcome or a collection of outcomes. Events are more general than outcomes and allow us to calculate more complex probabilities. The following are some simple examples of events, using our toy examples from earlier in the lesson:
+
+In a six-sided dice roll, the event that we'll roll an odd number includes the outcomes 1, 3, and 5.
+In a deck of playing cards, the event that we'll draw an Ace is composed of 4 outcomes: the Ace of Spades, Hearts, Clubs and Diamonds.
+We can define events to include outcomes that are not a part of a particular sample space. For example, if we define our event to be "rolling a 7" when our sample space is the outcomes of a six-sided dice roll. No matter how many times we roll the dice, we'll never satisfy the event, so intuitively the probability of this event is 0.
+
+In the last screen, we calculated the probability of an outcome. We can generalize it to be able to calculate the probability of an event:
+
+
+
+$$\begin{equation}
+P(event) = \frac{\text{number of outcomes that satisfy the event}}{\text{number outcomes in the sample space}}
+\end{equation}$$
+Using this formula, we can calculate the probability of the event "drawing an ace from a deck of cards":
+
+$$\begin{equation}
+P(\text{drawing an ace}) = \frac{4}{52} = \frac{1}{13} = 0.0769
+\end{equation}$$
+Note that we still interpret the probability of an event similarly to that of an outcome: a numerical measure of the chance of it happening. On the next screen, we'll discuss another way of interpreting probability. Let's do a few exercises before moving on.
+
+
+A new deck of playing cards contains 52 cards. The deck contains 4 suits, or distinct symbols, and each suit has 13 playing cards. These 13 cards include: the ace, the numbers 2 through 10 and the three face cards: Jack, Queen and King.
+
+Using this knowledge, calculate the probabilities of the event that:
+
+- we draw a card with the Hearts suit — assign your answer to `p_heart`.
+- we draw a card that has any of the numbers 2 or 3 — assign your answer to `p_2_or_3`.
+
+```{r}
+p_heart <- 13 / 52
+p_2_or_3 <- 8 / 52
+```
+
+## Empirical Probability
+
+At this point, we can calculate theoretical probabilities of both events and outcomes. But consider a curious question: if we can calculate theoretical probability, how would we be able to confirm if our calculation is correct? That is to say, is there a way that we can estimate a theoretical probability of a given event?
+
+Our solution is the random experiment! A single experiment only results in a single outcome, but we can repeat the experiment multiple times. To estimate the probability of an event, we can repeat an experiment a certain number of times and count how many times we observe the event of interest. To summarize this in an equation, we get:
+
+
+$$\begin{equation}
+\text{est. P(event)} = \frac{\text{number of times event observed}}{\text{number of times experiment was repeated}}
+\end{equation}$$
+As a simple example, let's say we're interested in estimating the probability of a coin landing on heads. To estimate the probability, we can take the following steps:
+
+Toss the coin many times, thus repeating the random experiment
+Count the number of times the coin landed on heads.
+Divide the number of heads by the total number of times we tossed the coin.
+Let's say we got heads 56 times. Then, the probability of a coin landing heads up in this particular instance would be $\frac{56}{100} = 0.56$. Our estimated probability of a coin landing heads up is 56%. We call this probability an empirical probability. Empirical refers to the idea that we concretely observe this probability, as opposed to merely calculating it theoretically. We can interpret an empirical probability as a relative frequency, which is similar to our understanding of the theoretical probability.
+
+It's important to note that the number 56 was arbitrary. We could have easily gotten 40 heads, 47 heads or even 60 heads. Each experiment can yield a different empirical probability, but only one outcome -50 heads- corresponds with our theoretical probability of 50%. If we can get many different empirical probabilities, how do we reconcile this with our theoretical probability? We'll discuss this question in the next screen.
+
+
+Before then, get some practice calculating some empirical probabilities.
+
+Say we rolled a six-sided dice 100 times and got the number three 18 times. Calculate the probability of getting that number using the formula above and assign the result to `p_three`.
+
+
+
+```{r}
+p_three <- 18 / 100
+```
+
+## Repeating Experiments
+
+
+We learned in the last screen that empirical probabilities may not match up with our calculated theoretical probabilities, as in our coin flipping example. If we're looking at the same phenomenon, we should expect that the empirical and theoretical probabilities should match up.
+
+We made up some values in the interest of calculating empirical probability, but programming gives us a valuable tool to test our probability terms. Instead of having to actually flip an actual coin multiple times, we can simulate multiple coin flips using R. Writing simulations is an essential tool to a data scientist's toolkit.
+
+We'll start by writing a function named `coin_toss()` to simulate a single coin toss:
+
+
+```{r}
+set.seed(1)
+
+coin_toss <- function() {
+
+    toss <- runif(1)
+    if (toss <= 0.5) {
+        return("HEADS")
+    } else {
+        return("TAILS")
+    }
+}
+```
+
+To break down the code above:
+
+
+1. We used the `set.seed()` function to set a random seed for our analysis. Setting the same seed in your analyses is important because it enables functions to return the same result, despite incorporating randomness.
+2. We use the `runif()` function to emulate a coin flip and create a random number between 0 and 1. We've assumed that our theoretical probability is 50%, so if the random number is less than 0.5, the function will return "HEADS". Otherwise, it will return "TAILS."
+
+Take some time to understand the code before proceeding to the exercise. Make sure you understand precisely how the function emulates a single coin toss. For this exercise, we'll use this function to simulate increasingly higher numbers of coin flips to calculate our empirical probability of getting a heads.
+
+1. For this exercise, we've already defined the `coin_toss()` function and a `heads` variable. Using this function:
+- Write a for-loop to repeat the coin toss 10 times
+- If the coin returns `HEADS`, you should increment
+2. Use this loop of "coin flips" to calculate the empirical probability of getting a heads. Assign it to `experiment_one`.
+3. Using a separate variable called `experiment_two`, perform another set of 100 coin tosses and calculate another empirical probability of getting heads and assign it to this variable.
+- The only variable that changes here is the number of coin tosses. Use this to your advantage and leverage the code you write for problem 2.
+
+
+```{r}
+set.seed(1)
+
+coin_toss <- function() {
+    toss <- runif(1)
+    if (toss <= 0.5) {
+        return("HEADS")
+    } else {
+        return("TAILS")
+    }
+}
+
+heads <- 0
+n_experiments <- 10
+for (i in 1:n_experiments) {
+    toss <- coin_toss()
+    if (toss == "HEADS") {
+        heads <- heads + 1
+    }
+}
+
+experiment_one <- heads / n_experiments
+experiment_one
+
+n_experiments <- 100
+heads_2 <- 0
+for (i in 1:n_experiments) {
+    toss <- coin_toss()
+    if (toss == "HEADS") {
+        heads_2 <- heads_2 + 1
+    }
+}
+
+experiment_two <- heads_2 / n_experiments
+
+experiment_two
+```
+
+## The Law of Large Numbers
+
+You may have noticed that the probability of `experiment_two` is much closer to the theoretical probability than `experiment_one`. The more experiments you use, the empirical probability of getting a heads starts to approach the theoretical probability. This result comes from one of the most important laws in probability: the Law of Large Numbers. The Law of Large Numbers is what links our empirical probabilities to our theoretical probabilities. We won't go into its technical details, but just know that this law is what makes simulations and programming so powerful.
+
+The figure below expands on the exercise you just worked on. We calculated empirical probability as a function of coin tosses. Notice that for small numbers, the empirical probability can differ a lot from the theoretical probability, denoted by the red line. As the number of coin tosses increases, this deviation away from the theoretical probability will shrink.
+
+
+![](https://dq-content.s3.amazonaws.com/405/lln-demonstration.png)\
+
+The examples we've seen in this lesson have dealt with counting events, but the concepts they exemplify apply to many probability problems. Often times, there will be cases where we can't calculate the theoretical probability to check against an empirical probability. In these cases, we may take some solace that performing a properly set up simulation many, many times will create a good estimate of the theoretical probability.
+
+In this lesson, we've discussed what a probability is and different ways to calculate a probability. Both are important to answering more complex questions. We used programming to get our feet wet with a simple simulation to see how these different concepts are interrelated. Before we move on, we'll look at a more concrete probability problem.
+
+
+The Law of Large Numbers can take effect really quickly. This means that you won't need to repeat your experiment an extreme amount of times before you start approximating the theoretical probability well. We can also demonstrate this using simulation. We've provided the same `coin_toss()` function here, and we'd like you to do the following:
+
+
+1. Write a `for-loop` to calculate the empirical probability of getting a heads using 10 coin flips. Subtract this probability from the theoretical probability. Assign this difference to `experiment_diff_one`.
+2. Repeat the task above using 100 coin flips. Subtract this probability from the theoretical probability. Assign this difference to `experiment_diff_two`.
+3. Finally, repeat the task above using 1000 coin flips. Subtract this probability from the theoretical probability. Assign this difference to `experiment_diff_three`.
+- Do you notice any trends between the differences and the number of coin flips used?
+
+
+```{r}
+set.seed(1)
+
+coin_toss <- function() {
+    toss <- runif(1)
+    if (toss <= 0.5) {
+        return("HEADS")
+    } else {
+        return("TAILS")
+    }
+}
+heads <- 0
+n_experiments <- 10
+for (i in 1:n_experiments) {
+    toss <- coin_toss()
+    if (toss == "HEADS") {
+        heads <- heads + 1
+    }
+}
+
+experiment_diff_one <- 0.5 - (heads / n_experiments)
+experiment_diff_one
+
+n_experiments <- 100
+heads_2 <- 0
+for (i in 1:n_experiments) {
+    toss <- coin_toss()
+    if (toss == "HEADS") {
+        heads_2 <- heads_2 + 1
+    }
+}
+
+experiment_diff_two <- 0.5 - (heads_2 / n_experiments)
+experiment_diff_two
+
+n_experiments <- 1000
+heads_3 <- 0
+for (i in 1:n_experiments) {
+    toss <- coin_toss()
+    if (toss == "HEADS") {
+        heads_3 <- heads_3 + 1
+    }
+}
+
+experiment_diff_three <- 0.5 - (heads_3 / n_experiments)
+experiment_diff_three
+```
+
+
+
+# 2. Probability Rules
+## Probability In Terms of Sets
+In the last lesson, we learned how to calculate empirical and theoretical probabilities, and introduced a few key concepts: random experiment, outcomes, events and sample spaces. In this lesson, we'll build on this knowledge and learn how to calculate the probabilities of different types of events.
+
+To briefly review:
+
+- a random experiment is an action where we can't predict its outcome with certainty, like rolling a dice.
+- an outcome is a possible result of a random experiment, and an event can include more than one outcome. Seeing a 1 is a possible outcome of rolling a dice. Seeing an even number is an example of an event since 2, 4, and 6 are all outcomes that meet the definition of the event.
+- a sample space is the collection of all possible outcomes of a random experiment. The numbers 1 through 6 are the sample space of a dice roll.
+- a probability can be understood as a numerical measure of chance. You can calculate it by dividing the number of outcomes you want by the total number of outcomes in the sample space.
+We'll start this section with a bit of notation. The probability concepts we mentioned above all revolve around the idea of looking at particular items in a collection. These ideas are nicely described in terms of sets. A set is just a collection of distinct objects. That is, we cannot have duplicate objects in a set. The sample space is a great example of a set since its collection of objects are the various outcomes that make it up. We cannot have duplicate outcomes in a sample space, so it qualifies as a set. Taking a six-sided dice, we would represent its sample space as:
+
+
+$$\begin{equation}
+\text{Outcomes} = { 1, 2, 3, 4, 5 ,6 }
+\end{equation}$$
+
+
+A set is denoted by a pair of curly brackets that surround each of its items. The sample space is sometimes denoted with the capital Greek letter Ω (read as "omega"). Changing the notation from above, the sample space of a dice roll can be expressed as:
+
+
+
+$$\begin{equation}
+\Omega = { 1, 2, 3, 4, 5 ,6 }
+\end{equation}$$
+
+
+Let's now do a quick exercise and continue to reframe our understanding of probability in terms of sets in the next few screens.
+
+
+We toss a normal coin two times. After listing out all of the possible outcomes, assign the number of items in this sample space to the variable `coin_toss_omega`. 
+
+
+
+```{r}
+coin_toss_omega <- length(c('HH', 'TT', 'HT', 'TH'))
+```
+
+##  Venn Diagrams
+
+One great thing about sets is that they are easy to visualize using Venn Diagrams. We used Venn Diagrams previously in our Intermediate SQL in R course, so you may find that the intuition follows here as well. Instead of dealing with table rows, we'll handle events and sample spaces. For instance, this is how we would represent some event A and sample space Ω on a Venn diagram.
+
+
+![](https://dq-content.s3.amazonaws.com/406/a_outcome.png)\
+
+
+The rectangle represents the entire sample space since it contains all possible outcomes. Note the 
+Ω sign on the right corner of the rectangle. Events are merely smaller collections, or subsets, of the sample space, so we would represent the event A as being contained entirely within Ω.
+
+
+
+We can easily represent multiple events, say A and B, on the same Venn diagram:
+
+![](https://dq-content.s3.amazonaws.com/406/a_and_b_mutual_exclusive.png)\
+
+
+
+Notice that the two circles representing the events do not intersect at all. There are cases where two events may not have any shared outcomes, so this is easily illustrated in the Venn Diagram. Consequently, if we wanted to illustrate two events, C and D, with shared outcomes.
+
+![](https://dq-content.s3.amazonaws.com/406/c_and_d_shared_outcomes.png)\
+
+The benefit of using Venn Diagrams is being able to see how the outcomes of the sample space are distributed in multiple events. This will be useful when we start calculating the probabilities of multiple events happening together.
+
+For the exercises below consider the six-sided dice roll. We'll define the events C and D as follows:
+
+- C: rolling an even number, $\{ 2, 4, 6 \}$
+
+- D: rolling a number greater than 3: $\{ 4,5,6 \}$
+
+
+Assume all outcomes have equal chances of occurring.
+
+Calculate:
+- $P(C)$: assign your answer to` p_c`
+- $P(D)$: assign your answer to` p_d`
+
+Calculate the probability of getting a number that is either even or greater than 3. $P(C or D)$. Assign your answer to `p_c_or_d`
+
+Calculate the probability of getting a number that is either even or greater than 3. $P(C and D)$. Assign your answer to `p_c_and_d`
+
+
+```{r}
+p_c <- 3/6
+p_d <- 3/6
+p_c_or_d <- 4/6
+p_c_and_d <- 2/6
+```
+
+
+## Unions and Intersections of Sets
+
+
+On the last screen, we considered two events at the same time, such as "$C$or$D$" and "$C$and$D$". In terms of sets, the event "$C$or$D$" would be called the union of $C$and$D$.  In the last screen with the dice roll, we saw that the union of $C$ and $D$ was made up of the outcomes that satisfied the conditions for either $C$ or $D$
+
+Likewise, the event "$C$and$D$" would be called the intersection of $C$ and $D$". The outcomes of an intersection must satisfy the conditions for both $C$ and $D$. By definition, a union of events will usually contain more events than an intersection of events. Using proper set notation, the union of $C$ and $D$ would be denoted as $C \cup D$. The intersection of $C$ and $D$ would be written as $C \cap D$. 
+Recall that a set can only contain unique elements. This rule applies to unions and intersections as well, so the set resulting from a union will not contain duplicate elements if they appear in both events. Using our example of the dice roll, the events "roll an even number" and "roll a number equal or greater than 3" both contain the number 4. The union of these events would therefore look like $\{ 2, 3, 4, 5, 6 \}$ and not $\{ 2, 3, 4, 4, 5, 6 \}$. 
+ 
+With intersections, there are often times where there will be no shared outcomes between the events. When this happens, we say that the resulting intersection is the empty set, denoted as $\emptyset$. You can think of the empty set as the set equivalent of the number zero. The empty set is still a set, but it contains no elements. If we took the intersection of the events "roll an odd number" and "roll an even number", we would get the empty set.
+
+Now that we know a bit more about set notation, we can question our probabilities from the last lesson more formally:
+
+- $P(C\ or\ D)$ becomes $P(C \cup D)$ 
+- $P(C\ and\ D)$ becomes $P(C \cap D)$ 
+
+Moving forward, we will use set notation in our courses. Set notation is important because it is the standard notation in the probability literature. If you consult other probability resources to supplement your learning, you'll stand a better chance of understanding the notation. The diagram below summarizes the notation that we've learned on this screen.
+
+![](https://dq-content.s3.amazonaws.com/406/unions_and_intersections_summary.png)\
+
+
+
+Now let's do a couple of exercises and explore some other concepts in the next screen.
+
+
+Consider the following sets:
+
+- $M = \{100, 22, 1, 2\}$
+- $N = \text{{22, car insurance, 2, house insurance}}$
+- $O = \text{{HHHH, TTTT, TH}}$
+- $P = \text{{Hockey, Cycling, Athletics, Swimming}}$
+
+
+Consider the following set operations and their results:
+
+1. $M \cup P = \emptyset$
+2. $N \cap M = \{22, 2\}$
+3. $O \cup M = \text{{HHHH, TTTT, 100, 22, 2}}$
+4. $P \cap N = \emptyset$
+
+```{r}
+operation_1 <- FALSE
+operation_2 <- TRUE
+operation_3 <- FALSE
+operation_4 <- TRUE
+```
+
+## Mutually Exclusive Events
+
+In the last screen, we learned that the intersection of two sets is the subset of all shared elements between the two. If there are no shared elements, then the intersection is the empty set. The diagram below illustrates these two cases side-by-side.
+
+![](https://dq-content.s3.amazonaws.com/406/intersection_vs_no_intersection.png)\
+
+When there is no intersection between two events, we call them mutually exclusive events. If two events are mutually exclusive, it means that it is a zero probability for them to happen at the same time. We know that when there is no intersection between events, there are also no outcomes in this set. Since there are no outcomes satisfying the condition of the intersection, the probability is zero. Some examples of mutual exclusivity include:
+
+- Getting a 5 (event one) and getting a 3 (event two) when we roll a regular six-sided dice — it's impossible to get both a 5 and 3.
+- A coin lands on heads (event one) and tails (event two) — it's impossible for a coin to land on both heads and tails.
+
+
+Visualizing mutual exclusivity is easy too. We can see in the diagram above that there is no overlap between events A and B, so they have no events in common. This is the same as saying they are mutually exclusive. Mutual exclusivity plays an important role in deciding how we should calculate the probabilities of unions and intersections.
+
+Before we move on, we'll test ourselves on our ability to detect if events are mutually exclusive.
+
+
+We'll use the experiment of picking a random number between 1 and 20. Consider the following events:
+
+- $A = \text{The number chosen is even}$
+- $B = \text{The number chosen is divisible by 11}$
+- $C = \text{The number chosen is divisible by 5}$
+
+```{r}
+mutual_exclusive_1 <- TRUE
+mutual_exclusive_2 <- TRUE
+mutual_exclusive_3 <- FALSE
+```
+
+## The Addition Rule
+
+We know how to calculate the probability of a simple event by dividing the number of outcomes in the event by the total number of outcomes. In this lesson, we have started to consider unions and intersections, which are made of multiple events. On this screen, we'll learn how to calculate the probabilities of these compound events.
+
+We'll start by considering a fair six-sided dice. We'll define the following events and their union.
+
+- $A$ getting a number divisible by 3
+- $B$ getting a number divisible by 5
+- $A \cup B$ getting a number divisible by either 3 or 5
+We know that the sample space of rolling a six-sided dice is $\Omega = \{1, 2, 3, 4, 5, 6\}$. Using the conditions for each event, we know that the outcomes satisfying $A$ and $B$ are:
+
+- $A = \{3, 6 \}$
+
+- $B = \{ 5 \}$
+
+
+Notice that $A$ and $B$ are also mutually exclusive. Knowing this fact will be an important role in adjusting union and intersection probabilities when this is not the case. Using the equation for probability, we can calculate the probability of $A \cup B$ using the probabilities of the singular events themselves.
+
+$$\begin{equation}
+P(A) = \frac{\text{number of successful outcomes}}{\text{total number of possible outcomes}} = \frac{2}{6}
+\end{equation}$$
+$$\begin{equation}
+P(B) = \frac{\text{number of successful outcomes}}{\text{total number of possible outcomes}} = \frac{1}{6}
+\end{equation}$$
+$$\begin{equation}
+P(A\ \cup \ B) = \frac{\text{number of successful outcomes}}{\text{total number of possible outcomes}} = \frac{3}{6}
+\end{equation}$$
+The calculations above demonstrate a simple relationship between individual event probabilities and their union. We can extract a pattern from above into a formula, which is sometimes called the addition rule:
+$$\begin{equation}
+P(A\ \cup B) = P(A) + P(B)
+\end{equation}$$
+One way to visualize the probability of an event is the "area" covered by its circle. Remember that this equation is valid for mutually exclusive events though. If we have another look at these events on a Venn Diagram, we can see how this equation works out:
+
+
+![](https://dq-content.s3.amazonaws.com/406/a_and_b_union.png)\
+Looking at $A$ and $B$ together as one event, we can see that the probability of their union is the sum of their "areas". The addition rule is convenient because it works out for any number of mutually exclusive events. We would just add more "area" to the union:
+
+
+$$
+\begin{equation}
+P(A \cup B \cup  C \cup \ldots) = P(A) + P(B) + P(C) + \ldots
+\end{equation}
+$$
+![](https://dq-content.s3.amazonaws.com/406/multiple_union.png)\
+
+Using the addition rule, find the probability of the following events for a playing card deck. Remember that a new deck of playing cards contains 52 cards. The deck contains 4 suits, or distinct symbols, and each suit has 13 playing cards. These 13 cards include: the ace, the numbers 2 through 10 and the three face cards: Jack, Queen and King.
+
+- Drawing a card with either hearts or diamonds as its suit. Assign your answer to `p_heart_or_diamonds`.
+- Drawing a face card of any suit — assign your answer to `p_face_card`.
+
+
+```{r}
+p_heart_or_diamonds <- 13/52 + 13/52
+p_face_card <- 3/52 + 3/52 + 3/52 + 3/52
+```
+
+## A More General Addition Rule
+On the last screen, we said that the addition rule could only be used for mutually exclusive events. What if this wasn't the case? We'll explore this with a slightly altered dice-rolling example from the last screen:
+
+- $C$ getting a number divisible by 3
+- $D$ getting a number divisible by 2
+
+Listing out the outcomes that satisfy each of the events, we get:
+
+- $C = \{3, 6 \}$
+- $D = \{2,4,6 \}$
+
+And finally, we can try adding up the probabilities of $C$ and $D$ to get the probability of their union.
+
+$$\begin{equation}
+P(C) = \frac{2}{6}
+\end{equation}$$
+
+
+$$\begin{equation}
+P(D) = \frac{3}{6}
+\end{equation}$$
+
+$$\begin{equation}
+P(C \cup D)? = \frac{2}{6} + \frac{3}{6} = \frac{5}{6}?
+\end{equation}$$
+If we investigate the union of the outcomes of $C$ and $D$, we see that the number 6 appears in both events. By adding the individual probabilities of $C$ and $D$ together without considering this, we have accidentally counted for it twice. The union $C \cup D$ is also an event, so its outcomes should also be a set as well. The probability that we calculated is bigger than it should be as a result.
+
+The problem with using the addition rule from the last screen is that it ignores intersections between the two events. Using the area visualization again, we see that the two circles partially cover each other. By adding the two areas together, we include their shared portion twice and overestimate the probability.
+
+![](https://dq-content.s3.amazonaws.com/406/c_and_d_shared_outcomes.png)\
+
+
+With this in mind, we can alter the addition rule formula to account for the shared area:
+
+$$\begin{equation}
+P(C\ \cup \ D) = P(C) + P(D) - P(C \cap \ D)
+\end{equation}$$
+We added a new term to the addition rule: subtracting $C \cap D$. This new term corrects for the overcounting we discussed earlier. Applying this new equation to each of the events, we can correctly calculate the probability of the union.
+
+
+![](https://dq-content.s3.amazonaws.com/406/general_addition_rule.png)\
+
+
+$$\begin{equation}
+P(C \cup D) = \frac{2}{6} + \frac{3}{6} - \frac{1}{6} = \frac{4}{6}
+\end{equation}$$
+
+Much better! This formula is the general formula for handling the probabilities of unions and intersections of two events. When A and B are mutually exclusive, then the probability of their intersection is 0, simplifying the equation to the one we saw in the previous screen. Rearranging this equation also allows us to figure out the probability of intersections as well.
+
+We've covered a lot so far, so you should feel proud for learning it all. Before we wrap everything up, we'll practice using our new formula using a quick exercise.
+
+An online betting company offers customers the possibility of betting on a variety of games and events (football, tennis, hockey, horse races, car races, etc.). Based on historical data, the company knows the empirical probabilities of the following events:
+
+- The probability that a new customer's first bet is on football, event $F$, is 0.26.
+- The probability that a new customer's first bet is on tennis, event $T$, is 0.11. 
+
+- The probability that a new customer's first bet is on both football and tennis, event $T \cap F$, is 0.03.
+
+- Find the probability that a new customer's first bet is either on football or tennis. Assign your answer to `p_f_or_t`. You can't use theoretical probability formula to solve this, so you'll need to make use of the addition rule.
+
+```{r}
+p_f_or_t <- 0.26 + 0.11 - 0.03
+```
+
+
+# 3. Probabilities of Multiple Random Experiements
+
+## Multiple Random Experiments
+
+So far, we've dealt with probability problems dealing with a single random experiment. In the last lesson, we learned how to calculate the probabilities of unions and intersections of events using the addition rule. While the addition rule can go a long way, we are still unequipped for some basic problems.
+
+We'll use the example of two coin flips as a single random experiment. Representing heads as "H" and tails as "T", the sample space of this experiment is composed of $\{ HH, HT, TH, TT \}$  where the first letter represents the outcome of the first toss and so on. Now that we have the sample space, we can start calculating probabilities of events in this sample space.
+
+
+![](https://dq-content.s3.amazonaws.com/409/visualizing-two-coin-flips.png)\
+
+
+What if we wanted to look at 100 coin flips? Absolutely no one wants to write out strings of a hundred H's and T's just to figure out the sample space and its associated probabilities. Remember that to calculate event probabilities, we need to know two things: 1) the size of the sample space and 2) all the outcomes that satisfy the event. When there are many, many outcomes, we can no longer simply count outcomes in our head, so there is a fundamental limitation in considering multiple flips as a single random experiment.
+
+A good alternative is to think of it as many single coin flips. Instead of having to deal with a large random experiment, we'll figure out a way to combine the results of many small random experiments. We'll explore this idea as we progress through the lesson. For now, let's perform a quick warm-up before progressing to the next screen. For the exercises below, you'll need to use the addition rule. Remember that the addition rule enables us to calculate the probabilities for the union of two events.
+
+
+$$\begin{equation}
+P(A \cup B) = P(A) + P(B) - P(A \cap B) 
+\end{equation}$$
+
+An advertisement company runs a quick test and shows two ads on the same web page (ad "A" and ad "B") to 100 users. At the end of the trial, they found:
+
+- 12 users clicked on ad "A"
+- 17 users clicked on ad "B"
+- 3 users clicked on both ads
+
+Find: 
+- The probability that a user clicks on ad "A." Assign your result to `p_a`.
+- The probability that a user clicks on ad "B." Assign your result to `p_b`.
+- The probability that a user clicks on both ad "A" and ad "B." Assign your result to `p_a_and_b`.
+- The probability that a user clicks on either ad "A" or ad "B." Assign your result to `p_a_or_b`. For this exercise, keep in mind a user can click on both ads, so the events are not mutually exclusive — use the addition rule.
+
+
+
+```{r}
+p_a <- 12/100
+p_b <- 17/100
+p_a_and_b <- 3/100
+p_a_or_b <- p_a + p_b - p_a_and_b
+```
+
+## The Multiplication Rule
+
+What are the benefits of considering 100 coin flips as 100 individual random experiments rather than one large experiment? This change in perspective gives us a better way to visualize how the final outcome will play out. Instead of viewing the sample space as just a "pool" of outcomes, we can view it as a tree. The diagram below takes the two-coin flip random experiment and reimagines it as a path of outcomes.
+
+![](https://dq-content.s3.amazonaws.com/409/visualizing-two-coin-flips-as-tree.png)\
+
+Each flip becomes a split in the tree, and the final outcome of the experiment is one of the paths through this tree. We can get the number of outcomes in the sample space by counting the number of paths in the tree! The random experiment is essentially the same, but a shift in perspective can offer some helpful new ways of thinking. We can use this new tree of outcomes to calculate the probability of getting two heads.
+
+Using the diagram above, we know that getting heads on the first coin flip means going "up" on the first branching point in the tree. Similarly, getting heads on the second flip means we go up on the second branching point as well. Visually, we can see that there are a total of 4 paths and only one satisfies our desired outcome of "two heads", so the probability of getting two heads is 0.25.
+
+We calculated this probability by going through the random experiment in stages, considering the result of the first coin flip before the second. By thinking of the experiment in terms of stages, we can break down the probability calculation in terms of stages as well. The first stage is just a coin flip, so we know the different probabilities for each outcome:
+
+
+![](https://dq-content.s3.amazonaws.com/409/visualizing-two-coin-flips-first-branch.png)\
+
+Likewise, the second coin flip is also just a choice between heads or tails, so the full path we take in the two-coin flip experiment looks as follows:
+
+![](https://dq-content.s3.amazonaws.com/409/visualizing-two-coin-flips-second-branch.png)\
+
+For both coin flips, the probability of getting heads is 0.5. Once we see the outcome of the first coin flip, we only need to worry about the outcome of the second flip. However, we don't just forget about the result of the first flip, we need to keep track of it in some way. Each branch in the path creates 2 new paths, so we get a total of 4 paths by multiplying the number of branches by how many new ones each creates. Using this same logic, we can calculate the probability in stages. Another way of thinking about the event "getting two heads" is getting heads on the first flip and on the second flip.
+
+
+$$\begin{equation}
+P(\text{getting 2 heads}) = P(\text{getting heads in first flip}) \times P(\text{getting heads in second flip}) = \frac{1}{2} \times \frac{1}{2} = \frac{1}{4}
+\end{equation}$$
+
+The end result is significant for us: instead of calculating the probability for multiple events all at once, we can calculate it in stages. This is called the multiplication rule. The addition rule allows us to calculate probabilities for unions and intersections, while the multiplication rule allows us to calculate the probabilities of multiple random experiments together. Recall that looking at the probability of two events happening at the same time is also called an intersection. So in a more general formula, the multiplication rule looks like:
+
+$$\begin{equation}
+P(A \cap B) = P(A) \times P(B)
+\end{equation}$$
+
+Going back to the 100-coin flip, we now have an equation for calculating the probability of getting 100 heads. Instead of having just 2 branching points, we now have 100, but the calculation is similar. There are now 100 stages, and for each stage, the probability of getting heads is 0.5:
+
+
+$$\begin{equation}
+P(\text{100 heads}) = \frac{1}{2} \times \text{...} \times \frac{1}{2} = \bigg( \frac{1}{2}\bigg)^{100}
+\end{equation}$$
+The multiplication rule is incredibly important in calculating probabilities, but it also has an important assumption behind it. We'll cover this in the next screen, but take some time to practice using the multiplication rule.
+
+For rolling a fair six-sided die, find:
+- The probability of getting a 6 two times in a row. Assign your result to `p_6_6`.
+- The probability of getting a 3 on the first throw and a 2 on the second throw. Assign your result to `p_3_2`.
+- The probability of getting an even number on both throws. Assign your result to `p_even_even`.
+- The probability of getting a 1 on the first throw and an even number on the second throw. Assign your result to `p_1_even`.
+
+
+
+```{r}
+p_6_6 <- 1/6 * 1/6
+p_3_2 <- 1/6 * 1/6
+p_even_even <- 3/6 * 3/6
+p_1_even <- 1/6 * 3/6
+```
+
+## Independent Events
+
+When we toss a coin two times, we don't have much reason to believe that the result of the first flip will affect the second. In terms of probability, no matter what the result is for the first flip, the probability of the second coin resulting in heads will stay at 50%. Using more everyday events, we can take event A to be "I will go to the gym today" and event B to be "I will do homework today". Assuming that nothing extraordinary happens in my day, the act of me going to the gym realistically will not change the chances that I will do my homework and vice-versa.
+
+
+Conversely, there are also instances where two events might affect each other's chances. Let's consider the same event 
+B, doing my homework, and another event C, watching a movie with friends. It usually takes me a long time to properly do my homework, so it is not unrealistic to think that I might miss the movie with my friends if I do my homework. Similarly, if I go watch the movies, I might not have enough time to do my homework afterwards. Since one event can affect the chances of another happening, we must call them dependent.
+
+This idea of events influencing or not influencing each other's chances of occurring is extremely important to the field of probability. So important that the idea has been given a name. When two events do not question the other's chance of happening, they are independent of each other. When the two events do affect each other, we call them dependent. This independence does not refer to the ability to be free of influence of others; it refers to a special relationship between events. That is to say, if events A and B are independent and A happens, then we know that the probability of B will not decrease or increase.
+
+The concept of independence is crucial to using the multiplication rule. The multiplication rule assumes that the events that you're looking at are independent. In the two- and 100- coin flip example, we can reasonably assume this since it is unlikely that any single flip will alter the coin in any way that will affect the probability of a heads in a future flip. If the two events are dependent on each other, we cannot use the multiplication rule.
+
+Before you move on to the next screen, take some time to practice handling independence.
+
+
+You work at a company that analyzes successful data scientist applicants. You've received some data on skills that were particularly useful to prospective hires. You wonder how likely it is for applicants to have particular combinations of skills, so you investigate the data:
+
+According to all the resumes that are in your system:
+
+- The probability that an applicant lists SQL on their resume is 0.20.
+- The probability that an applicant lists machine learning on their resume is 0.30.
+- The probability that an applicant lists a visualizations on their resume is 0.40
+
+
+
+Assuming that having these skills is independent of having any other, calculate the following probabilities:
+
+1. The probability that an applicant lists both SQL and machine learning on their resume. Assign this value to `sql_and_ml`.
+2. The probability that an applicant either lists machine learning or visualizations on their resume. Assign this value to `ml_or_viz`.
+3. The probability that an applicant has at least one of the skills. Assign this value to `at_least_one_skill`.
+
+
+```{r}
+sql_and_ml <- 0.2 * 0.3
+ml_or_viz <- 0.3 + 0.4 - (0.3 * 0.4)
+at_least_one_skill <- 0.2 + 0.3 + 0.4 - (0.2 * 0.3) - (0.2 * 0.4) - (0.3 * 0.4) + (0.2 * 0.3 * 0.4)
+```
+
+
+## Independence vs Mutual Exclusivity
+
+In the last lesson, we introduced the idea of mutual exclusivity. If two events are mutually exclusive, then it is impossible for them to happen at the same time. A common misconception is that independence and mutual exclusivity are the same thing. We can see their differences more clearly if their formulas are shown together. Mathematically, we represent mutually exclusive events as follows:
+$$\begin{equation}
+P(A \cap B) = 0
+\end{equation}$$
+
+This is different than the definition for independence, given below:
+
+$$\begin{equation}
+P(A \cap B) = P(A) \times P(B)
+\end{equation}$$
+
+One might think of mutual exclusivity as one event "affecting " another. If we observe event $A$ and it is mutually exclusive to $B$, then we know that $B$ has no chance of happening. However you must take careful note that in mutually exclusive events, neither event is truly influencing the other: $A$ does not change the probability of $B$. Mutual exclusivity is just a statement that two events cannot happen together, whereas independence between events is a statement of a certain connection between them. Being able to tell if events are independent or mutually exclusive from each other is important to probability calculations. If you mistake one for the other, then your calculations will be way off. To demonstrate this, you'll work through a similar problem on the last screen, with a slight twist.
+
+
+You work at a company that analyzes successful data scientist applicants. You've received some data on skills that were particularly useful to prospective hires. You wonder how likely it is for applicants to have particular combinations of skills, so you investigate the data:
+
+According to all the resumes that are in your system:
+
+- The probability that an applicant lists SQL on their resume is 0.20.
+- The probability that an applicant lists machine learning on their resume is 0.30.
+- The probability that an applicant lists a visualizations on their resume is 0.40
+
+
+This time, however, let's assume that each of these events are mutually exclusive, instead of independent. Please calculate:
+
+- The probability that an applicant lists both SQL and machine learning on their resume. Assign this value to `sql_and_ml_me`.
+- The probability that an applicant either has machine learning or visualizations on their resume. Assign this value to `ml_or_viz_me`.
+- The probability that an applicant has at least one of the skills (SQL, machine learning, or a personal website). Assign this value to `at_least_one_skill_me`.
+
+
+```{r}
+sql_and_ml_me <- 0
+ml_or_viz_me <- 0.3 + 0.4
+at_least_one_skill_me <- 0.2 + 0.3 + 0.4
+```
+
+
+## Complements
+
+
+We'll take a break from the multiplication rule and independence to discuss another important concept in probability. When we talk about events, we are talking about all of the outcomes that satisfy the conditions of the event. If there are outcomes that satisfy the conditions, there may be outcomes that don't satisfy the conditions.
+
+For example, if we take rolling a six-sided dice as our random experiment, we could define our event as "rolling an even number". This means that the numbers 2, 4, and 6 would satisfy this event. Consequently, the odd numbers —1, 3, and 5— don't satisfy the event. Visualizing this as a pair of Venn Diagrams, we see the following:
+
+
+
+![](https://dq-content.s3.amazonaws.com/407/even_and_odd.png)\
+
+If all the outcomes satisfying the event form the "circle," then all the outcomes that don't satisfy it represent the rest of the rectangle. If we take the union of these two sets, we get the sample space! As it turns out, thinking of all the events that don't satisfy an event condition is a useful idea in probability. We refer to this set of outcomes as the complement of an event. In the dictionary, a complement is a thing that brings another to perfection, so it makes sense that an event and its complement will recreate the sample space. Notation-wise, we typically use a capital, superscript "C" to denote the complement. If we define an event $A$, then the complement of $A$ would look like $A^C$. 
+
+Complements provide us with another useful tool to calculate probabilities. We'll explore a more involved example using complements in the next screen, but before then, solidify your grasp of complements.
+
+
+
+1. Consider the roll of a six-sided dice. We'll define "rolling an even number" as our event.
+- Calculate the probability of the complement of this event and assign it to `p_complement_even`
+2. Consider drawing a card from a deck of playing cards. We'll define "drawing an ace" as our event.
+- Calculate the probability of the complement of this event and assign it to `p_complement_ace`
+
+
+```{r}
+p_complement_even <- 1/2
+p_complement_ace <- 48/52
+```
+
+
+
+## Using Complements With Probability
+Equipped with complements and the addition and multiplication rules, we can tackle many simple probability problems. For the rest of this lesson, we'll cover some other techniques that you can use when working through some problems. More difficult problems will require you to combine multiple rules together. One technique we'll learn is how to take advantage of using complements to calculate probabilities.
+
+Consider the event "What is the probability of getting at least one 6 in four throws of a single six-sided die?" This type of event is different from what we've seen so far because it asks for getting at least one 6 instead of exactly one. Rather than ask ourselves about all the outcomes that satisfy this event, we may consider its complement instead. The opposite of getting at least one 6 is getting zero 6's at all in the four throws.
+
+Recall that the complement of an event is all the outcomes that don't satisfy the event. You may think of the complement of some event $A$ as $-A$.We also know that the union of an event and its complement is the entire sample space:
+
+
+$$\begin{equation}
+A \cup A^C = \Omega
+\end{equation}$$
+An outcome must either satisfy the event condition or not, so it cannot do both. Therefore, an event and its complement are also mutually exclusive as well. If two events are mutually exclusive, then the probability of their union is just the sum of the individual probabilities.
+
+
+$$\begin{equation}
+P(A \cup A^C) = P(\Omega) \implies P(A) + P(A^C) = P(\Omega)
+\end{equation}$$
+The probability of getting any event in the entire sample space is 1, since the sample space contains all of the outcomes. Rearranging the above equation, we can see an interesting relationship between the probability of an event and the probability of its complement:
+$$\begin{equation}
+P(A) + P(A^C) = 1 \implies P(A) = 1 - P(A^C)
+\end{equation}$$
+
+
+This equation lets us calculate the probability of "not rolling a 6" in a single dice roll. We know that the probability of rolling a 6 is $1/6$, so the probability of not rolling a 6 is $5/6$. Using the multiplication rule, we can calculate the probability of rolling zero 6's! Not getting a 6 is equivalent to rolling any of the other numbers, $5/6$. Since dice rolls are independent of each other, the probability of getting no 6's in 4 rolls is simply:
+
+
+
+$$\begin{equation}
+P(A^C) = \bigg( \frac{5}{6} \bigg)^4 = 0.4823
+\end{equation}$$
+Visually, we can think of getting zero 6's in 4 dice throws in the abbreviated diagram below:
+![](https://dq-content.s3.amazonaws.com/407/abbrev-dice-toss.png)\
+
+Using the equation from above, we can instantly get the probability of getting at least one 6 in 4 dice throws:
+
+
+$$\begin{equation}
+P(A) = 1 - \bigg( \frac{5}{6} \bigg)^4 = 0.5177
+\end{equation}$$
+
+As you can see, it is possible to turn harder problems into simpler problems by shifting your perspective on it. Using the complement of an event is one of these ways. Get some practice using the complement to solve a probability problem before moving onto the next screen.
+
+
+Consider the random experiment of throwing two six-sided dice simultaneously.
+
+Find the probability of getting at least one double-six (both die show 6) in 24 throws of two six-sided dice. Assign your answer to `p_one_double_6`. The table below shows all the outcomes of throwing two six-sided dice.
+
+![](https://s3.amazonaws.com/dq-content/379/pr1m3_twodice.png)\
+
+```{r}
+p_one_double_6 <- 1 - (35/36)**24
+```
+
+## Another Application: Detecting Dependence
+
+
+In the previous screens, we have given an emphasis on independence. However, figuring out if two events are actually dependent is an important skill as well. Recall that dependent events are events that affect each other's probabilities of occurring. While this sounds simple in theoretical terms, knowing that two events are dependent on each other can be significant in real-world contexts.
+
+Consider a company that hires two reviewers to examine the resumes of potential data scientists to hire. Working alone, one reviewer says that 10% of the resumes are great candidates. Alone, the second says that 17% of the resumes are good hires. However, when working together the two reviewers only agree that 8% of the candidates are good for the job.
+
+You may find it weird that the percentage of "good" candidates changes if the two reviewers are working alone or together. You really want to make sure that you only look at qualified candidates, so you want to see if they influence each other. The question is: how can you prove this using the probability rules you've learned so far?
+
+
+- We'll define the following events:
+
+A: The first reviewer decides that a resume is a good hire
+B: The second reviewer decides that a resume is a good hire
+- Using the data from the scenario, figure out if these two events are independent.
+
+- First, calculate the probability that both the first and second reviewer decide the resume is a good hire assuming they are independent. Assign this probability to `p_intersection`.
+- Next, to see if the two events are independent, use the equality operator `==` to compare `p_intersection` against what we see in the data. If it is TRUE, then the reviewers are independent. If `FALSE`, then we've detected that the two reviewers are dependent on each other! Assign this comparison to `is_independent`.
+
+
+```{r}
+p_intersection <- (0.1 * 0.17)
+is_independent <- p_intersection == 0.08
+is_independent
+```
+
+
+
+# 4. Permutations and Combinations 
+
+In the previous lesson, we discussed the hypothetical random experiment of flipping a coin 100 times. One difficulty that came out of this random experiment was not being able to keep track of the entire list of outcomes that form the sample space. As we've seen before, we need to know the size of the sample space if we want to calculate the probabilities of events that take place within it. To know the size of a sample space, we need to count the number of outcomes, but this won't always be simple. In situations like this, we'll need more tools to do the counting. Learning this set of tools will be the focus of this lesson.
+
+We begin with considering a composite experiment $A_1 A_2$ composed of two individual experiments, denoted as "$A_1$" and "$A_2$"
+
+- $A_1$: flipping a fair coin
+- $A_2$: throwing a six-sided dice
+
+
+
+$A_1 A_2$ means we flip a coin and throw a dice and consider the outcomes of the two individual experiments together as a pair. For example, one of the possible outcomes of this composite experiment $A_1 A_2$ (H,1), indicating that the coin landed heads up and the dice showed a 1. There are 12 possible outcomes associated with $A_1 A_2$:
+$$\begin{equation}
+\Omega = \text{{(H, 1), (H, 2), (H, 3), (H, 4), (H, 5), (H, 6), (T, 1), (T, 2), (T, 3), (T, 4), (T, 5), (T, 6)}} 
+\end{equation}$$
+
+We can also illustrate the outcomes using a tree diagram:
+
+![](https://dq-content.s3.amazonaws.com/408/pr1m4_tree_diagram_1.png)\
+
+When we flip the coin, there are two possible outcomes: heads or tails. Each of the two outcomes can be followed by six other outcomes, depending on how the six-sided dice lands. If there are two outcomes, and each of these two have six other corresponding outcomes, we can use multiplication to find the total number of outcomes:
+
+$$\begin{equation}
+\text{Total number of outcomes} = 2 \times 6 = 12
+\end{equation}$$
+This small example gives us some insight into how we can calculate the sample space sizes of composite random experiments. Generally, if we have an experiment $E_1$ (like flipping a coin) with a outcomes, followed by an experiment $E_2$ (like rolling a dice) with b outcomes, then the total number of outcomes for the composite experiment $E_1 E_2$ can be calculated by multiplying a with b:
+
+$$\begin{equation}
+\text{Total number of outcomes} = a \times b
+\end{equation}$$
+The formula above is known as the rule of product (or the multiplication principle). Note that this is different than the multiplication rule we learned in the previous lesson. The rule of product will help us figure out the size of sample spaces, while the multiplication rule helps us calculate probabilities of composite random events.
+
+We'll use the rule of product throughout this lesson to build more powerful counting techniques. For now, let's do a quick exercise.
+Consider the composite experiment $E_1 E_2$, where $E_1$ is rolling a fair six-sided dice once, and $E_2$  is rolling the same dice again. One of the outcomes of $E_1 E_2$ could be (1, 6), which means we get a 1 for the first roll and a 6 for the second one.
+
+- Use the rule of product to calculate the total number of outcomes. Assign your answer to `n_outcomes`.
+- Use `n_outcomes` to calculate the probability of getting a (6,6). Assign your answer to `p_six_six`. Check the hint if you find difficulties calculating this.
+- Use `n_outcomes` to calculate the probability of not getting a (5,5) and assign your answer to `p_not_five_five`.
+
+
+```{r}
+n_outcomes <- 6 * 6
+
+p_six_six <- 1 / n_outcomes
+p_five_five <- 1 / n_outcomes
+p_not_five_five <- 1 - p_five_five
+```
+
+## Extending The Rule of Product
+
+On the previous screen, we used the rule of product for a composite experiment consisting of just two experiments.
+$$
+\begin{equation}
+\text{Number of outcomes} = a \times b
+\end{equation}
+$$
+
+One great aspect of the rule of product is that we can easily extend it to composite experiments with any number of component experiments. For instance, consider the composite experiment $E_1 E_2 E_3$, where:
+
+- $E_1$ is flipping a coin
+- $E_2$ is rolling a six-sided dice
+- $E_3$ is flipping another coin
+
+
+![](https://dq-content.s3.amazonaws.com/408/pr1m4_tree_diagram_2.png)\
+
+
+We can extend the rule of product and get the product of each experiments sample space to get back to the 24 outcomes we saw in the tree diagram.
+$$
+\begin{equation}
+\text{Total number of outcomes} = 2 \times 6 \times 2
+\end{equation}
+$$
+More generally, if we have an experiment $E_1$ with a outcomes, followed by an experiment $E_2$ (like rolling a dice) with b outcomes,  followed by more experiments up until experiment $E_1$ with n outcomes, the total number of outcomes for the composite experiment $E_1 E_2 ... E_n$ can be found by multiplying their individual outcomes:
+
+$$\begin{equation}
+\text{Total number of outcomes} = a \times b \times \ldots \times n
+\end{equation}$$
+
+Let's now use this extended rule of product to calculate more outcomes and probabilities.
+
+
+
+We roll a fair six-sided dice three times, and then randomly draw a card from a standard 52-card deck. One of the outcomes could be (6, 6, 6, ace of diamonds), which means getting three 6's in a row when we roll the dice, followed by drawing an ace of diamonds from the deck.
+
+1. Use the extended rule of product to calculate the total number of outcomes. Assign your answer to `total_outcomes`.
+2. Use `total_outcomes` to calculate the probability of getting (6, 6, 6, ace of diamonds) — three sixes in a row followed by an ace of diamonds. Assign your answer to `p_666_ace_diamonds`.
+3. Use `p_666_ace_diamonds` to calculate the probability of getting anything but (6, 6, 6, ace of diamonds). Assign your answer to `p_no_666_ace_diamonds`.
+
+
+```{r}
+total_outcomes <- 6 * 6 * 6 * 52
+p_666_ace_diamonds <- 1 / total_outcomes
+p_no_666_ace_diamonds <- 1 - p_666_ace_diamonds
+```
+
+## A More Concrete Example
+
+On the previous screen, we learned to compute the sample space size for any composite experiment $E_1 E_2 ... E_n$ using the formula below:
+
+
+$$\begin{equation}
+\text{Total number of outcomes} = a \times b \times \ldots \times n
+\end{equation}$$
+where a, b, and n represent the number of outcomes associated with the individual experiments that are part of the composite experiment.
+
+We'll use a security example to show where the rule of product has an application. Let's say that a potential thief is going to attempt to login into my Dataquest account by blindly entering random strings of letters. To simplify the example, let's say that a Dataquest password must be exactly 9 characters long, with 8 lowercase letters followed by a single digit. When we say that the thief is entering random strings, this means that any of the letters are equally likely to be picked as the next letter (aka simple random sampling).
+
+The thief also knows the password constraints, so they start manually typing out random strings that fit the constraints. The thief hopes that they will get lucky, but thankfully the rule of product will give us some degree of protection. To understand this, it's best to rethink typing a password as a composite random experiment.
+
+A password is just a particular arrangement of letters and a number, so randomly typing out passwords is the same as picking random letters/numbers. Each choice of a letter is an individual random experiment, so the password overall is a composite random experiment. To get access to my account, the thief needs to choose the one correct string out of many. To see just how unlikely this is, we need calculate the number of all possible Dataquest passwords. There are 26 letters in the Roman alphabet and 10 numerals, so by the rule of product:
+$$
+\begin{equation}
+\text{Total number of Dataquest passwords} = 26^8 \times 10 = 2,088,270,645,760
+\end{equation}
+$$
+
+Since 8 letters are required, we need to multiply 26 by itself 8 times, followed by 10 to account for the number at the end. The sheer number of possible strings that fit the (simplified!) Dataquest criteria surpasses 2 trillion. My Dataquest password is just one of these. The probability that thief will correctly guess my password through brute force is:
+
+
+This probability is astronomically small, and we've even simplified the constraints for the password! The rule of product is why we should make our passwords as long as possible: it makes it much, much harder to guess the password and prevent thieves from using your Dataquest account.
+
+In the following exercise, we're going to practice using the rule of product in a similar application.
+
+
+Say that Dataquest passwords were simplified even further to have only numbers (like a PIN code). Consider the two situations below:
+
+1. Find the probability of cracking a 4-digit PIN code using the code 8362. Assign your answer to `p_crack_4`.
+2. Find the probability of cracking a 6-digit PIN code using the code 348821. Assign your answer to `p_crack_6`.
+
+
+```{r}
+total_outcomes_4_pin <- 10^4 # 10 multiplied by itself 4 times
+p_crack_4 <- 1 / total_outcomes_4_pin
+
+total_outcomes_6_pin <- 10^6 # 10 multiplied by itself 6 times
+p_crack_6 <- 1/total_outcomes_6_pin
+```
+
+## With Replacement vs Without Replacement
+
+In the last screen, we discussed the probability of correctly guessing a 4-digit PIN code. Using the rule or product, we know that there are 10,000 possible arrangements of 4 digits. For any of the numbers in the 4-digit PIN code, any of the numbers between 0 and 9 were possible candidates to be chosen, regardless if we were picking a number for the first digit or the last digit.
+
+There is a particular term used for this type of sampling. When we choose a digit, we are picking one from the set {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}. After we've chosen a number for the first digit, we do the same for the second and so on. If we "pick" a number for the first digit and then "put it back" so that it is available for the second pick, we call this sampling with replacement. Conversely, if we don't put the first "picked" digit back and it's not available for the second pick, we call it sampling without replacement. Using the 4-digit example, if the number "8" were picked for the first digit of the PIN code, it cannot be used again for any of the subsequent digits.
+
+When calculating the sample space size of composite random experiment, it is important to know if we are sampling with or without replacement. In sampling without replacement, we effectively reduce the number of outcomes in subsequent random experiments. This has implications on the rule of product calculation. Composite random experiments that have sampling with replacement have larger sample space than those with sampling without replacement.
+
+When we were calculating the number of simplified Dataquest passwords, we were also sampling with replacement. If we were to repeat the calculation but without replacement, the calculation would look be:
+
+
+$$\begin{equation}
+26 \times 25 \times 24 \times \ldots \times 10 = 629,909,280,000
+\end{equation}$$
+
+After the first letter is chosen, it is no longer available for the second letter, which is why you see the 25. For comparison, the amount of password arrangements with replacement was over 2 trillion, while the amount without replacement is a paltry 628 billion. To put this scale in perspective, there are about 3 passwords with replacement for every password without.
+
+For our exercise, we'll take on a more realistic example of where sampling without replacement might take place.
+You are a manager picking some data scientists for some team projects. You have a pool of 10 candidates to choose from. Please calculate:
+
+1. The number of teams possible if you needed to fill a 4-person team. Assign your answer to `size_num_4`.
+2. The number of teams possible if you needed to fill a 6-person team. Assign your answer to `size_num_6`.
+
+```{r}
+size_num_4 <- 10 * 9 * 8 * 7
+size_num_6 <- 10 * 9 * 8 * 7 * 6 * 5
+```
+
+
+## Permutations
+
+On the last screen, we saw that we could extend the rule of product to incorporate more than two random experiments. For the exercise, we also saw we have 10,000 possible 4-digit PIN codes:
+
+
+$$
+\begin{equation}
+\text{Number of outcomes} = 10 \times 10 \times 10 \times 10 = 10,000
+\end{equation}
+$$
+There's a particular quality to passwords and PIN codes that deserve some discussion. Both passwords and PIN codes represent arrangements of letters and numbers where the order of the individual digits matters. Order matters in a sense that the string of numbers "1289" is distinct from "9821". The two strings are made of the same numbers, but they are distinct because the order of their numbers is different.
+
+There is a term for arrangements of items where their order matters. They are called permutations. To use the 4-digit PIN codes as an example, we would say that there are 10,000 possible permutations for a 4-digit PIN code, or arrangements where the order of the digits matters. We'll also cover arrangements where order doesn't matter, but this will come later in the lesson.
+
+Let's now turn our attention to another simple example. We're interested in calculating the total number of possible permutations for the set of numbers {5, 6, 7}. One possible permutation would be 567, another would be 657, and so on.
+
+However, this time we want to form the permutations by sampling without replacement. For instance, if we sample once without replacement from the set {5, 6, 7} and get a 5, we don't put the 5 back in the set, and only {6, 7} remains for the second round of sampling.
+
+To form a permutation like 567 or 657, we need to sample three times from the set {5, 6, 7}. Since we sample three times, we can break down the entire process into three experiments:
+
+- $E_1$ which has three possible outcomes: {5, 6, 7}
+- $E_2$ which has two possible outcomes because we sample without replacement from 
+$E_1$
+- $E_3$ which has the single outcome left
+
+Using the rule of product, we see we have a total of six outcomes for the composite experiment 
+$E_1 E_2 E_3$:
+
+$$\begin{equation}
+\text{Total number of outcomes} = 3 \times 2 \times 1 = 6
+\end{equation}$$
+
+This makes sense, since these are all the possible permutations (arrangements) of {5, 6, 7} when we sample without replacement: 567, 576, 657, 675, 756, 765.
+
+
+![](https://dq-content.s3.amazonaws.com/408/pr1m4_tree_diagram_3.png)\
+
+From this basic example, we can extract a more useful general formula for sampling without replacement. Consider an experiment with n outcomes, and we want to sample from these outcomes without replacement until only one remains. In other words, if there are n outcomes for the first experiment, (n-1) outcomes for the second, (n-2) for the third, until we only have one outcome for the last experiment, then we can find the number of permutations without replacement using the formula:
+
+$$\begin{equation}
+n \times (n - 1) \times \ldots \times 2 \times 1
+\end{equation}$$
+
+In mathematics, this expression is so common that it has been given its own name and notation. This product is abbreviated as $n!$ and it is called a factorial. We would read $n!$ as "n factorial". For instance, if $n=5$, then $n! = 5! = 5 \times 4 \times 3 \times 2 \times 1 = 120$.
+
+
+For our case above with finding the total number of permutations for {5, 6, 7}, n=3. To find the total number of permutations we use:
+
+
+
+$$\begin{equation}
+n! = 3! = 3 \times 2 \times 1 = 6. 
+\end{equation}$$
+
+We're now going to do an exercise and resume the discussion about permutations on the next screen.
+
+
+1. Write a function named `factorial()` which takes as input a number n and computes the factorial of that number n. There's more than one way to code this function, so we'll leave this exercise open — check the hint section if you get stuck.
+
+
+2. Use the `factorial()` function to find the total number of permutations (arrangements where order matters) for the letters "a", "b", "j", "k", "x", "y" (the letters cannot be repeated — this is equivalent to sampling without replacement from the set {"a", "b", "j", "k", "x", "y"}. Assign your answer to `letter_permutations`.
+
+
+```{r}
+factorial_recursive <- function(n) {
+  if (n == 0 || n == 1) {
+    return(1)
+  } else {
+    return(n * factorial_recursive(n - 1))
+  }
+}
+factorial_recursive(6)
+
+factorial <- function(n) {
+    final_product <- 1
+    for (i in 1:n) {
+        final_product = final_product * i
+    }
+    return(final_product)
+}
+
+letter_permutations <- factorial(6) # because there are 6 letters
+letter_permutations
+
+
+```
+
+
+## More About Permutations
+
+
+In the last exercise, we calculated the number of permutations for the 52 cards of a standard 52-card deck. In practice though, we're often more interested in smaller card hands rather than the full 52 card stack. A hand is a small subset of the cards that you have to play with during a card game.
+
+For example, in a variation of poker called Texas hold'em, players are interested in 5-card hands. To find the total number of possible permutations for a 5-card poker hand, we start by considering this hand as a composite random experiment where we sample five times without replacement from a standard 52-card deck:
+
+- $E_1$: we have 52 cards in the deck, so 52 outcomes are possible
+- $E_2$: we have 51 cards left in the deck, so 51 outcomes are possible (because we sample with replacement, we don't put back in the deck the card we got at $E_1$
+- $E_3$: we have 50 cards in the deck, so 50 outcomes are possible
+- $E_4$: we have 49 cards in the deck, so 49 outcomes are possible
+- $E_5$: we have 48 cards in the deck, so 48 outcomes are possible
+
+
+We can use the extended rule of product to calculate the number of permutations for a 5-card poker hand:
+
+$$
+\begin{equation}
+\text{Number of possible 5-card hands} = 52 \times 51 \times 50 \times 49 \times 48 = 311,875,200
+\end{equation}
+$$
+
+The factorial notation-$n!$-that we learned in the previous screen can't be used directly here because we only want to consider a 5-card hand. More generally, we need to figure out a new formula to use if we only want to choose smaller subsets from a greater collection of n objects.
+
+When we have a group of n objects, but we're taking only k objects from this group, the number of permutations (which we abbreviate as $P$) is:
+
+$$
+\begin{equation}
+P(n, k) = n \times (n-1) \times (n-2) \times \ldots \times (n - k + 1)
+\end{equation}
+$$
+
+This formula is called the permutation formula. The dots imply that we continue multiplying until we reach $n - k + 1$. The $n - k + 1$ erm comes from an offset since we start our multiplication with n. Using the 5-card poker hand example, we can see how this plays out in the diagram below since $n = 52$ and $k = 5$:
+
+
+![](https://dq-content.s3.amazonaws.com/408/formula-example.png)\
+
+Instead of writing the dots, we want the permutation formula in a form that can be written more concisely. If $n$ is large and $k$ is small,  then we could potentially be writing a lot of terms for a relatively simple multiplication. This shorter form should incorporate only two pieces of information: the number of total objects n and the desired size of the subgroup k. We know that the permutation formula can be written as a long list of numbers:
+
+$$\begin{equation}
+P(n, k) = n \times (n-1) \times (n-2) \times \ldots \times (n - k + 1)
+\end{equation}$$
+This formula is like a shortened factorial, so maybe we can make use of the notation. We know that
+
+$$\begin{equation}
+n! = n \times (n-1) \times (n-2) \times \ldots \times 1
+\end{equation}$$
+
+so our all we would need to do is find a way to cancel out the terms after $n - k + 1$ that we don't need. We can cancel these terms out by using division! We just need to figure out some number using $n$ and $k$ to cancel out exactly the terms we want to remove. To use a simpler example, let's say that $n=5$ and $k=3$. Our problem then becomes:
+
+$$\begin{equation}
+\frac{5!}{?} = \frac{5 \times 4 \times3\times2\times1}{?} = \frac{52!}{47!} = 5 \times 4 \times3
+\end{equation}$$
+
+In order to cancel out the last two terms in the numerator, we need 2!. The last piece we need to figure out is how this value relates to $n$ and $k$. Since$n=5$ and $k=3$, then the way we can get back to 2! is by taking the factorial of the difference,$(n - k)!$. We've finally found a better form of the permutation formula:
+
+$$\begin{equation}
+P(n, k) = n \times (n-1) \times (n-2) \times \ldots \times (n - k + 1) = \frac{n!}{(n - k)!} 
+\end{equation}$$
+Applying this back to the 5-card poker hand, we can confirm that the formula still works correctly:
+
+
+
+$$\begin{equation}
+P(52, 5) = \frac{52!}{(52 - 5)!} = \frac{52!}{47!} = 52 \times \ldots \times 48
+\end{equation}$$
+We've worked through the permutation formula a lot on this screen, it's time to get some practice using it.
+
+
+Using the formula we just learned:
+
+1. Create a function called `permutation` that takes in 2 arguments, n and k, and outputs the total number of permutations from these two inputs.
+- We've provided the `factorial` function here, which might be of use here.
+2. Use your function to calculate the number of permutations for 3-card hand when we're drawing without replacement from a 52-card standard deck. Assign your answer to `perm_3_52`.
+3. Use your function to calculate the number of permutations for a 4-card hand when we're drawing without replacement from a 20-card deck. Assign your answer to `perm_4_20`.
+
+
+```{r}
+factorial <- function(n) {
+    final_product <- 1
+    for (i in 1:n) {
+        final_product = final_product * i
+    }
+    return(final_product)
+}
+permutation <- function(n, k) {
+    return(factorial(n) / factorial(n - k))
+}
+
+perm_3_52 <- permutation(52,3)
+perm_3_52
+perm_4_20 <- permutation(20, 4)
+perm_4_20
+```
+
+##  Sometimes Order Doesn't Matter
+
+Previously, we mentioned players in Texas hold 'em are interested in having a winning 5-card poker hand. To find the number of permutations for a 5-card poker hand, we learned to use the permutation formula:
+
+$$\begin{equation}
+P(52, 5) = \frac{52!}{(52-5)!} = 311,875,200
+\end{equation}$$
+However, we have to remember that a permutation is an arrangement of elements where order matters. While the number that we calculated above is correct, consider a particular detail we may have missed. Below are three 5-card hands, and each has the same cards. Although they are each considered different permutations since order matters, this detail doesn't really matter from the player's perspective.
+
+
+![](https://dq-content.s3.amazonaws.com/408/pr1m4_cards.png)\
+In a poker game, the order of cards in a player's hand is not important. It matters more what cards we have. Effectively, the three hands above would be considered identical. We might be interested instead in finding the number of unique card arrangements with while ignoring the order of the cards. There is another special name for this type of arrangement: the combination. Both permutations and combinations are arrangements of items, but order matters in permutations and doesn't in combinations.
+
+To find the number of unique combinations, we begin with the observation that given n items and needing to pick k items from them without replacement, there will always be more permutations than combinations. Intuitively, if order matters, then the same k items themselves can be rearranged k! different ways. If order doesn't matter, then we only have one combination of the k items. Using the card example from above, each of the hands showed are different orderings (permutations) of the same combination of cards. This leads us to an important observation: for every combination of k items, there are k!permutations of these items.
+
+This insight gives us a relationship between the number of combinations of objects and the number of permutations of these objects. In the last screen, we worked out the exact formula for the number of permutations of n objects choosing k of them.
+
+$$\begin{equation}
+P(n, k) = \frac{n!}{(n-k)!}
+\end{equation}$$
+Our goal of interest is to figure out how many unique combinations there are of $n$ items, choosing $k$ of them. For now, we'll designate this number as an unknown constant $c$. We now know that for every combination of $k$ items, there are $k!$ permutations of these items, making for a total of c$×k!$ possible permutations. We can set these two quantities equal to each other since they represent the same thing!
+
+
+$$\begin{equation}
+c \times k! = \frac{n!}{(n-k)!} \implies c  = \frac{\frac{n!}{(n-k)!}}{k!}
+\end{equation}$$
+
+Rearranging the terms so we don't have fractions in fractions, the formula for combinations becomes:
+
+$$\begin{equation}
+c = \frac{n!}{k!(n-k)!} 
+\end{equation}$$
+This is great! We have a concise formula for figuring out the number of combinations of $n$ items, choosing $k$ of them. This quantity would be more of interest to an aspiring poker player, rather than the number of permutations.
+
+
+$$\begin{equation}
+c = \frac{52!}{5!(52-5)!} = 2,598,960
+\end{equation}$$
+We can confirm that the number of unique 5-card combinations (2,598,960) is much lower than the number of permutations of all 5-card hands (311,875,200). This is still an high number for a poker player to manipulate, but it's still a relevant figure to know. Let's now do an exercise and use what we found to calculate some probabilities. We'll discuss more about the notation we use with combinations in the next screen.
+
+
+1. Use the `factorial()` and `permutation()` functions to calculate the number of unique 5-card arrangements when drawing without replacement from a standard 52-card deck. Assign your answer to a variable named `c`.
+2. Calculate the probability of getting a 5-card hand with four aces and a seven of diamonds (assume we're drawing randomly and without replacement from the deck). Assign your answer to `p_aces_7`.
+3. For a state lottery, six numbers are drawn randomly and without replacement from an urn containing numbers from 1 to 49. Using the `factorial()` and the `permutation()` functions, find the total number of unique 6-number arrangements that could result. Assign your answer to `c_lottery`.
+4. Calculate the probability of winning the big prize for this state lottery provided you use the numbers (3, 20, 37, 44, 45, 49) — the big prize means the numbers match exactly those resulted from the official drawing.
+- Assign your answer to `p_big_prize`.
+
+
+
+```{r}
+factorial <- function(n) {
+    final_product <- 1 
+    for (i in 1:n) {
+        final_product <- final_product * i
+    }
+    return(final_product)
+}
+
+permutation <- function(n, k) {
+    return(factorial(n) / factorial(n - k))
+}
+c <- permutation(52, 5) / factorial(5)
+p_aces_7 <- 1/c
+p_aces_7
+
+c_lottery <- permutation(49,6) / factorial(6)
+p_big_prize <- 1/c_lottery
+p_big_prize
+```
+
+
+## Combination Notation
+
+On the previous screen, we made the observation that the order in which the cards are arranged in a 5-card hand doesn't really matter to poker players. This observation motivated us to calculate the number of unique combinations of 5-card hands that are possible from a 52-card deck, rather than the number of permutations. We saw earlier in the lesson that permutations have particular notation associated with them, so it's important to know what notation to expect from combinations.
+
+![](https://dq-content.s3.amazonaws.com/408/pr1m4_cards.png)\
+
+
+On the previous screen, we used this technique to calculate the number of combinations of a 5-card hand. In this case, $n=52$ and $k=5$. Filling out the equation we learned earlier:
+
+$$\begin{equation}
+\frac{52!}{5!(52-5)!} = 2,598,960
+\end{equation}$$
+The notation for combinations is simlar to that of permutations. Just as the permutation formula can be written as:
+
+
+$$\begin{equation}
+P(n, k) = \frac{n!}{(n - k)!}
+\end{equation}$$
+Combinations can be written as:
+
+
+$$\begin{equation}
+C(n, k) = _nC_k = \frac{n!}{k!(n - k)!} = {n \choose k}
+\end{equation}$$
+All three notations are equivalent and are read as "n choose k". Using another example, if we wanted to calculate the number of unique ways we can borrow 10 books from a small library of 35 different books, we can calculate this as ${35 \choose 10}$ ("35 choose 10"):
+
+$$\begin{equation}
+{35 \choose 10} =  \frac{35!}{10!(35-10)!} = 183,579,396
+\end{equation}$$
+Let's now write a function for our formula above, solve a few probability problems, and wrap up this lesson on the next screen.
+
+
+1. Write a function named `combination()` which takes in two inputs (`n` and `k`) and outputs the number of combinations when we're taking only $k$ objects from a group of 
+$n$ objects. To simplify your work, use the `factorial()` function we wrote on a previous screen.
+2. A small company is interested in running an A/B test and is about to select a group of 18 customers out of a total of 34 customers. Find the number of unique ways in which 18 customers can be selected from a group of 34 and assign your result to `c_18`.
+3. One of the possible outcomes is group Y, which is a group formed by 18 customers. Assume all the outcomes have equal chances of occurring and calculate the probability of getting a group other that group Y. Assign your answer to `p_non_Y`.
+
+```{r}
+factorial <- function(n) {
+    final_product <- 1 
+    for (i in 1:n) {
+        final_product <- final_product * i
+    }
+    return(final_product)
+}
+combination <- function(n, k) {
+    return(factorial(n)/(factorial(n - k) * factorial(k)))
+}
+
+c_18 <- combination(34, 18)
+
+p_Y <- 1/c_18
+p_non_Y <- 1 - p_Y
+```
+
+# 5. Conditional Probability: Fundamentals
+
+## Introduction
+
+In the previous course, we covered fundamental concepts in probability, including:
+
+- Theoretical and empirical probabilities
+- Probability rules (the addition rule and the multiplication rule)
+- Counting techniques (the rule of product, permutations, and combinations)
+
+In this course, we'll build on these concepts further and explore a new type of probability. Sometimes we are interested in conditional probabilities, probabilities that must consider if some condition occurred. We use conditional probability often in our daily lives, and we might not even realize it. We may be getting dressed for school or work and notice it is awfully cloudy outside. We may wonder, "It looks overcast today, I wonder if it'll rain later?"
+
+This question is different from just asking, What is the chance that it will rain?" Cloudiness is associated with an increased chance of rain, so it is more likely to rain when the sky is cloudy. If we are just asking about the probability of rain, then we would use the concepts we learned in the previous course. The presence of conditions slightly alters the probability calculations, so we will learn how to incorporate these changes into our current knowledge of probability.
+
+By the end of this course, we'll be able to:
+
+- Assign probabilities to events based on certain conditions by using conditional probability rules.
+- Assign probabilities to events based on whether they are in a relationship of statistical independence or not with other events.
+- Assign probabilities to events based on prior knowledge by using Bayes' theorem.
+- Create a spam filter for SMS messages using the Naive Bayes algorithm.
+Let's start by doing a quick recap and solve a few probability exercises. Click the "Next" button below to start!
+
+## Brief Recap
+
+
+On this screen, we'll refamiliarize ourselves with some of the concepts we learned in Probability Fundamentals since they'll be immediately useful. We'll do a brief recap, but if you feel it's not enough, feel free to pause and go back to the previous course and study the material again. Recall of material is an essential part of the learning process, so don't worry if you need to look at it again if it's been a while.
+
+Consider rolling a regular six-sided die. This random experiment has six possible outcomes: 1, 2, 3, 4, 5, and 6. The set of all possible outcomes associated with a random experiment is called a sample space, and we denote it by the Greek letter $\Omega$ (pronounced "omega"). We represent the sample space of a die roll as a set:
+
+
+$$\Omega = \{1, 2, 3, 4, 5, 6\}$$
+
+Assuming that all six outcomes are equally likely of happening (i.e. the die is fair), we can find $P(5)$ — the probability of observing a 5 in a single roll — by using the following formula:
+
+$$P(\text{event}) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}}$$
+Of the six possible outcomes $\{1, 2, 3, 4, 5 ,6\}$, only one satisfies the event we want, so the probability of getting a 5 when rolling a fair six-sided die is:
+
+$$P(5) = \frac{1}{6}$$
+
+Now let's solve a few exercises and start our discussion about conditional probability on the next screen.
+
+Consider rolling a fair six-sided die once and calculate:
+- The probability of getting a 2. Assign your answer to `p_2`.
+- The probability of getting an odd number (1, 3, or 5). Assign your answer to `p_odd`.
+- The probability of getting a 2 or a 4, Assign your answer to` p_2_or_4`.
+
+
+```{r}
+p_2 <- 1/6
+p_odd <- 3/6
+p_2_or_4 <- 2/6
+```
+
+
+## Updating Probabilities With New Information
+
+On the previous screen, we reviewed some important probability concepts and found that the probability of getting a 5 when rolling a fair six-sided die is $P(5) = \frac{1}{6}$
+
+
+
+Now suppose the die is rolled and before we're able to observe the actual result, we're given some new information: the die showed an odd number. With this new piece of information, should we reconsider our original calculation of $P(5)$?
+
+Will the probability of getting a 5 still be $\frac{1}{6}$,  or does the new information allow us to recalculate?
+
+When we don't know if the result is odd or not, the possible outcomes of the experiment are still $\{1, 2, 3, 4, 5, 6\}$. After we find out the number is odd, the possible outcomes narrows down to $\{1, 3, 5\}$  since the other outcomes don't match the condition. In other words, the new information serves to reduce the size of the original sample space from $\{1, 2, 3, 4, 5, 6\}$ to $\{1, 3, 5\}$.
+
+In terms of notation:
+
+$$\Omega = \{1, 2, 3, 4, 5, 6\} \xrightarrow[]{becomes} \Omega|\text{result is odd} = \{1, 3, 5\}$$
+The pipe $|$ that comes after the second $\Omega$  is what allows us to denote that the sample space is updated after receiving information that the result is odd. When you see a |symbol, you say "given". Since the size of the sample space changes, the probability calculation also changes. With $\Omega|\text{result is odd} = \{1, 3, 5\}$, we now have three total possible outcomes and one successful outcome, so $P(5)$ becomes:
+
+
+$$P(5) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} = \frac{1}{3}$$
+
+![](https://dq-content.s3.amazonaws.com/471/cpm1_viz1.png)\
+
+Let's do a few exercises similar to the one above. We'll continue our discussion on the next screen, where we will introduce the concept of conditional probability.
+
+
+A fair six-sided die is rolled. Before we see the result, we are told that the number we got is less than 5. With this in mind, calculate:
+
+1. The probability of getting a 3. Assign your answer to `p_3`.
+2. The probability of getting a 6. Assign your answer to `p_6`.
+3. The probability of getting an odd number. Assign your answer to `p_odd`.
+4. The probability of getting an even number Assign your answer to `p_even`.
+
+
+```{r}
+p_3 <- 1/4
+p_6 <- 0/4
+p_odd <- 2/4
+p_even <- 2/4
+```
+
+
+## Conditional Probability
+On the previous screen, we considered a die roll and used some new information that the result was odd to update $P(5)$ from $\frac{1}{6}$ to $\frac{1}{3}$. Which probability is correct?Taken individually, however, $P(5) = \frac{1}{6}$ and $P(5) = \frac{1}{3}$ are correct answers to two different questions:
+
+
+1. What is the probability of getting a 5?
+2. What is the probability of getting a 5 given the die showed an odd number?
+
+
+$P(5) = \frac{1}{6}$ is a correct answer to the first question, where we only want to find the probability of getting a 5. Whereas $P(5) = \frac{1}{3}$ is the correct answer to the second question, where we introduce a condition: the die showed an odd number. To allow us to distinguish between which of the two questions are being asked, we need to introduce some new notation. When we're considering the second question that incorporates a condition on the probability, we write this as:
+
+
+
+$$P(5|\text{result was odd}) = \frac{1}{3}$$
+
+In plain English, we would read $P(5|\text{result was odd})$ as, "the probability of getting a 5 given the result was odd." The pipe, |, is what indicates that the probability here is a conditional probability. The information "the result was odd" becomes the condition for the probability.
+
+Now let's get more practice with solving conditional probability problems. On the next screen, we'll develop a formula for calculating conditional probabilities that will let you generalize to more problems.
+
+
+
+A student is randomly selected from the Dataquest users. We are given some information that they were born during the winter season. Assume the winter months are December, January, and February. For the purposes of this exercise, we'll also assume that each month is equally likely to have been the month the student was born in. Calculate:
+
+1. The conditional probability that they were born in December. Assign your answer to `p_december`.
+2. The conditional probability that they were born in a 31-day month. Assign your answer to `p_31`.
+3. The conditional probability that they were born during summer. Assign your answer to `p_summer`.
+4. The conditional probability that they were born in a month which ends in letter "r". Assign your answer to `p_ends_r`.
+
+```{r}
+p_december <- 1/3
+p_31 <- 2/3
+p_summer <- 0/3
+p_ends_r <- 1/3
+```
+
+
+
+## Conditional Probability Formula
+
+
+
+On the last screen we saw that the conditional probability of getting a 5, given the result showed an odd number was $\frac{1}{3}$. We'll look to a similar example and develop a formula for conditional probability from our intuition about it.
+
+Say we roll a fair six-sided die again and want to find the probability of getting an odd number. This time, however, we are told that the result showed a number greater than 1. Using probability notation, we want to find $P(A|B)$ where:
+
+
+- $A$ is the event that the number is odd: $A = \{1, 3, 5\}$
+- $B$ is the event that the number is greater than 1: $B = \{2, 3,4,5,6\}$
+
+Although $P(A|B)$ is a conditional probability, it still follows the general formula that we use for calculating probabilities in general:
+
+
+$$P(A|B) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}}$$
+
+Recall in a previous screen that the condition "the result was odd" reduced our sample space from $\{2, 3,4,5,6\}$ to  $\{1,3,5\}$. Similarly, the condition "the result was greater than 1" also reduces the original sample space to $\{2, 3,4,5,6\}$. In both of these examples, a condition affects the above probability calculation by changing the denominator: the total number of possible outcomes. Some outcomes don't satisfy the condition that is given, so they are no longer possible. There is a special name that we give to the size or number of elements in a set, which we call the cardinality of the set. Referring back to the original sample space of a fair die roll, its cardinality was 6. In set notation, we abbreviate the cardinality of a sample space as is abbreviated as card ($\Omega$), so we have:
+
+$$\text{card}(\Omega) = 6$$
+
+Since the cardinality of an set or event corresponds to the total number of possible outcomes for that event, we can update our old probability formula:
+
+$$P(A|B) = \frac{\text{number of outcomes satisfying the event}}{\text{card}(B)}$$
+Recall we're interested in finding the probability of getting an odd number, given the number the die showed is greater than 1. We're now describing the denominator in terms of a cardinality, it makes sense to try to convert the numerator in terms of a cardinality as well. There are three odd numbers on a regular six-sided die (1, 3, and 5), but we are given that the result was greater than 1. This narrows down the only possible odd numbers to 3 and 5. This means that the number of possible outcomes satisfying both the event and the condition is two. From here, we know that the cardinality of the intersection of the event and the condition is two.
+
+$$A \cap B = \{3, 5\}$$
+![](https://dq-content.s3.amazonaws.com/471/cpm1_viz2.png)
+Now, we have a way to describe number of outcomes satisfying the event in terms of a cardinality. That is, the number of outcomes satisfying the event is the cardinality of the intersection of $A$ and $B$. Our formula becomes:
+
+$$P(A|B) = \frac{\text{card}(A \cap B)}{\text{card}(B)}$$
+
+
+We now have a formula for conditional probability, defined purely in terms of the events $A$ and $B$. Here, $A$ and $B$ don't have to be related to a die roll, they can be reinterpreted with any two events and the calculation will still work.
+
+We'll practice this formula in the following exercise. On the next screen, we'll look at a more realistic example and see how the formula can be used to measure the efficiency of a newly developed HIV test.
+
+Two fair six-sided die are rolled at the same time, and the two results are added together. The diagram below shows all the possible results that we can get from adding the two numbers together.
+
+![](https://s3.amazonaws.com/dq-content/378/pr1m2_sums.png)\
+
+
+Find $P(A|B)$, where $A$ is the event that the sum is an even number, and $B$ is the event that the sum is less than eight.
+
+
+1. Find the cardinality of B. Assign your answer to `card_b`.
+- Note that you'll have to treat identical sums differently if they come from different die numbers. On the diagram above, we see that we have three sums of 4, but they all come from different die outcomes: (3, 1), (2,2), and (1, 3), where the first number describes the outcome of the first die throw, and the second number the outcome of the second die throw.
+
+
+2. Find the card of the intersection of $A$ and $B$. Assign your answer to `card_a_and_b`.
+
+
+3. Calculate $P(A|B)$. Assign your answer to `p_a_given_b`. 
+
+```{r}
+card_b <- 21
+card_a_and_b <- 9
+p_a_given_b <- card_a_and_b / card_b
+```
+
+
+## Example Walkthough
+
+
+On the previous screen, we developed a formula for conditional probability in terms of the cardinalities of sets:
+
+$$P(A | B) = \frac{\text{card}(A \cap B)}{\text{card}(B)}$$
+We'll now use this formula in the context of a common example seen in the real world. A team of biologists wants to measure the efficiency of a new HIV test they developed. HIV is a virus that causes AIDS, a disease which affects the immune system. They used the new test on 53 people, and the results are summarized in the table below:
+
+![](https://dq-content.s3.amazonaws.com/471/hiv-table.png)\
+
+Reading the table above, we can glean some important details about the test:
+
+- 23 people are infected with HIV
+- 30 people are not infected with HIV (aka the complement to being infected with HIV)
+- 45 people tested positive for HIV
+- 8 people tested negative for HIV
+- Given that someone was infected, 21 tested positive for HIV
+- Given that someone was not infected, 24 tested positive for HIV
+
+
+This represents a classic problem with diagnostic tests and diseases. Doctors want to know the true disease state of a person, but are only able to know about it through a test. The problem is that the tests are not perfect. They may falsely declare someone with the disease as not having it (false negative) or it might conclude that someone without the disease actually has it (false postive). Both of these outcomes are horrible, so we want tests that minimize these erroneous results.
+
+The team now intends to use these results to calculate probabilities for new patients and figure out whether the test is reliable enough to use in hospitals. They want to know:
+
+- What is the probability of testing positive, given that a patient is infected with HIV?
+- What is the probability of testing negative, given that a patient is not infected with HIV?
+
+
+We'll denote two events to represent the two events we care about. $T$ will be the event that the test is positive, and $D$ will be the event that the patient has HIV. For example, $P(T|D)$ is the probability of testing positive, given that the patient is infected with HIV. Using our probability formula, we can fill in this information:
+
+$$P(T|D) = \frac{\text{card}(T \cap D)}{\text{card}(D)}$$
+In the biologists' sample, there are 23 people infected with HIV, which means $\text{card}(D) = 23$.  Out of these 23 people, 21 tested positive, which means $\text{card}(T \cap D) = 21$. 
+
+![](https://dq-content.s3.amazonaws.com/471/hiv-table-highlighted.png)\
+
+
+This means that $P(T|D)$ is: 
+
+$$P(T|D) = \frac{21}{23} = 0.9130$$
+The probability of testing positive given that the patient is infected with HIV is 91.30%. At face value, this result suggests that the new test is fairly good at detecting the HIV virus when the it is actually present. However, we must consider this percentage in terms of actual numbers of people. If we used this test 10,000 patients infected with HIV, only 9,131 patients will get a correct diagnosis, while the other 869 will not. Given the severity of HIV, the team should probably conclude that the test needs more refinement with respect to detecting the virus among the infected.
+
+Let's now calculate $P(T^C|D^C)$, the probability of testing negative given that a patient is not infected with HIV.
+
+Use the data in the table below to do the following:
+
+![](https://dq-content.s3.amazonaws.com/471/hiv-table.png)\
+
+1. Calculate $P(T^C|D^C)$.  Assign your answer to `p_negative_given_non_hiv`.
+
+2. Print `p_negative_given_non_hiv`.
+
+3. Interpret the result — does the value of $P(T^C|D^C)$ suggest that the test needs more work? Or does it look like the test is reliable enough to use in hospitals? Write your thoughts using a multi-line string. This part of the exercise is not answer-checked, but we suggest a solution nonetheless.
+
+
+```{r}
+p_negative_given_non_hiv <- 6/30
+print(p_negative_given_non_hiv)
+
+"The probability of testing negative given that a patient does not
+have HIV is 20%. This means that for every 10,000 healthy
+patients tested, only about 2000 will get a correct diagnosis, while the
+other 8000 will not. This rate is unacceptable, and it would be dangerous
+to have it used in hospitals."
+```
+## Conditional Probability Formula Revisited
+On the last screen, we put our new conditional probability formula to use and answered a few questions about the effectiveness of a new HIV test using the data in the table below:
+
+![](https://dq-content.s3.amazonaws.com/471/hiv-table.png)\
+
+We used our formula and saw that $P(T|D)$  — the probability of testing positive given that the patient is infected with HIV — was:
+
+
+$$P(T|D) = \frac{\text{card}(T \cap D)}{\text{card}(D)} = \frac{21}{23}$$
+Sometimes, there may be cases where we do not know the cardinality of an event. This could happen in cases where the event is extremely rare or complex. In these cases, we would not be able to use our current conditional probability formula, so it would be good to have a formula that does not rely on the cardinalities. If we use the probabilities of both the numerator and denominator events, we will find that the result comes out exactly the same. Using the table above, we see that $P(T \cap D) = \frac{21}{53}$ and P(D) = \frac{23}{53}. Using these values in place of the cardinalities, we would get:
+
+$$P(T|D) = \frac{P(T \cap D)}{P(D)} = \frac{\frac{21}{53}}{\frac{23}{53}} = \frac{21}{23}$$
+Using the cardinalities to calculate the conditional probability was convenient when they were known. In general, we will know more about the individual probabilities of events rather than their cardinalities, so using probabilities is more useful. This allows us to define a formula for conditional probability purely in terms of probabilities instead of set cardinalities. Thus, for any two events $A$ and $B$, $P(A|B)$ is:
+
+$$P(A|B) = \frac{P(A \cap B)}{P(B)}$$
+This formula is useful when we only know probabilities. For instance, let's say a different test is used to diagnose a patient. The conditional probability $P(T|D)$  is more useful from a doctor perspective; a doctor will know exactly how well the test can diagnose HIV status. However, from a patient perspective, this information is not as useful. Often a patient will want to know something slightly different: $P(D|T)$, the probability of actually having HIV, given that the test was positive. A patient does not know if they are diseased or not, so they want to know their chances of having HIV just from looking at the test result. It is critical to know that, in general, $P(A|B)$  is not the same as $P(B|A)$. That is to say, if we exchange the event of interest and the condition that we are using, their probabilities will not be the same.
+
+Let's consider a new test. A patient tests positive for HIV, and they want to find $P(D|T)$. Using our conditional probability formula (using probabilities instead of cardinalities), we get:
+
+$$P(D|T) = \frac{P(D \cap T)}{P(T)}$$
+Based on information from the test's creators, we know that $P(T) = 0.12$ and $P(D \cap T) = 0.000015$. We don't have cardinalities, but we can still use the probabilities:
+
+
+$$P(D|T) = \frac{P(D \cap T)}{P(T)} = \frac{0.000015}{0.12} = 0.000125$$
+This result can offer a bit of relief to a worried patient. The probability that the test is positive and the subject has HIV is small. Even though the test was positive, the probability that they actually have the disease is still relatively small.
+
+Now let's get more practice with our new formula.
+
+A company offering a browser-based task manager tool intends to do some targeted advertising based on people's browsers. The data they collected about their users is described in the table below:
+
+![](https://dq-content.s3.amazonaws.com/471/cpm1_table2.png)\
+
+
+Find:
+
+1. $P(\text{Premium}|\text{Chrome})$ — the probability that a randomly chosen user has a premium subscription, provided their browser is Chrome. Assign your answer to `p_premium_given_chrome`.
+2. $P(\text{Basic}|\text{Safari})$ — the probability that a randomly chosen user has a basic subscription, provided their browser is Safari. Assign your answer to `p_basic_given_safari`.
+3. $P(\text{Free}|\text{Firefox})$ — the probability that a randomly chosen user has a free subscription, provided their browser is Firefox. Assign your answer to `p_free_given_firefox`.
+4. Between a Chrome user and a Safari user, who is more likely to have a premium subscription? If you think a Chrome user is the answer, then assign the string "Chrome" to a variable named more_likely_premium, otherwise assign 'Safari'. To solve this exercise, you'll also need to calculate $P(\text{Premium}|\text{Safari})$
+
+
+```{r}
+p_premium_given_chrome <- 158/2762
+p_basic_given_safari <- 274/1288
+p_free_given_firefox <- 2103/2285
+more_likely_premium <- 'Safari' # because P(Premium | Safari) > P(Premium | Chrome)
+```
+
+
+# 6. Conditional Probability: Intermediate
+
+## Condition vs Intersection
+In the last lesson, we started our journey into conditional probability and managed to derive two important formulae:
+
+$$\tag{1} P(A|B) = \frac{\text{card}(A \cap B)}{\text{card}(B)}$$
+$$\tag{2} P(A|B) = \frac{P(A \cap B)}{P(B)}$$
+
+An intuitive way to understand $P(A|B)$ is "if I know that $B$ happened, then what's the probability that $A$  happens?" The formulae suggest that could be a relationship between $A$ and $B$. However, if $P(A \cap B)$  is the probability that both A and B occur, then what's the difference between $P(A|B)$ and $P(A \cap B)$, if any?
+
+To explore this difference, let's consider the roll of a fair six-sided die and try to find  $P(A|B)$ and $P(A \cap B)$. We'll define the following:
+
+- $A$ is the event that the number is odd: $A = \{1, 3, 5\}$
+- $B$ is the event that the number is greater than 1: $B = \{2, 3,4,5,6\}$
+
+[Since the sets are relatively small, we can use formula (1) above to calculate $P(A|B)$, the probability of getting an odd number given that we got a number greater than 1, is:]{color="red"}
+
+$$P(A|B) = \frac{\text{card}(A \cap B)}{\text{card}(B)} = \frac{2}{5}$$
+
+[Finding $P(A \cap B)$  means that we are finding the probability that we get a number that is both odd and greater than 1. We can calculate this below:]{color="blue"}
+
+$$\begin{aligned}
+P(A \cap B) &= \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} \\
+&= \frac{\text{card}(A \cap B)}{\text{card}(\Omega)} \\
+&= \frac{2}{6}
+\end{aligned}$$
+We have found that $P(A|B) = \frac{2}{5}$ and $P(A \cap B) = \frac{2}{6}$, so $P(A|B)$ and $P(A \cap B)$ must represent different concepts. The reason for the shift is the change in the denominator: $P(A|B)$ uses the cardinality of $B$, while $P(A \cap B)$ uses the cardinality of the sample space of the whole die roll. By conditioning on $B$, it shrinks the cardinality of the denominator. Conditional probability means we are thinking in terms of a world where $B$ happended. $P(A|B)$ tells us that we assume $B$ has happened, and we want to know what the probability that $A$ happens when we assume this. The probability of an intersection does not have this extra meaning behind it, it only asks what the probability that both events in a random experiment happened.
+
+Looking at formula (2) above, we can also see a mathematical difference between $P(A|B)$ and $P(A \cap B)$. If we try to isolate $P(A \cap B)$ in formula (2), we see that:
+
+$$\begin{aligned}
+P(A|B) &= \frac{P(A \cap B)}{P(B)} \\
+\implies P(A \cap B) &= P(A|B) \times P(B)
+\end{aligned}$$
+Below, we'll look at an exercise to help us understand this distinction better. Before that, let's do a quick and important summary of the notation we know so far:
+
+- $P(A)$  is the probability of A
+- $P(A|B)$ is the conditional probability of A, given that B happened
+- $P(A \cap B)$ is the probability that both A and B occur
+- $P(A \cup B)$ is the probability that either A happens or B happens (there's a chance both could happen)
+
+
+The analytics team of a store randomly sampled 2,000 customers in their database. They looked at customer behavior with respect to buying laptops and wireless mice to see if bundling them might increase sales. The results are summarized in the table below, where we have the events:
+
+- $L$ is the event that the customer bought a laptop
+- $M$  is the event that the customer bought a mouse
+- $L^C$ is the event that the customer didn't buy a laptop
+- $M^C$  is the event that the customer didn't buy a mouse
+
+
+![](https://dq-content.s3.amazonaws.com/472/cpm2_viz1.png)\
+
+- $P(M)$, the probability that a customer buys a mouse — assign your answer to `p_m`.
+- $P(M|L)$,  the probability that a customer buys a mouse given that they bought a laptop — assign your answer to `p_m_given_l`.
+- $P(M \cap L)$,  the probability that a customer buys both a mouse and a laptop — assign your answer to `p_m_and_l`.
+- $P(M \cup L)$, the probability that a customer buys a mouse or a laptop — assign your answer to `p_m_or_l`. Check the hint if you don't remember how to calculate this.
+
+```{r}
+p_m <- 515/2000
+p_m_given_l <- 32/90
+p_m_and_l <- 32/2000
+
+p_l <- 90/2000
+p_m_or_l <- p_m + p_l - p_m_and_l
+```
+
+## Conditional Probability & Complements
+
+In the last exercise, we considered the table below and found that $P(M|L)$,  the probability that a customer buys a mouse given that they bought a laptop, was $\frac{32}{90}$. 
+
+![](https://dq-content.s3.amazonaws.com/472/cpm2_viz1.png)\
+
+Looking at the table, we can see that $P(M^C|L)$, , the probability that a customer doesn't buy a mouse given that they bought a laptop, is:
+
+
+$$P(M^C|L) = \frac{\text{card}(M^C \cap L)}{\text{card}(L)} = \frac{58}{90}$$
+Recall that all events have a complement, usually denoted by a superscript "$C$", as in $A$ and $A^C$. The probability that either of these will happen —"$A$ or not- $A$" ($P(A \cup A^C)$)- is certain, so it has a 100% probability of happening. 
+
+$$P(A \cup A^C) = P(A) + P(A^C) = 1$$
+Given that a customer bought a laptop, they will either a buy a mouse or not. The fact that they bought a laptop doesn't change this aspect of probability. This means we can also be certain that either event $(M|L)$ or $(M^C|L)$ will happen:
+
+$$P(M|L) + P(M^C|L) = 1$$
+
+We can confirm this by hand since we already know that $P(M|L) = \frac{32}{90}$ and $P(M^C|L) = \frac{58}{90}$, so:
+
+$$P(M|L) + P(M^C|L) = \frac{32}{90} + \frac{58}{90} = 1$$
+In more general terms, for any two events A and B, we have:
+
+$$P(A|B) + P(A^C|B) = 1$$
+This formula mirrors what we have learned previously, but adds a conditional aspect to it. Conditional probabilities are still probabilities in the end, so they must also obey the same rules that "non-conditional" or marginal probabilities follow. However, you must be careful to note that that the relationship above applies for the event $A$ and not the condition $B$. The complement of $P(A|B)$ is $P(A^C|B)$, not $P(A|B^C)$
+
+$$\tag{Incorrect} P(A|B) \neq 1 - P(A|B^C)$$
+
+Let's now do a few exercises and continue the discussion in the next screen.
+
+
+For our electronics store example, let's say that more data has been collected. We are now interested in how other items are related to laptops and computer mice. We know that:
+
+- $P(B|M)$ = 0.1486, the probability that a customer buys batteries given that they bought a mouse is 0.1486.
+- $P(C|L)$ = 0.0928, the probability that a customer buys a cooler given that they bought a laptop is 0.0928.
+
+- $P(B^C|C)$ = 0.7622, the probability that a customer doesn't buy batteries given that they bought a cooler is 0.7622.
+
+Using the rules we learned above, find:
+1. $P(B^C|M)$, and assign your answer to `p_non_b_given_m`.
+2. $P(C^C|L)$, and assign your answer to `p_non_c_given_l`.
+3. $P(B|C)$, and assign your answer to `p_b_given_c`.
+
+```{r}
+p_b_given_m <- 0.1486
+p_c_given_l <- 0.0928
+p_non_b_given_c <- 0.7622
+p_non_b_given_m <- 1 - p_b_given_m
+p_non_c_given_l <- 1 - p_c_given_l
+p_b_given_c <- 1 - p_non_b_given_c
+```
+
+
+## Distinguishing Between Event and Condition
+
+
+In the last lesson, we alluded to the fact that two similar-looking conditional probabilities, $P(A|B)$ and $P(B|A)$ have different interpretations. On this screen, we'll discuss this idea a bit more in detail. Let's consider the data from the earlier exercise again:
+
+![](https://dq-content.s3.amazonaws.com/472/cpm2_viz1.png)\
+
+We can calculate $P(M|L)$ and $P(L|M) using the data in the table, and we see they are not the same:
+
+$$P(M|L) = \frac{32}{90}$$
+$$P(L|M) = \frac{32}{515}$$
+Why are these two different? The key to understanding this is knowing that even though they look the same, they are asking different things. The two probabilities change what is the event we want to know the probability for and what is the event that we condition on. $P(M|L)$ conditions on a person buying a laptop, but $P(L|M)$ conditions on a person buying a mouse. The marginal probabilities of these events can be wildly different from each other, so we would get different conditional probabilities. In principle, there are cases where $P(M|L)$ is equal to $P(L|M)$, but in general, this will not be the case.
+
+The take-home message is that it matters how what our condition is. $P(A|B)$  does not necessarily have the same value as  $P(B|A)$. If you're ever unsure of how to interpret a conditional probability, know that the event comes first and the condition afterwards. Being able to distinguish between these two is paramount to understanding conditional probability correctly.
+
+When we read $P(A|B)$, we distinguish between the roles of $A$ and $B$. $A$ is the event that we want to calculate the probability for. $B$ is the event that we condition on, so from here on out we will refer to it as the condition.
+
+Let's continue with a few exercises and resume the discussion on the next screen.
+
+For the following exercises use the data in the table below.
+
+![](https://dq-content.s3.amazonaws.com/430/cpm2_viz1.png)\
+
+- $P(M|L^C)$— assign your answer to `p_m_given_non_l`.
+- $P(L^C|M)$— assign your answer to `p_non_l_given_m`.
+- $P(M \cap L^C)$— assign your answer to `p_m_and_non_l`.
+- $P(L^C \cap M)$— assign your answer to `p_non_l_and_m.` Check the hint if you're not sure about exercises 3 and 4.
+
+```{r}
+p_m_given_non_l <- 483/1910
+p_non_l_given_m <- 483/515
+p_m_and_non_l <- 483/2000
+p_non_l_and_m <- 483/2000 #P(M and non-L) is the same as P(non-L and M); see the exercise hint
+```
+
+## More On Intersection Probabilities
+
+
+Previously, we found that the probability of an intersection could be expressed as a product of a conditional and a marginal probability:
+
+$$\begin{aligned}
+P(A|B) &= \frac{P(A \cap B)}{P(B)} \\
+\implies P(A \cap B) &= P(A|B) \times P(B)
+\end{aligned}$$
+This formula takes on a familiar form to something we have learned in the Probability Fundamentals course: the multiplication rule. That is, the probability of an intersection of events can be expressed as the product of the two marginal probabilities:
+
+$$P(A \cap B) = P(A) \times P(B)$$
+The only difference that we have with this new equation is that one of the probabilities is now a conditional probability instead of a marginal one. We said in the last screen that, in general, the two conditional probabilities $P(A|B)$ and  $P(B|A)$ are not equal to each other. Despite this, we can still derive a useful relationship between the two. Just as we saw with the diagnostic test for HIV in the last lesson, both probabilities can be important to know.
+
+To derive this relationship, notice that both $P(A|B)$ and  $P(B|A)$ can be written in terms of a ratio of an intersection and a marginal probability:
+
+$$P(A|B) = \frac{P(A \cap B)}{P(B)}$$
+
+$$P(B|A) = \frac{P(A \cap B)}{P(A)}$$
+When we change the condition, it changes what the probability is in the denominator. Notice that no matter what the event or condition is, the numerator remains the same. For any two events, their intersection won't change, so we can solve for the intersection in both of the above equations and set them equal to each other:
+
+$$\begin{aligned}
+P(A|B) &= \frac{P(A \cap B)}{P(B)} \implies P(A \cap B) = P(A|B) \times P(B) \\
+P(B|A) &= \frac{P(B \cap A)}{P(A)} \implies P(B \cap A) = P(B|A) \times P(A) \\
+&\implies P(A|B) \times P(B) = P(B|A) \times P(A)
+\end{aligned}$$
+
+The above equation tells us about the relationship between $P(A|B)$ and  $P(B|A)$. It is worth saying again that this formula works in general since the probability of the intersection between two events won't change. This relationship will come in handy later, but for now, we'll focus on the fact that the probability of an intersection can be written in two equivalent ways.
+
+To ground our formula, suppose we have a bowl with six green marbles and four red marbles. If we're drawing one marble at a time randomly and without replacement (meaning we don't put the marbles drawn back in the bowl), then what's the probability of getting a red marble on the first draw, followed by a green marble on the second draw?
+
+In probability notation, we want to find $P(A \cap B)$,  where:
+
+- $A$ is the event that we get a red marble on the first draw
+- $B$ is the event that we get a green marble on the second draw
+
+
+In this case, we don't have a convenient table of data to allow us an easy calculation $P(A \cap B)$. However, we can use the multiplication rule to calculate $P(A \cap B)$ in our example with the marbles. Out of the ten marbles in the bowl, four marbles are red, so we have:
+
+$$P(A) = \frac{4}{10}$$
+Using the multiplication rule, we see that $P(A \cap B)$, the probability of drawing a red marble followed by a green marble, is:
+
+$$P(A \cap  B) = P(B|A) \times P(A) = \frac{6}{9} \times \frac{4}{10} = \frac{24}{90}$$
+Let's now get some practice using the multiplication rule.
+For the exercises below, we know:
+
+- The probability that a customer buys RAM memory from an electronics store is 
+P(RAM) = 0.0822.
+- The probability that a customer buys a gaming laptop is P(GL) = 0.0184.
+- The probability that a customer buys RAM memory given that they bought a gaming laptop is P(RAM|GL) = 0.0022.
+
+Calculate:
+
+1. $P(\text{GL} \cap \text{RAM})$- assign your answer to `p_gl_and_ram`.
+
+2. $P(\text{RAM}^C | \text{GL})$- assign your answer to `p_non_ram_given_gl`.
+
+3. $P(\text{GL} \cap \text{RAM}^C)$— assign your answer to `p_gl_and_non_ram`.
+
+4. $P(\text{GL} \cup \text{RAM})$— assign your answer to `p_gl_or_ram`.
+
+```{r}
+p_ram <- 0.0822
+p_gl <- 0.0184
+p_ram_given_gl <- 0.0022
+p_gl_and_ram <- p_gl * p_ram_given_gl
+p_non_ram_given_gl <- 1 - p_ram_given_gl
+p_gl_and_non_ram <- p_gl * p_non_ram_given_gl
+p_gl_or_ram <- p_gl + p_ram - p_gl_and_ram
+```
+
+##  Conditional Probability and Independence
+
+On the last screen, we saw the multiplication rule in a slightly different form and that the probability of an intersection can be expressed in two similar ways:
+
+
+$$\tag{1} P(A \cap  B) = P(B|A) \times P(A)$$
+$$\tag{2} P(A \cap  B) = P(A|B) \times P(B)$$
+
+These formula are similar to the multiplication rule we learned in Probability Fundamentals. In this screen, we'll see how this formula can be simplified back to the product of two marginal probabilities. Let's consider an example where we roll a fair six-sided die twice and want to find $P(A \cap  B)$, where:
+
+
+- $A$ is getting a 5 on the first roll
+- $B$ is getting a 6 on the second roll
+
+Let's start by using the formula (1). The probability of getting a 5 on the first roll (event A) is:
+
+
+$$P(A) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} = \frac{1}{6}$$
+Now we need $P(A|B)$, , the probability of getting a 6 on the second roll (event B) given that we got a 5 on the first roll (event $A$).
+
+
+$$P(B|A) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} = \frac{1}{6}$$
+
+Notice here that conditioning on $A$ doesn't have any effect on the denominator. Since we are assuming that the die is fair, we would expect that previous rolls will not affect future rolls. A die does not "remember" what it last rolled. The resulting calculation above is similar to what we calculated for $P(A)$ This suggests that the conditional probability is the same as the marginal probability.
+
+
+Plugging both of these values in, we get:
+
+
+$$P(A \cap B) = P(B|A) \times P(A) = \frac{1}{36}$$
+Let's say that instead of looking at the conditional probability $P(B|A)$, we want the marginal 
+$P(B)$ instead. This calculation is just like the one we made for $A$:
+
+
+$$P(B) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} = \frac{1}{6}$$
+
+This is an instance where $P(B)$ is equal to $P(B|A)$, , and it marks an important aspect about conditional probability. Since we know that previous dice rolls won't affect future die rolls, we have an intuition that $A$ and $B$ do not influence each other. If two events don't influence each other, then it wouldn't matter if we condition on one of them or not. Therefore, we can rewrite formula (1) back in terms of how we learned the original multiplication rule:
+
+
+
+$$\tag{3} P(A \cap  B) = P(B|A) \times P(B) = P(A) \times P(B)$$
+If we were to repeat the same process with formula (2), we would find the same result: the conditional probability $P(A|B)$ is equal to the marginal $P(A)$. Recall from Probability Fundamentals that if two events were independent, then the probability of their intersection can be described as shown in formula (3). To summarize, if events A and B are independent, it means that:
+
+
+$$P(A) = P(A|B) \\
+P(B) = P(B|A) \\
+P(A \cap B) = P(A) \times P(B)$$
+
+By definition, independent events are events that do not affect the probability of each other. In this lesson, we finally learn what that "means" mathematically: if two events are independent of each other, it doesn't change the probability of their intersection if we condition on one. In fact, formula (3) is the mathematical definition for independence. If that equality does not hold, then we know that the two events are not independent of each other, or they are dependent on one another.
+
+On the next screen, however, we'll see the formula fails if $A$ and $B$ are not independent. Until we resume our discussion, let's get some practice with what we've learned.
+
+
+A fair six-sided die is rolled twice and the following three events are considered:
+
+- K- the die showed a 4 on the second roll
+- L- the die showed a 2 on the first roll
+- M- the die showed an even number on the second roll
+
+Find whether the following events are independent or not:
+
+1. Events K and L- assign the string `"independent"` to a variable named `k_and_l` if the events are independent, otherwise assign the string `"dependent"`.
+2. Events L and M- assign the string `"independent"` to a variable named `l_and_m` if the events are independent, otherwise assign the string `"dependent"`.
+3. Events K and M- assign the string `"independent"` to a variable named `k_and_m` if the events are independent, otherwise assign the string `"dependent"`.
+
+```{r}
+k_and_l <- 'independent'
+l_and_m <- 'independent'
+k_and_m <- 'dependent'
+```
+
+## Dependent Events
+
+
+In the previous screen, we saw events A and B are independent if and only if:
+
+
+$$P(A) = P(A|B) \\
+P(B) = P(B|A) \\
+P(A \cap B) = P(A) \times P(B)$$
+
+
+
+If any of the three relationships above does not hold, then $A$ and $B$ are dependent on each other. It is worth some time to really think about independence and dependence and understand what they mean for us in a real-world setting. Our examples so far have dealt with die rolls, but a solid understanding of independence has far reaching consequences later in your learning journey.
+
+For example, when data scientists create a model to predict customer behavior, they will often have to assume that each of their customer's purchasing habits are independent of each other. If that assumption is faulty, say when an influencer creates an ad that encourages all their followers to buy a product, then the results of the model will not be as reliable.
+
+
+In the previous exercise, for instance, we considered rolling a fair six-sided die twice and saw events 
+$K$ and $M$ were not independent, where: -$K$: The die showed a 4 on the second roll. -$M$: The die showed an even number on the second roll.
+
+$P(K)$ is $\frac{1}{6}$ since it doesn't matter what happened on the first roll. However, $P(K|M)$- the probability that $K$ occurs given that $M$ occurred- is not $\frac{1}{6}$ because knowledge that $M$ occured reduces the sample space:
+
+
+$$P(K|M) = \frac{\text{number of outcomes satisfying the event}}{\text{total number of possible outcomes}} = \frac{1}{3}$$
+We see $P(K) = \frac{1}{6}$ and $P(K|M) = \frac{1}{3}$, so the relationship $P(K) = P(K|M)$ doesn't hold. This in turn means event $K$ and $M$ are not independent (so they are dependent). Stepping back a bit from the problem, this makes sense. Just from reading what $K$ and $M$, we have an idea that the two will be related in some way. This relationship makes it hard to see these two events as independent. To calculate $P(A \cap B)$ for dependent events, we go back to the original formulas we learned:
+
+
+$$P(A \cap  B) = P(B|A) \times P(A)$$
+
+
+Both formulas will lead to the same result. However, depending on the problem we're trying to solve, it may be easier to calculate $P(A|B)$ rather than $P(B|A)$ or vice versa, so we should choose the formula that's easier to work with.
+
+Now let's look at a few exercises, then move to one of the last screens of this lesson.
+
+Consider the table below:
+
+![](https://dq-content.s3.amazonaws.com/472/cpm2_viz1.png)\
+
+For problems 1 and 2, find whether the following events are independent or not (check the hint if you don't know how to solve this). For 3 and 4, use the formulas we learned to calculate the given probabilities.
+
+1. Events $L$ and $M$- assign the string "independent" to a variable named `l_and_m` if the events are independent, otherwise assign the string "dependent".
+2. Events $L$ and $M^C$- assign the string "independent" to a variable named `l_and_non_m` if the events are independent, otherwise assign the string "dependent".
+3. $P(L \cap M)$- assign your answer to `p_l_and_m`.
+4. $P(L \cap M^C)$- assign your answer to `p_l_and_non_m`.
+
+```{r}
+# Exercise 1 & 2
+l_and_m <- 'dependent'
+l_and_non_m <- 'dependent'
+
+# Exercise 3
+p_l <- 90/2000
+p_m_given_l <- 32/90
+p_l_and_m <- p_l * p_m_given_l
+
+# Exercise 4
+p_not_m_given_l <- 58/90
+p_l_and_non_m <- p_l * p_not_m_given_l
+```
+
+
+## Independence for Three Events
+
+As we wrap up the lesson, let's discuss another aspect of independence. You may have noticed that we've only considered two events. What will the multiplication rule look like if we have three events $A$, $B$ and $C$? How do we find whether or not they are independent?
+
+When we discussed the multiplication rule in Probability Fundamentals, you might recall we explained that the rule can be extended for any number of events, provided they are all independent of each other. That is to say, if we have events $A$, $B$, $C$ that are independent of each other, then the multiplication rule becomes:
+
+$$P(A \cap B \cap C \ldots) = P(A) \times P(B) \times P(C)$$
+
+Adding a third event adds a little more complexity. To find whether three events — $A$, $B$, $C$- are independent or not, we have to check two different kinds of independence. **First**, each event has to be independent one from all the others, which means the following relationships must be true:
+
+
+$$P(A \cap B) = P(A) \times P(B) \\
+P(A \cap C) = P(A) \times P(C) \\
+P(B \cap C) = P(B) \times P(C) \\$$
+
+Above, events A, B, C are independent in pairs — we say they are pairwise independent. **The second condition** is that they should be also independent all together, which mathematically means:
+
+$$P(A \cap B \cap C) = P(A) \times P(B) \times P(C)$$
+
+If both conditions above hold, events A, B, C are said to be mutually independent.
+
+It is important to note that having pairwise independence in the three events does not automatically mean that they will be mutually independent. We'll look at an example where three events satisfy the condition of pairwise independence, and yet they are not mutually independent. Let's say we toss a fair coin twice and consider the following three events, where:
+
+
+- $A$ is the event that we get heads on both tosses, or heads on the first toss and tails on the second:$\{HH, HT\}$
+- $B$ is the event that we get heads on both tosses, or tails on the first toss and heads on the second:$\{HH, TH\}$ 
+- $C$ is the event that we get heads on both tosses, or tails on both tosses: $\{HH, TT\}$
+
+For two coin flips, the sample space has four possible outcomes:
+
+$$\Omega = \{HH, HT, TH, TT\}$$
+Each of the events A, B, C have two successful outcomes, so we have:
+
+$$P(A) = P(B) = P(C) = \frac{2}{4} = \frac{1}{2}$$
+Notice that $A \cap B = \{HH\}$, so $P(A \cap B)$ means finding the probability that outcome $HH$ happens:
+
+$$P(A \cap B) = \frac{1}{4}$$
+Multiplying $P(A)$ by $P(B)$ gives us the same result for $P(A \cap B)$, so A and B are independent:
+
+$$P(A \cap B) = P(A) \times P(B) = \frac{1}{4}$$
+By the same calculation, we see that pairwise independence holds for all three events:
+
+$$P(A \cap B) = \frac{1}{4} = P(A) \times P(B) \\
+P(A \cap C) = \frac{1}{4} = P(A) \times P(C) \\
+P(B \cap C) = \frac{1}{4} = P(B) \times P(C) \\$$
+
+To check for the second condition, notice that $A \cap B \cap C = \text{{HH}}$, so: 
+$$P(A \cap B \cap C) = \frac{1}{4}$$
+However, multiplying $P(A)$,$P(B)$,$P(C)$ together gives us a different result:
+
+$$P(A) \times P(B) \times P(C) = \frac{1}{2} \times \frac{1}{2} \times \frac{1}{2} = \frac{1}{8} \\
+P(A \cap B \cap C) = \frac{1}{4} \not = P(A) \times P(B) \times P(C)$$
+
+
+We conclude that events $A$, $B$, $C$ are not mutually independent, even though they are pairwise independent.
+
+For our electronics store example, say new data is collected, and we know that:
+
+- The probability that a customer buys an electric toothbrush is $P(\text{ET})$ = 0.0432.
+- The probability that a customer buys an air conditioning system is $P(\text{AC})$ = 0.0172
+- The probability that a customer buys a PlayStation is  $P(\text{PA})$ = 0.0236.
+
+Assuming that all of the events given are mutually independent, calculate:
+
+
+1. $P(\text{ET} \cap \text{PS})$ — assign your answer to `p_et_and_ps`.
+2. $P(\text{ET} \cap \text{AC})$ — assign your answer to `p_et_and_ac`.
+3. $P(\text{AC} \cap \text{PS})$ — assign your answer to `p_ac_and_ps`.
+4. $P(\text{ET} \cap \text{AC} \cap \text{PS})$ — assign your answer to `p_et_and_ac_and_ps`.
+
+```{r}
+p_et <- 0.0432
+p_ac <- 0.0172
+p_ps <- 0.0236
+p_et_and_ps <- p_et * p_ps
+p_et_and_ac <- p_et * p_ac
+p_ac_and_ps <- p_ac * p_ps
+p_et_and_ac_and_ps <- p_et * p_ac * p_ps
+```
+
+# 7. Bayes Theorem
+## A Review On Mutual Exclusivity
+In the last lesson, we continued learning about conditional probability and its relationship to independence. As we move towards the central topic of this course, we feel a review of mutual exclusivity would be beneficial. It is common for students to mistake independence with mutual exclusivity. Events are independent when the occurrence of one event does not affect the probability of the other. Mathematically, we know two events to be independent if the probability of their intersection is the product of their marginal probabilities, as seen below:
+
+$$P(A \cap B) = P(A) \times P(B)$$
+
+Recall that the above is the case since the conditional probabilities are equal to the marginal probabilities. Mutual exclusivity is also a statement about the probability of an intersection. When two events are mutually exclusive, it is impossible for them to happen at the same time. That is, the probability of their intersection is 0.
+
+$$P(A \cap B) = 0$$
+Examples of mutually exclusive events include:
+
+- Getting a 5 (event A) and getting a 3 (event B) when we roll a regular six-sided die — it's impossible to get both a 5 and a 3 simultaneously in a single roll.
+- A coin lands on heads (event A) and tails (event B) — it's impossible to flip a coin and see it landing on both heads and tails.
+
+Both independence and mutual exclusivity describe the relationship between two or more events, and we see that this in their mathematical formulae:
+
+$$\begin{aligned}
+\text{Independence} &\implies P(A \cap B) = P(A) \times P(B) \\
+\text{Dependence} &\implies P(A \cap B) = P(A) \times P(B|A) \\
+\text{Mutually Exclusive} &\implies P(A \cap B) = 0 
+\end{aligned}$$
+Now let's review a few exercises before learning some new material.
+For the exercises below, consider the following events and probabilities:
+
+- $D$: a subject has HIV
+- $T$: a subject tests positive on a diagnostic test
+- The probability of having HIV is 0.00014. That is $P(D) = 0.00014$
+- The probability of being infected with HIV given a positive test result is 0.03. That is, $P(D|T) = 0.03$
+
+
+Answer the following statements with True or False based on your knowledge of independence and mutual exclusivity.
+
+1. Are $D$ and $T$ are independent?
+2. Are $D$ and $D^C$ mutually exclusive?
+3. Are $D^C$ and $T$ dependent?
+
+```{r}
+statement_1 <- FALSE
+statement_2 <- TRUE
+statement_3 <- TRUE
+```
+
+## From Conditional to Marginal
+
+On the previous screen, we reviewed the differences between independence and mutual exclusivity. Before we're able to move on with the lesson, we also need to review the addition rule, which we learned in Probability Fundamentals.
+
+$$P(A \cup B) = P(A) + P(B) - P(A \cap B)$$
+If events $A$ and $B$ are mutually exclusive, then $P(A \cap B) = 0$.Therefore, the addition rule for mutually exclusive events simplifies to:
+$$\begin{aligned}
+P(A \cup B) &= P(A) + P(B)
+\end{aligned}$$
+
+With this in mind, let's reconsider the example of HIV and the diagnostic test:
+
+- The probability of getting a positive test result given that a patient is not infected with HIV is  1.05%, $P(T|D^C) = 0.0105$
+- The probability of getting a positive test result given that a patient is infected with HIV is 99.78%, $P(T|D) = 0.9978$
+- The probability of being infected with HIV is 0.14%, $P(D) = 0.0014$. This is also called the prevalence of HIV and can be reinterpreted as how common the disease is in the general population.
+
+- The probability of not being infected with HIV is 99.86%, $P(D^C) = 0.9986$
+
+
+When we first dealt with this example, it was only in the context of conditional probabilities, such as 
+$P(T|D)$. We are equipped to move back from conditional to marginal probability. What if we just want to find $P(T)$, the probability that a person selected at random will get a positive result? In the context of this problem, there are two possible scenarios where someone can a positive result:
+
+- A person gets a positive result and is infected with HIV.
+- A person gets a positive result, but is not infected with HIV.
+
+When we think about positive test results, our first instinct is often to think that it means the disease is present. Conditional probability reminds us that this isn't the case and that false positives are possible. Ignoring these false positives can warp our understanding of how well a test performs.
+
+Both of the described scenarios are intersections of events: $T \cap D$ and $T \cap D^C$. These two intersections represent the only two scenarios where a person can test positive, so we are able to describe the marginal probability of testing positive as the sum of these two probabilities.
+
+
+
+$$P(T) = (T \cap D) \cup (T \cap D^C)$$
+To build out an understanding of this formula, we'll develop the Venn Diagram:
+
+![](https://dq-content.s3.amazonaws.com/473/hiv-venn.png)\
+
+There's a lot to unpack here in this one picture, so we'll dissect it here. First, notice that the entire sample space is comprised of either $D$ or $D^C$. When a group of events fully make up the sample space, we call them exhaustive. Assuming no intermediate level of disease, people can be described as either having HIV or not having it. Since someone cannot both have and not have HIV, we know that $D$ and $D^C$ are mutually independent. Since $D$ and $D^C$ have these two qualities, exhaustive and mutual exclusivity, we may call them a partition of the sample space.
+
+
+We can now also add the event $T$  on the diagram above, which will show us visually why $T = (D \cap T) \cup (D^C \cap T)$
+
+![](https://dq-content.s3.amazonaws.com/473/hiv-venn-test.png)\
+
+
+When we start considering test results in this sample space, we can see that some positive results will happen in those who have HIV (hopefully most), but some also appear in the $D^C$ region. The overlap of the $T$ area with the $D$ and $D^C$ areas represent our intersectional probabilities. Because $D$ and $D^C$ are mutually exclusive, we can are also assured that the intersections $(T \cap D)$ and $(T \cap D^C)$ are also mutually exclusive. This is the crucial insight of the picture.
+
+The mutual exclusivity of the intersections means that we can calculate the probability of their union using the addition rule we mentioned in the beginning of this screen.
+
+$$\begin{aligned}
+P(\overbrace{T}^{A \cup B}) &= P((\overbrace{D \cap T}^{A}) \cup (\overbrace{D^C \cap T}^{B})) \\
+P(\overbrace{T}^{A \cup B}) &= P(\overbrace{D \cap T}^{A}) + P(\overbrace{D^C \cap T}^{B}))
+\end{aligned}$$
+Now that we can represent $P(T)$ in terms of intersectional probabilities, we can use the multiplication rule we learned in the previous lesson:
+
+$$P(T) = P(D) \times P(T|D) + P(D^C) \times P(T|D^C)$$
+We have made the leap from conditional probability back to marginal probability. Using all the probabilities we need were listed earlier, which means we can calculate $P(T)$:
+
+$$\begin{aligned}
+P(T) &= 0.0014 \times 0.9978 + 0.9986 \times 0.0105 \\
+&= 0.0119
+\end{aligned}$$
+We see $P(T)$ is only 1.19%. This is mostly because having HIV is rare in the first place. Ideally, we would want to see that $P(T)$ matches the prevalence of the disease $P(D)$ that is, only those with the disease will test positive. Now let's look at a quick exercise and continue the discussion on the next screen.
+
+We can find the word "secret" in many spam emails. However, some emails are not spam even though they contain the word "secret." Let's define the following events and probabilities:
+
+- $S$: the event that an email is spam
+- $X$: the event that an email contains the word secret
+- The probability of getting a spam email is 23.88%. That is $P(S) = 0.2388$
+- The probability of an email containing the word "secret" given that the email is spam is 48.02%, $P(X|S) = 0.4802$
+- The probability of an email containing the word "secret" given that the email is not spam is 12.84%, $P(X| S^C) = 0.1284$.
+
+Calculate:
+
+1. $P(S^C)$. Assign the result to `p_non_spam`
+2. $P(S\cap X)$. Assign the result to `p_spam_and_secret`
+3. $P(S^C \cap X)$. Assign the result to `p_non_spam_and_secret`
+4. $P(X)$. Assign the result to `p_secret`
+
+```{r}
+p_spam <- 0.2388
+p_secret_given_spam <- 0.4802
+p_secret_given_non_spam <- 0.1284
+p_non_spam <- 1 - p_spam
+p_spam_and_secret <- p_spam * p_secret_given_spam
+p_non_spam_and_secret <- p_non_spam * p_secret_given_non_spam
+p_secret <- p_spam_and_secret + p_non_spam_and_secret
+```
+
+
+## A General Formula
+
+On the previous screen, we developed an intuition about the probability of testing positive using a Venn Diagram:
+
+![](https://dq-content.s3.amazonaws.com/473/hiv-venn-test.png)\
+
+Using this diagram, we were able to calculate $P(T)$ by rethinking $T$ as the union of mutually exclusive events:
+
+$$(D^C\cap T)\\
+P(T) = P(D \cap T) + P(D^C \cap T)$$
+We've grounded our understanding in the diagnostic test example, but we need a more general formula to apply to other problems. Imagine that instead of $T$, $D$, and $D^C$, we replace them with more general events $A$, $B$, and $B^C$:
+
+![](https://dq-content.s3.amazonaws.com/473/hiv-venn-general.png)\
+
+With this in mind, we can now develop a general formula for $P(A)$"
+
+$$P(A) = P(B \cap A) + P(B^C \cap A)$$
+Using the multiplication rule again on $P(B \cap A)$ and $P(B^C \cap A)$ the above formula becomes:
+
+$$P(A) = P(B) \times P(A|B) + P(B^C) \times P(A|B^C)$$
+The above formula works thanks to the rules of probability. Any event $B$ and its complement $B^C$  form a partition of the sample space. This means that any intersections of another event 
+$A$ in this sample space will also be mutually exclusive and suited to the addition rule.
+
+We'll see on the following screens that this formula plays a critical role in Bayes' Theorem. Now let's do a quick exercise.
+
+
+An airline transports passengers using two types of planes: a Boeing 737 and an Airbus A320. Assume the following:
+
+- The Boeing operates 73% of the flights. Out of these flights, 3% arrive at the destination with a delay.
+- The Airbus operates the remaining 27% of flights. Out of these flights, 8% arrive with a delay.
+Use the information above to calculate the following probabilities:
+
+1. Assign the probability of flying with a Boeing to `p_boeing` (to better understand what this probability means, imagine a passenger having bought a ticket with this airline — what's the probability that this passenger will be assigned to fly to her destination with a Boeing?).
+2. Assign the probability of flying with an Airbus to `p_airbus`.
+3. Assign the probability of arriving at the destination with a delay given that the passenger flies with a Boeing to `p_delay_given_boeing`.
+4. Assign the probability of arriving at the destination with a delay given that the passenger flies with an Airbus to `p_delay_given_airbus`.
+5. The probability that a passenger will arrive at her destination with a delay. Assign your answer to `p_delay`. Check the hint if you get stuck.
+
+
+```{r}
+p_boeing <- 0.73
+p_airbus <- 0.27
+p_delay_given_boeing <- 0.03
+p_delay_given_airbus <- 0.08
+
+p_delay <- p_boeing*p_delay_given_boeing + p_airbus*p_delay_given_airbus
+```
+
+## Extending Our Formula
+
+In the previous exercise, we applied the following formula to calculate the probability of having a delay when flying with a particular airline:
+
+$$\overbrace{P(\text{Delay})}^{P(A)} = \overbrace{P(\text{Boeing}) \times P(\text{Delay}|\text{Boeing})}^{P(B) \times P(A|B)} + \overbrace{P(\text{Airbus}) \times P(\text{Delay}|\text{Airbus})}^{P(B^C) \times P(A|B^C)}$$
+
+In this screen, we'll consider how to extend the formula to incorporate more than just two events to calculate a marginal probability. Let's consider another airline which has three types of planes, instead of two: a Boeing 737, an Airbus A320, and an ERJ 145.
+
+- The Boeing operates 58% of the flights. Out of these flights, 4% arrive at the destination with a delay.
+- The Airbus operates 31% of the flights. Out of these flights, 7% arrive with a delay.
+- The ERJ operates the remaining 11% of the flights. Out of these flights, 2% arrive with a delay.
+
+
+When a passenger buys a ticket from this airline, we know they will be assigned to just one of the airplane types. If we consider the airplane assignment as a random experiment, then the entire sample space is made up of just these three airplanes. Like an event and its complement, these three airplanes form a partition of the sample space: they are mutually exclusive and exhaustive. On a Venn diagram, we have:
+
+
+
+![](https://dq-content.s3.amazonaws.com/473/cpm3_viz4.png)\
+
+Just as how we did with the positive test result in the HIV example, we'll add the Delay event on the above Venn diagram:
+![](https://dq-content.s3.amazonaws.com/431/cpm3_viz5.png)\
+
+The Delay event can also be reimagined as multiple intersections. Since these intersections are mutually exclusive, we can calculate $P(Delay)$ as:
+
+$$\begin{aligned}
+P(\text{Delay}) &= P(\text{Boeing} \cap \text{Delay}) + P(\text{Airbus} \cap \text{Delay}) + P(\text{ERJ} \cap \text{Delay}) \\
+&= P(\text{Boeing}) \times P(\text{Delay}|\text{Boeing}) + P(\text{Airbus}) \times P(\text{Delay}|\text{Airbus}) + P(\text{ERJ}) \times P(\text{Delay}|\text{ERJ}) \\
+&= 0.58 \times 0.04 + 0.31 \times 0.07 + 0.11 \times 0.02 = 0.05
+\end{aligned}$$
+In this example, the event that we are conditioning on is the choice of airplane. To extend the formula to three events for the condition, we needed to make sure that we had all of the events necessary to create a partition of the sample space. We knew that the airline only had three airplanes, so these planes became our partition. Any other event that we try to consider with this partition can be rethought of as the union of mutually exclusive intersections.
+
+To develop a more general formula, imagine that instead of the events Delay, Boeing, Airbus, and ERJ, we have events $A$, $B_1$, $B_2$, and $B_3$.
+
+
+$$\overbrace{P(A)}^{P(\text{Delay})} = \overbrace{P(B_1)}^{P(\text{Boeing})} \times P(A|B_1) + \overbrace{P(B_2)}^{P(\text{Airbus})} \times P(A|B_2) + \overbrace{P(B_3)}^{P(\text{ERJ})} \times P(A|B_3)$$
+We'll now get a little practice with this new expanded formula. On the next screen, we're going to expand the formula for an arbitrary number of events. After that, we'll be well-equipped to start discussing Bayes' Theorem.
+
+An airline transports passengers using three types of planes: a Boeing 737, an Airbus A320, and an ERJ 145.
+
+- The Boeing operates 62% of the flights. Out of these flights, 6% arrive at the destination with a delay.
+- The Airbus operates 35% of the flights. Out of these flights, 9% arrive with a delay.
+- The ERJ operates the remaining 3% of the flights. Out of these flights, 1% arrive with a delay.
+
+Calculate the probability of delay and assign your result to `p_delay`. See the hint if you get stuck.
+
+```{r}
+p_boeing <- 0.62
+p_airbus <- 0.35
+p_erj <- 0.03
+p_delay_boeing <- 0.06 
+p_delay_airbus <- 0.09
+p_delay_erj <- 0.01
+p_delay <- p_boeing*p_delay_boeing + p_airbus*p_delay_airbus + p_erj*p_delay_erj
+```
+
+## The Law of Total Probability
+
+On the previous screen, we developed a formula incorporating three events to calculate a marginal probability:
+
+$$P(A) = P(B_1) \times P(A|B_1) + P(B_2) \times P(A|B_2) + P(B_3) \times P(A|B_3)$$
+
+In order for this formula to calculate the correct probability, we needed to make sure that the set of events $\{B_1, B_2, B_3 \}$ formed a partition for their sample space. In the HIV example, having the disease or not having it made up all of the different possibilities. In the airline example, the three planes formed all of the different possibilities. Using this same line of reasoning, we could extend the formula to any arbitary number of events for the condition.
+
+Let's say that we have a sample space $\Omega$ that can be divided up into a partition of 
+$n$ mutually exclusive and exhaustive events. We represent the number of events as the variable 
+$n$ since we don't know it ahead of time.
+
+
+$$\Omega = \{B_1, B_2, ..., B_n\}$$
+Using the same reasoning as we used above, the probability of $A$ in this sample space made of 
+$n$ events is:
+
+$$P(A) = P(B_1) \times P(A|B_1) + P(B_2) \times P(A|B_2) + \ldots + P(B_n) \times P(A|B_n)$$
+The above formula has a special name: The Law of Total Probability. When we have long sums, it's often more convenient to represent it as the Greek letter $\Sigma$, pronounced "sigma". The law of total probability is usually written using this summation sign $\Sigma$:
+
+
+$$P(A) = \sum_{i = 1}^{n} P(B_i) \times P(A|B_i)$$
+## Bayes' Theorem
+
+In the last lesson, we commented on the fact that conditional probabilities typically aren't the same when we switch the event and the condition: $P(A|B)$ vs P(B|A). Our review of the Law of Total Probability gives us the ability to better flesh out the relationship between these two conditional probabilites. We saw that the probability of an intersection of two events can be written in one of two ways:
+
+$$P(A \cap B) = P(A|B) \times P(B)$$
+$$P(A \cap B) = P(B|A) \times P(A)$$
+This works out because the intersection will not change no matter how we define the event and the condition in a conditional probability. Since these two are equal to each other, we can derive a relationship between the two flipped conditional probabilities.
+
+$$\begin{aligned}
+P(A \cap B) &= P(B|A) \times P(A) = P(A|B) \times P(B) \\
+&\implies P(B|A) \times P(A) = P(A|B) \times P(B) \\
+&\implies P(B|A) = \frac{P(A|B) \times P(B)}{P(A)}
+\end{aligned}$$
+This formula suggests that the two conditional probabilities are related by a ratio of probabilities: $\frac{P(B)}{P(A)}$ This ratio doesn't have any immediate intuition, so we'll motivate it by our airline example again to develop our understanding.
+
+We used the Law of Total Probability to figure out the probability of getting a delay, using information on the different airplanes and the chances of having a delay given that a particular airplane was used. We know each of the conditional probabilities of delay given a particular airline, but let's say that we want to flip this probability. If we actually observe a delay in a plane, what is the probability that the plane itself is a Boeing? In more familiar phrasing, what is the probability that the plane we see is a Boeing, given that it arrived with a delay?
+
+The following was the data we had on an airline with just two airplanes: the Boeing and the Airbus.
+
+- The Boeing operates 73% of the flights. Out of these flights, 3% arrive at the destination with a delay.
+- The Airbus operates the remaining 27% of the flights. Out of these flights, 8% arrive with a delay.
+Let's say a plane did arrive with a delay and we want to find the probability that the plane is a Boeing. In other words, we want to find $P(Boeing|Delay)$. Using the formula for conditional probability, we know that: 
+
+$$P(\text{Boeing}|\text{Delay}) = \frac{P(\text{Boeing} \cap \text{Delay})}{P(\text{Delay})} = \frac{P(\text{Boeing}) \times P(\text{Delay}|\text{Boeing})}{P(\text{Delay})}$$
+
+
+Matching this equation to the more general equation we found earlier means that $A$ is getting a delay and $B$ is that the plane is a Boeing. We already know from the data that $P(Boeing) = 0.73$ and $P(Delay|Boeing) = 0.03$ The final piece that we don't have is the probability of a delay, $P(Delay)$ However, the Law of Total Probability gives us a way to calculate this marginal probability in terms of conditional probabilities.
+
+$$\begin{aligned}
+P(Delay) &= P(\text{Boeing}) \times P(\text{Delay}|\text{Boeing}) + P(\text{Airbus}) \times P(\text{Delay}|\text{Airbus}) \\
+&= 0.73 \times 0.03 + 0.27 \times 0.08 \\
+&= 0.0435
+\end{aligned}$$
+Now we can plug in the values in our initial conditional probability formula and find $P(Boeing|Delay)$:
+
+$$P(\text{Boeing}|\text{Delay}) = \frac{0.73 \times 0.03}{0.0435} = 0.5034$$
+Using our knowledge of conditional probability and the Law of Total Probability, we were able to "flip" the conditional probability and calculate it. The airline example was an application of Bayes' Theorem to solve a probability problem. Bayes' Theorem enables us to "flip" the conditional probability. The airline example represents a case where two events, an event and its complement, make up all of the possibilities. The denominator in Bayes' Theorem is a marginal probability, which we can calculate using the Law of Total Probability.
+
+Mathematically, Bayes' Theorem can be written as:
+
+$$\begin{aligned}
+P(A \cap B) &= P(B|A) \times P(A) = P(A|B) \times P(B) \\
+&\implies P(B|A) \times P(A) = P(A|B) \times P(B) \\
+&\implies P(B|A) = \frac{P(A|B) \times P(B)}{P(A)} \\
+&\implies P(B|A) = \frac{P(A|B) \times P(B)}{\sum_{i=1}^n P(B_i) \times P(A|B_i)} 
+\end{aligned}$$
+It's worth clarifying the difference between $B$ and $B_i$ in the above equation. Here $B$ represents a particular condition that we want to know the probability about. $B_i$ represents all the conditions that are possible. In our airline example, the Boeing and the Airbus were the only two planes we could ride. The Law of Total Probability captures all of this information by incorporating all of the conditions. Bayes' Theorem works in general, and we can even flip the event and condition:
+
+$$\begin{aligned}
+\text{Conditional Probability} &\implies P(A|B) = \frac{P(A \cap B)}{P(B)} \\
+\text{The Law of Total Probability} &\implies P(B) = \sum_{i = 1}^{n} P(A_i) \times P(B|A_i) \\
+\text{Bayes' Theorem} &\implies P(A|B) = \frac{P(A) \times P(B|A)}{\displaystyle \sum_{i = 1}^{n} P(A_i) \times P(B|A_i)}
+\end{aligned}$$
+The result of flipping the event and condition is just a slight change in the notation. Now let's use Bayes' Theorem to find $P(Airbus|Delay)$. On the next screen, we'll learn more about how to interpret the results of Bayes' Theorem.
+
+An airline transports passengers using two types of planes: a Boeing 737 and an Airbus A320.
+
+- The Boeing operates 73% of the flights. Out of these flights, 3% arrive at the destination with a delay.
+- The Airbus operates the remaining 27% of the flights. Out of these flights, 8% arrive with a delay.
+
+Use Bayes' theorem to find $P(\text{Airbus}|\text{Delay})$. Assign your answer to `p_airbus_delay.` Don't forget you can check the hint if you get stuck.
+
+
+
+```{r}
+p_boeing <- 0.73
+p_airbus <- 0.27
+p_delay_given_boeing <- 0.03
+p_delay_given_airbus <- 0.08
+p_delay <- p_boeing*p_delay_given_boeing + p_airbus*p_delay_given_airbus
+p_airbus_delay <- (p_airbus * p_delay_given_airbus) / p_delay
+```
+
+## Prior and Posterior Probability
+Near the beginning of this lesson, we considered an example around HIV testing and saw the following probabilities:
+
+- The probability of getting a positive test result given that a patient is infected with HIV is 99.78%, $P(T|D) = 0.9978$
+- The probability of getting a positive test result given that a patient is not infected with HIV is 1.05%, $P(T|D^C) = 0.0105$
+- The probability of being infected with HIV is 0.14%, $P(D) = 0.0014$
+- The probability of not being infected with HIV is 99.86%, $P(D^C) = 0.9986$
+
+
+Since $P(T|D) = 0.9978$, it means that 99.78% of those infected with HIV will get a correct diagnosis if they take the test. Conversely, the value of $P(T|D^C) = 0.0105$ means 1.05% of the persons who are not infected with HIV get the wrong diagnosis.
+
+In reality, a patient will not know beforehand if they have HIV or not. That is the point of a diagnostic test. They are hoping that the test result will correctly tell them about their HIV status, but we must account for the fact that the test is not perfect. Let's say a patient tests positive. We are faced with a flipping of the event and the condition. We know $P(T|D)$ and $P(T|D^C)$ but the actual probability of interest to the patient is $P(D|T)$, the probability of having HIV given that they had a positive test result.
+
+
+Since we are looking to flip the event and condition, we can find the answer by applying Bayes' Theorem. Let's begin by expanding $P(D|T)$ using the conditional probability formula:
+
+
+$$P(D|T) = \frac{P(D \cap T)}{P(T)} = \frac{P(D) \times P(T|D)}{P(T)}$$
+Using the law of total probability, we can find the marginal probability of testing positive with the given data:
+
+$$\begin{aligned}
+P(T) &= P(D) \times P(T|D) + P(D^C) \times P(T|D^C) \\
+&= 0.0014 \times 0.9978 + 0.9986 \times 0.0105 \\
+&= 0.0119
+\end{aligned}$$
+This will allow us to calculate the conditional probability of interest:
+
+$$P(D|T) = \frac{0.0014 \times 0.9978}{0.0119} = 0.1174$$
+Notice that if a person tests positively, the probability of being infected with HIV increases quite a bit from the given prevalence of HIV, 0.14%. This change in probability happens because the patient has more information on hand. Using a test, a patient has a better idea about how likely they are to be infected with HIV. In its mathematical form, Bayes' Theorem may seem like another probability concept, but all of us use it in our daily lives, whether we know it or not.
+
+We all have beliefs about the world, some of which are correct and incorrect. If we think that R is a relatively useless skill, we can think of this as a low probability. The probability that R is useful is low. However, let's also say that we explored some job postings and saw that R was mentioned in almost all of them. After seeing this, you'd be more inclined to think that R was more useful than you originally thought and believe that its usefulness is higher. That is, after seeing some evidence about R's usefulness, you updated your belief about it. This is the essence of Bayes' Theorem! We all have prior beliefs, but we are also open to changing our beliefs in light of evidence.
+
+In the above example, we've considered the probability of being infected with HIV in two scenarios:
+
+1. Before doing any test: $P(D)$
+2. After testing positive: $P(D|T)$
+
+The probability of being infected with HIV before doing any test is called the prior probability ("prior" means "before"). Without any other information, our best guess is that the probability of having HIV is just how common it is in the population. The probability of being infected with HIV after testing positive is called the posterior probability ("posterior" means "after"). So, in this case, the prior probability is 0.14%, and the posterior probability is 11.74%. The patient uses the positive test to update their beliefs about their HIV status.
+
+The probability of being infected with HIV before doing any test is called the prior probability ("prior" means "before"). Without any other information, our best guess is that the probability of having HIV is just how common it is in the population. The probability of being infected with HIV after testing positive is called the posterior probability ("posterior" means "after"). So, in this case, the prior probability is 0.14%, and the posterior probability is 11.74%. The patient uses the positive test to update their beliefs about their HIV status.
+
+
+Many spam emails contain the word "secret". However, some emails are not spam even though they contain the word "secret". Let's say we have the following events and probabilities:
+
+- $S$: the event that an email is spam
+- $X$: the event that an email has the word "secret" in it
+- The probability of getting a spam email is 23.88%. That is $P(S) = 0.2388$
+- The probability of an email containing the word "secret" given that the email is spam is 48.02%, $P(X|S) = 0.4802$
+- The probability of an email containing the word "secret" given that the email is not spam is 12.84%, $P(C| S^C) = 0.1284$
+
+Using this information, calculate:
+
+1. Use Bayes' theorem to find $P(S|X)$. Assign your answer to `p_spam_given_secret`.
+2. Assign the prior probability of getting a spam email to `prior`.
+3. Assign the posterior probability of getting a spam email (after we see the email contains the word "secret") to `posterior`.
+4. Calculate the ratio between the posterior and the prior probability — you'll need to divide the posterior probability by the prior probability. Assign your answer to `ratio`.
+
+
+
+```{r}
+p_spam <- 0.2388
+p_secret_given_spam <- 0.4802
+p_secret_given_non_spam <- 0.1284
+# Exercise 1
+p_non_spam <- 1 - p_spam
+p_secret <- p_spam*p_secret_given_spam + p_non_spam*p_secret_given_non_spam
+p_spam_given_secret <- (p_spam*p_secret_given_spam) / p_secret
+
+# Exercise 2 and 3
+prior <- p_spam
+posterior <- p_spam_given_secret
+
+# Exercise 4
+ratio <- posterior/prior
+```
+
+
+# 8. The Naive Bayes Algorithm
+
+## A Spam Filter
+
+Over the last three lessons, we've learned about the fundamental concepts of conditional probability, including the Law of Total Probability and Bayes' Theorem. In this lesson, we'll take these concepts and pivot towards a more applied approach. In this lesson and the guided project, we'll use concepts of conditional probability to build an spam filter.
+
+Spam are messages sent to a large amount of people and are usually intended to advertise or deceive those that read them. The easiest way to see what spam is is to look at the spam folder of your email inbox. Spam messages are largely a nuisance, but their indiscriminate nature means that we often get lots of it, more than enough to clutter our inboxes if not properly attended to. This is our problem: can we create a system that can distinguish between genuine email and spam email without too much manual input? We can already see implemented solutions in email services like Gmail, which have dedicated spam folders, but we'll learn a way to detect spam using conditional probability.
+
+To build the spam filter, we're going to use an algorithm called the Naive Bayes algorithm. As the name suggests, the algorithm is based on Bayes' Theorem. The Naive Bayes' Algorithm is used for classification, which suits our needs: classification of spam. By analyzing the text of emails, we'll teach our filter to use this text to decide if an email is genuine or not.
+
+This lesson explores the theoretical aspects of the algorithm and is dedicated to helping you understand how it works. In the next lesson, which is a guided project, we'll apply the algorithm to a [dataset](https://archive.ics.uci.edu/ml/datasets/sms+spam+collection) of over 5,000 SMS messages.
+
+Let's start by getting an overview of the Naive Bayes algorithm.
+
+## Naive Bayes Motivation and Overview
+
+Before we dive into the algorithm, it's good to ask ourselves, "Why do we need an algorithm in the first place?" Let's say that we get a single email with text saying:
+
+- "WINNER! You have 8 hours to claim your money by calling (123)456-7890. Claim code: KL341."
+
+Just by looking at the message, we know this must be spam. The only piece of programming we would need is an `if-else` block to classify this message as spam. We could write a rule that says that if the word "money" was in the email, then we could classify it as spam. If we knew that some of our actual emails had conversations about money, we could add more `if-else` rules to account for this. No need for an algorithm!
+
+But, keep in mind that the above message was just a single, short email. Spam email can have many subjects, so our "money" related rules wouldn't capture them correctly. Some spam email can also be complex as well, requiring much more than one `if-else` statement. Altogether, these two complications mean that manually programming control flow statements won't be enough to act as an adequate spam filter. We need something that is easily scalable, especially since most people will get hundreds or thousands of spam messages in a day.
+
+Another solution would be to classify a couple of messages ourselves and use an algorithm to learn from our classification. This is exactly what the Naive Bayes algorithm is about! By giving a computer program some emails we know to be spam and others known not to be spam, we can have the computer use this knowledge and the rules of the algorithm to classify messages it has not seen before. This will help it account for spam that we may not have thought of.
+
+The Naive Bayes algorithm turns the question of spam classification into a conditional probability question. It looks to calculate a conditional probability in the form:
+
+$$P(\text{Spam} | \text{Message content})$$
+
+In plain English, these two probabilities can be thought of as, "What's the probability that a new message is spam, given its content (its words, punctuation, letter case, etc.)?". Once we have this value, we know the probability of its converse, the probability that an email is not spam given its content. Once the computer has the values for these two probabilities, the computer can perform the classification. If the conditional probability that the new email is spam is greater, then the message is classified as spam. Otherwise, it goes into the non-spam category.
+
+Now let's move to the next screen, where we'll start to look into the details of the algorithm.
+
+
+## Using Bayes' Theorem
+
+On the previous screen, we saw an overview of how the computer may classify new messages using the Naive Bayes algorithm:
+
+1. Humans provide a computer with information on what spam looks like and what non-spam looks like
+2. The computer uses that human knowledge to estimate probabilities for new messages — probabilities for spam and non-spam.
+3. Finally, the computer classifies a new message based on the probability values it calculated in step 2 — if the probability for spam is greater, then it classifies the message as spam. Otherwise, it classifies it as non-spam. In cases where these two probabilities are near-equal, we may want a human to classify the message. We'll come back to this issue in the guided project).
+
+
+In order to perform the classification, the algorithm requires the computer to calculate the following probabilities:
+
+
+$$P(\text{Spam} | \text{Message content})\\
+P(\text{Spam}^C | \text{Message content})$$
+Although the events we're dealing with here are not what we've seen before, we can still take the first equation and expand it using Bayes' Theorem:
+
+
+$$P(\text{Spam} | \text{Message content}) = \frac{P(\text{Spam}) \times P(\text{Message content} | \text{Spam})}{P(\text{Message content})}$$
+For the sake of this example, let's assume the following probabilities are already known:
+
+
+$$\begin{aligned}
+&P(\text{Spam}) = 0.5 \\
+&P(\text{Spam}^C) = 0.5 \\
+&P(\text{Message content}) = 0.4167 \\
+&P(\text{Message content} | \text{Spam}) = 0.5 \\
+&P(\text{Message content} | \text{Spam}^C) = 0.3334
+\end{aligned}$$
+With these values, the computer can calculate the probabilities it needs to classify a new message:
+$$P(\text{Spam} | \text{Message content})  = \frac{0.5 \cdot 0.5}{0.4167} = 0.6 \\
+P(\text{Spam}^C | \text{Message content})  = \frac{0.5 \cdot 0.3334}{0.4167} = 0.4$$
+
+[Since the probability that the new message is spam is greater, the computer will classify the new message as spam.]{color="red"} Let's now do a quick exercise and continue the discussion in the next screen.
+
+
+
+You've received a new email containing the message, "URGENT!! You have one day left to claim your prize." The following probabilities are known:
+$$\begin{aligned}
+&P(\text{Spam}) = 0.5 \\
+&P(\text{Spam}^C) = 0.5 \\
+&P(\text{Message content}) = 0.4167 \\
+&P(\text{Message content} | \text{Spam}) = 0.5 \\
+&P(\text{Message content} | \text{Spam}^C) = 0.3334
+\end{aligned}$$
+Classify this new message as spam or non-spam:
+
+1.Calculate $P(\text{Spam} | \text{Message content})$. Assign your answer to `p_spam_given_new_message`.
+2. Calculate $P(\text{Spam}^C | \text{Message content})$. Assign your answer to `p_non_spam_given_new_message`.
+3. Finally, classify the message. If the message is spam, then assign the word `"spam"` to the variable `classification`. Otherwise, assign `"not spam"` to it.
+
+```{r}
+p_spam <- 0.5
+p_non_spam <- 0.5
+p_new_message <- 0.5417
+p_new_message_given_spam <- 0.75
+p_new_message_given_non_spam <- 0.3334
+p_spam_given_new_message <- (p_spam * p_new_message_given_spam) / p_new_message
+p_non_spam_given_new_message <- (p_non_spam * p_new_message_given_non_spam) / p_new_message
+
+classification <- "spam" # p_spam_given_new_message > p_non_spam_given_new_message
+```
+
+
+## Using Proportionality
+
+
+On the last screen, we saw that the computer can use conditional probability to classify new messages as spam or not spam. The two conditional probabilities we needed to look at were:
+
+$$P(\text{Spam} | \text{Message content}) = \frac{P(\text{Spam}) \times P(\text{Message content} | \text{Spam})}{P(\text{Message content})}$$
+$$P(\text{Spam}^C | \text{Message content}) = \frac{P(\text{Spam}^C) \times P(\text{Message content} | \text{Spam}^C)}{P(\text{Message content})}$$
+
+These equations are a great first step, but they are in need of some simplification. One problem that stands in our way so far is the denominator of these conditional probabilities, $P(\text{Message content})$.  Although this probability exists in theory, in practice it is infeasible to calculate for a single email, much less many, many emails. Without this probability, we cannot calculate the actual conditional probability, but as we'll see, this isn't much of a problem.
+
+Remember that a computer classifies email as spam or not spam by comparing the two conditional probabilities above. In this case, both of the probabilities have $P(\text{Message content})$ in the denominator. $P(\text{Message content})$ is still a probability and takes on a value greater than 0 and less than 1, making it a constant. The only thing that will change when comparing the two probabilities is their numerators. This means that we can simplify the comparison to just examining the numerators of the two conditional probabilities:
+
+$$P(\text{Spam} | \text{Message content}) \propto P(\text{Spam}) \times P(\text{Message content} | \text{Spam})$$
+$$P(\text{Spam}^C | \text{Message content}) \propto P(\text{Spam}^C) \times P(\text{Message content} | \text{Spam}^C)$$
+The symbol $\propto$ is read as "is proportional to". We cannot use the = sign anymore since it is not truly an equality. As we've mentioned before, we know that the denominator is some constant probability. Being "proportional" to something means that it is multiplied by some constant. In this case, the numerator $P(\text{Spam}) \times P(\text{Message content} | \text{Spam})$ is proportional to $P(\text{Spam} | \text{Message content})$. The constants each are proportional to are marginal probability in these cases
+
+As it turns out, ignoring the denominator doesn't affect the algorithm's ability to classify new messages. For instance, let's repeat the classification we did on the previous screen using the new equations above. Recall that we assumed we already know these values:
+
+$$\begin{aligned}
+&P(\text{Spam}) = 0.5 \\
+&P(\text{Spam}^C) = 0.5 \\
+&P(\text{Message content}) = 0.4167 \\
+&P(\text{Message content} | \text{Spam}) = 0.5 \\
+&P(\text{Message content} | \text{Spam}^C) = 0.3334
+\end{aligned}$$
+Under these values, the algorithm classified the new message as spam. Pluggig these values into the new equations just using the numerators, the conclusion is identical:
+
+
+$$\begin{aligned}
+P(\text{Spam} | \text{Message content}) &\propto P(\text{Spam}) \times P(\text{Message content} | \text{Spam}) \\
+&\propto 0.5 \times 0.5 \\
+&\propto 0.25
+\end{aligned}$$
+$$\begin{aligned}
+P(\text{Spam}^C | \text{Message content}) &\propto P(\text{Spam}^C) \times P(\text{Message content} | \text{Spam}^C) \\
+&\propto 0.5 \times 0.3334 \\
+&\propto 0.1667
+\end{aligned}$$
+By ignoring the denominator, we make the calculation easier, but at a cost. The sacrifice we make is that the values we are calculating now are no longer probabilities. They are values proportional to the actual probabilities. If this seems unsettling, take solace in the fact that the algorithm is still performing its task correctly. The main goal of the algorithm is to classify new messages, not calculate probabilities. The conditional probabilities are what the algorithm uses to do the classification, and a simplification of the calculation doesn't hurt this capacity.
+
+Let's now use the optimized equations of the algorithm for our next exercise.
+
+Instructions
+A new mobile message has been received: "URGENT!! You have one day left to claim your prize." The following probabilities are known:
+$$\begin{aligned}
+&P(\text{Spam}) = 0.5 \\
+&P(\text{Spam}^C) = 0.5 \\
+&P(\text{Message content}) = 0.4167 \\
+&P(\text{Message content} | \text{Spam}) = 0.5 \\
+&P(\text{Message content} | \text{Spam}^C) = 0.3334
+\end{aligned}$$
+
+Use the new proportionality equations to classify the new message as spam or non-spam:
+1.Calculate $P(\text{Spam} | \text{Message content})$. Assign your answer to `p_spam_given_new_message`.
+2. Calculate $P(\text{Spam}^C | \text{Message content})$. Assign your answer to `p_non_spam_given_new_message`.
+3. Finally, classify the message. If the message is spam, then assign the word `"spam"` to the variable `classification`. Otherwise, assign `"not spam"` to it.
+
+
+```{r}
+p_spam <- 0.5
+p_non_spam <- 0.5
+p_new_message_given_spam <- 0.75
+p_new_message_given_non_spam <- 0.3334
+p_spam_given_new_message <- p_spam * p_new_message_given_spam
+p_non_spam_given_new_message <- p_non_spam * p_new_message_given_non_spam
+
+classification <- 'spam'
+```
+
+## Classifying One Word Messages
+
+On the previous screen, we simplified the conditional probabilities that we needed to calculate to perform the classification. Instead of calculating the actual probabilities, we found that finding just the numerators was enough to perform the calculation:
+
+
+
+$$P(\text{Spam} | \text{Message content}) \propto P(\text{Spam}) \times P(\text{Message content} | \text{Spam})$$
+$$P(\text{Spam}^C | \text{Message content}) \propto P(\text{Spam}^C) \times P(\text{Message content} | \text{Spam}^C)$$
+Now we'll look at how each of the probabilities used by the algorithm are actually calculated. Recall that humans need to provide information to the algorithm about what is considered spam and what is not spam. In other words, humans are providing the algorithm with each of the above probabilities used in the proportionality equations:
+
+- $P(\text{Spam})$ and $P(\text{Spam}^C)$
+- $P(\text{Message content} | \text{Spam})$ and $P(\text{Message content} | \text{Spam}^C)$
+
+To understand how each of these probabilities are calculated, we'll start with some small examples. Starting small will make the math easier to understand as you move to more complicated examples. Let's say we have three messages that have already been classified:
+
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz1.png)\
+
+When we start calculating each of the conditional probabilities, we'll be using these three emails to calculate $P(\text{Spam})$, etc. Now let's say that we've received a new email containing just a single word "secret", and we want to use the Naive Bayes algorithm to classify it as spam or non-spam.
+
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz2.png)\
+
+
+Since the message only contains one word, then we would be looking at probabilities like $P(\text{secret} | \text{Spam})$ instead. Let's begin with the first equation, for which we need to find the values of $P(\text{Spam})$ and $P(\text{secret} | \text{Spam})$. To calculate 
+$P(\text{Spam})$, we need to look at the emails that we know to be spam or non-spam. In this case, 2 out of the 3 emails we have are spam, so:
+
+$$P(\text{Spam}) = \frac{\text{number of spam messages}}{\text{total number of messages}} = \frac{2}{3}$$
+
+While $P(\text{Spam})$ deals with the number of emails, the second probability $P(\text{secret} | \text{Spam})$ deals with the number of words instead. To calculate $P(\text{secret} | \text{Spam})$, we need to focus our calculation on just the spam messages. We'll need to divide the number of times the word "secret" appears in all the spam messages by the total number of words in the spam messages.
+
+Notice that the word "secret" occurs four times in the spam messages:
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz3.png)\
+
+We have two spam messages with a total of seven words between them, so $P(\text{secret} | \text{Spam})$ is:
+
+$$P(\text{secret}| \text{Spam}) = \frac{\text{number of times the word "secret" occurs}}{\text{total number of words in all spam messages}} = \frac{4}{7}$$
+Now that we know the values for $P(\text{Spam})$ and $P(\text{secret} | \text{Spam})$, we have all we need to calculate  $P(\text{secret} | \text{Spam})$:
+
+$$\begin{aligned}
+P(\text{Spam} | \text{secret}) &\propto P(\text{Spam}) \times P(\text{secret} | \text{Spam}) \\
+&\propto \frac{2}{3} \times \frac{4}{7} \\
+&\propto \frac{8}{21}
+\end{aligned}$$
+For the exercise below, we'll take the same steps as above to calculate $P(\text{Spam}^C | \text{secret})$. Then, we can compare this value to $P(\text{Spam}^C | \text{secret})$ and classify this one word message as spam or non-spam.
+
+Using the table below (there are the same messages as above), classify the message "secret" as spam or non-spam.
+
+![](https://dq-content.s3.amazonaws.com/432/cpm4_viz2.png)
+
+
+1. Calculate $P(\text{Spam}^C)$
+2. Calculate $P(\text{secret} | \text{Spam}^C)$
+3. Calculate $P(\text{Spam}^C | \text{secret}^C)$
+4. Compare $P(\text{Spam}^C | \text{secret}^C)$ and $P(\text{Spam} | \text{secret})$ and classify the message. If the message is spam, then assign the string `"spam"` to the variable `classification`, otherwise assign the string `"non-spam"`.
+
+```{r}
+p_spam_given_secret <- 8/21
+p_non_spam <- 1/3
+p_secret_given_non_spam <- 1/4
+p_non_spam_given_secret <- p_non_spam * p_secret_given_non_spam
+p_non_spam_given_secret
+classification <- 'spam'
+```
+
+## Classifying Multiple Word Messages
+
+On the previous screen, we used our algorithm to classify the one word message "secret" as spam. It's rare that spam messages ever contain just one word though. In this screen, we'll extend our calculations to messages with multiple words.
+
+Let's say we receive a new message "secret place secret secret", and we want to classify it using four messages that are already classified. Note that these four messages are different from what what we saw on the previous screen.
+
+In order to approach the probability calculation for a multi-word message, we'll treat each word in our new message separately. In other words, the word "secret" at the beginning of the message will be considered distinct from the word "secret" at the end of the message. There are four words in the message "secret place secret secret", so for convenience, we'll abbreviate them $w_1$, $w_2$, $w_3$, $w_4$.
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz5.png)\
+ 
+
+For each word, we want to calculate the probability of observing it in the spam and non-spam messages, much like how we did with the word "secret" in the last screen. After we have each of these probabilities, we'll calculate the probability of the entire message as the product of all the individual probabilities we calculated. On the next screen, we'll explain why we're performing the calculation in this way. Using this calculation, the two conditional probabilities we want become:
+
+$$P(\text{Spam}^C | w_1,w_2,w_3,w_4) \propto P(\text{Spam}^C) \times P(w_1|\text{Spam}^C) \times P(w_2|\text{Spam}^C) \times P(w_3|\text{Spam}^C) \times P(w_4|\text{Spam}^C)$$
+Let's begin with calculating $P(\text{Spam}|w_1, w_2, w_3, w_4)$. To calculate the probabilities we need, we'll look at the four messages that are already classified. Half of the four messages are spam, so:
+
+$$P(\text{Spam}) = \frac{2}{4} = \frac{1}{2}$$
+The first word, $w_1$, is "secret", and we see that it appears four times in all spam messages. There's a total of seven words in all the spam messages, so:
+
+$$P(w_1|\text{Spam}) = \frac{4}{7}$$
+Applying a similar reasoning to the other words, we calculate:
+
+$$P(w_2|\text{Spam}) = \frac{1}{7} \\
+P(w_3|\text{Spam}) = \frac{4}{7} \\
+P(w_4|\text{Spam}) = \frac{4}{7}$$
+We now have all the probabilities we need to calculate $P(\text{Spam}|w_1, w_2, w_3, w_4)$
+
+$$\begin{aligned}
+P(\text{Spam} | w_1,w_2,w_3,w_4) &\propto P(\text{Spam}) \times P(w_1|\text{Spam}) \times P(w_2|\text{Spam}) \times P(w_3|\text{Spam}) \times P(w_4|\text{Spam}) \\
+&\propto \frac{1}{2} \times \frac{4}{7} \times \frac{1}{7} \times \frac{4}{7} \times \frac{4}{7} \\
+&\propto \frac{64}{4802} \\
+&\propto 0.01333
+\end{aligned}$$
+Let's now take similar steps to calculate $P(\text{Spam}^C|w_1, w_2, w_3, w_4)$, and then classify the message "secret place secret secret" as spam or non-spam.
+
+
+Using the table below, classify the message "secret place secret secret" as spam or non-spam.
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz4.png)\
+
+1. Calculate $P(\text{Spam}^C|w_1, w_2, w_3, w_4)$. Assign the answer to `p_non_spam_given_w1_w2_w3_w4`. Check the hint if you get stuck.
+2. Compare $P(\text{Spam}^C|w_1, w_2, w_3, w_4)$ against $P(\text{Spam}|w_1, w_2, w_3, w_4)$ and classify the message as spam or not spam. If the message is spam, then assign the string `"spam"` to the variable `classification`. Otherwise, assign the string `"non-spam"`.
+
+```{r}
+p_spam_given_w1_w2_w3_w4 <- 64/4802
+p_non_spam <- 2/4
+p_w1_given_non_spam <- 2/9
+p_w2_given_non_spam <- 1/9
+p_w3_given_non_spam <- 2/9
+p_w4_given_non_spam <- 2/9
+
+p_non_spam_given_w1_w2_w3_w4 <- (p_non_spam *
+                                p_w1_given_non_spam * p_w2_given_non_spam *
+                                p_w3_given_non_spam * p_w4_given_non_spam
+                               )
+
+classification <- 'spam'
+```
+
+## Conditional Independence
+
+On the previous screen, we introduced two equations related to the Naive Bayes algorithm without delving into their underlying concepts:
+
+$$\tag{1} P(\text{Spam} | w_1,w_2,w_3,w_4) \propto P(\text{Spam}) \times P(w_1|\text{Spam}) \times P(w_2|\text{Spam}) \times P(w_3|\text{Spam}) \times P(w_4|\text{Spam})$$
+$$\tag{2} P(\text{Spam}^C | w_1,w_2,w_3,w_4) \propto P(\text{Spam}^C) \times P(w_1|\text{Spam}^C) \times P(w_2|\text{Spam}^C) \times P(w_3|\text{Spam}^C) \times P(w_4|\text{Spam}^C)$$
+
+To gain a deeper understanding of these equations, let's explore the concept of conditional independence. In the context of the Naive Bayes algorithm, conditional independence assumes that the occurrence of one word in a sentence does not provide any information about the occurrence of other words in the same sentence.
+
+This assumption allows us to simplify the calculations involved in the algorithm. Instead of considering the joint probability of all the words in a sentence given a particular class (e.g., spam or non-spam), we treat each word's probability as independent of the others, given the class. Mathematically, we represent this assumption as:
+
+
+$$P(w_1, w_2, w_3, w_4 | \text{Spam}) = P(w_1 | \text{Spam}) \times P(w_2 | \text{Spam}) \times P(w_3 | \text{Spam}) \times P(w_4 | \text{Spam})$$
+$$P(\text{Spam} | w_1,w_2,w_3,w_4) = \frac{P(\text{Spam}) \times P(w_1, w_2, w_3, w_4|\text{Spam})}{P(w_1,w_2,w_3,w_4)}$$
+By applying this assumption, we can simplify equation (1) to:
+
+
+$$P(\text{Spam} | w_1, w_2, w_3, w_4) \propto P(\text{Spam}) \times P(w_1 | \text{Spam}) \times P(w_2 | \text{Spam}) \times P(w_3 | \text{Spam}) \times P(w_4 | \text{Spam})$$
+This equation allows us to calculate the posterior probability of an email being spam, given the occurrence of words $w_1$, $w_2$, $w_3$, and $w_4$, by simply multiplying the prior probability of spam and the conditional probabilities of each word given spam.
+
+It's important to note that the assumption of conditional independence is a simplification made in the Naive Bayes algorithm and may not hold true in reality. In real-world scenarios, words in a sentence may exhibit dependencies or correlations with each other. However, despite this simplification, the Naive Bayes algorithm still performs reasonably well in many applications.
+
+To summarize, the concept of conditional independence in the Naive Bayes algorithm assumes that the occurrence of one word in a sentence does not provide any information about the occurrence of other words in the same sentence. This assumption simplifies the probability calculations and allows us to treat each word's probability as independent of the others, given the class.
+
+On the next screen, we'll adjust our notation to make the equations more general.
+## A General Equation
+
+On the previous screen, we learned how the assumption of conditional independence is central to the Naive Bayes algorithm. The assumption allows us to simplify the calculation into a multiplication problem.
+
+
+$$P(\text{Spam} | w_1,w_2,w_3,w_4) \propto P(\text{Spam}) \times P(w_1|\text{Spam}) \times P(w_2|\text{Spam}) \times P(w_3|\text{Spam}) \times P(w_4|\text{Spam})$$
+
+
+$$P(\text{Spam}^C | w_1,w_2,w_3,w_4) \propto P(\text{Spam}^C) \times P(w_1|\text{Spam}^C) \times P(w_2|\text{Spam}^C) \times P(w_3|\text{Spam}^C) \times P(w_4|\text{Spam}^C)$$
+The example we worked with had a new message with only four words. We'll adjust our notation to be more general so it can handle messages of various word lengths. This mental exercise will be similar to how we generalized the equation for the Law of Total Probability. Let's consider a new message with some variable $n$ number of words. There's no such thing as "negative" words, so $n$ can just be can be any positive integer $(1, 2, 3, \ldots)$. With $n$ words, words, this means the conditional probability we want to calculate is $P(\text{Spam}|w_1, w_2, \ldots, w_{n-1}, w_n)$. Extending our knowledge of how the equation looks with 4 words to $n$ words, the new equation we'll use for general cases is:
+$$P(\text{Spam} | w_1, w_2, \ldots, w_n) \propto P(\text{Spam}) \times P(w_1|\text{Spam}) \times P(w_2|\text{Spam}) \times \ldots \times P(w_n|\text{Spam})$$
+Notice that instead of the 4 conditional probabilites that we need to multiply together, there's now  
+$n$ of them. Whenever we have a product that contains a variable number of items, it's common to use the $\prod$ symbol (this is the uppercase Greek letter "pi") to represent this product. This is similar to the $\Sigma_{i=1}^n$, which we use to add up a variable amount of terms.
+
+
+Using $\prod$,  the equation notation becomes:
+
+$$P(\text{Spam} | w_1, w_2, \ldots, w_n) \propto P(\text{Spam}) \times \prod_{i=1}^{n} P(w_i|\text{Spam})$$
+$$P(\text{Spam}^C | w_1, w_2, \ldots, w_n) \propto P(\text{Spam}^C) \times \prod_{i=1}^{n} P(w_i|\text{Spam}^C)$$
+This equation is what we use to classify multi-word messages. When we only have one word, this equation will also simplify back to what we've covered. Now that we have these general equations, we're going to discuss a few edge cases on the next few screens. After this, we'll be ready to start working on the guided project, where we'll work on a dataset with over 5,000 real messages.
+
+## Edge Case: Words Not In Vocabulary
+
+
+On a previous screen, we looked at a few messages that were already classified:
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz6.png)\
+
+Altogether we have four messages that contain nine unique words: "secret", "party", "at", "my", "place", "money", "you", "know", "the". We call the set of unique words a vocabulary. A conditional probability can be calculated for each of the words in the vocabulary using the process we covered in this lesson. This brings up a logistical issue: what do we do if we receive a new message that contains words which are not part of the vocabulary?
+
+For instance, say we received the message "secret code to unlock the money".
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz7.png)\
+
+
+Notice that for this new message:
+
+- The words "code", "to", and "unlock" are not part of the vocabulary.
+- The word "secret" is part of both spam and non-spam messages.
+- The word "money" is only a part of the spam messages and is missing from the non-spam messages.
+- Conversely, the word "the" is only a part of the non-spam messages.
+
+
+
+The first bullet represents an edge case that we have to account for. Tne solution we'll take is to ignore them when we're calculating probabilities. If we wanted to calculate $P(\text{Spam}|\text{"secret code to unlock the money"})$,  we could omit $P(\text{"code"}|\text{Spam})$, $P(\text{"to"}|\text{Spam})$, and $P(\text{"unlock"}|\text{Spam})$ from the calculation since "code", "to", and "unlock" are not part of the vocabulary:
+
+$$P(\text{Spam}|\text{"secret code to unlock the money"}) \propto P(\text{Spam}) \times {P(\text{"secret"}|\text{Spam}) \times P(\text{"the"}|\text{Spam}) \times P(\text{"money"}|\text{Spam})}$$
+We can also apply the same reasoning for calculating:
+
+$$P(\text{Spam}^C|\text{"secret code to unlock the money"})$$:
+
+$$P(Spam^C|\text{"secret code to unlock the money"}) \propto P(Spam^C) \times P(\text{"secret"}|\text{Spam}^C) \times P(\text{"the"}|\text{Spam}^C) \times P(\text{"money"}|\text{Spam}^C)$$
+Let's now calculate $P(\text{Spam}|\text{"secret code to unlock the money"})$ and $P(\text{Spam}^C|\text{"secret code to unlock the money"})$ to classify this message.
+
+
+$P(\text{Spam}|\text{"secret code to unlock the money"})$ is already calculated for you. Use the table below to calculate $P(\text{Spam}^C|\text{"secret code to unlock the money"})$
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz7.png)\
+
+
+1. Calculate $P(\text{Spam}^C|\text{"secret code to unlock the money"})$. Assign your answer to `p_non_spam_given_message`
+2. Print `p_spam_given_message` and `p_non_spam_given_message.` Why do you think we got these values? We'll discuss more about this in the next screen.
+
+
+```{r}
+p_spam <- 2/4
+p_secret_given_spam <- 4/7
+p_the_given_spam <- 0/7
+p_money_given_spam <- 2/7
+p_spam_given_message <- (p_spam * p_secret_given_spam *
+                        p_the_given_spam * p_money_given_spam)
+p_non_spam <- 2/4
+p_secret_given_non_spam <- 2/9
+p_the_given_non_spam <- 1/9
+p_money_given_non_spam <- 0/9
+p_non_spam_given_message <- (p_non_spam * p_secret_given_non_spam *
+                            p_the_given_non_spam * p_money_given_non_spam)
+
+
+print(p_spam_given_message)
+print(p_non_spam_given_message)
+```
+
+## Additive Smoothing
+
+In the previous exercise, we saw that both $P(\text{Spam}|\text{"secret code to unlock the money"})$ AND $P(\text{Spam}^C|\text{"secret code to unlock the money"})$ were equal to 0. This happens when we have words that occur in one category, but not the other. In this case, "money" occurs only in spam messages, while "the" only occurs in non-spam messages. This problem represents the second edge case that we need to account for in our Naive Bayes calculations.
+
+![](https://dq-content.s3.amazonaws.com/432/cpm4_viz8.png)\
+
+When we calculate $P(\text{Spam}|\text{"secret code to unlock the money"})$, , we can see that $P("the"|Spam)$ is equal to 0 because "the" is not part of the spam messages. When we multiply anything by zero, the whole product becomes zero.
+$$\begin{aligned}
+P(\text{Spam}|\text{"secret code to unlock the money"}) &\propto P(\text{Spam}) \times P(\text{"secret"}|\text{Spam}) \times P(\text{"the"}|\text{Spam}) \times P(\text{"money"}|\text{Spam}) \\
+&\propto \frac{2}{4} \times \frac{4}{7} \times \frac{0}{7} \times \frac{2}{7} \\
+&\propto 0
+\end{aligned}$$
+To fix this problem, we need to find a way to avoid zero values in the products. Let's start by looking at the equation to calculate $P(\text{"the"}|\text{Spam})$:
+
+
+$$P(\text{"the"}|\text{Spam}) = \frac{\text{total number of times "the" occurs in spam messages}}{\text{total number of words in spam messages}} = \frac{0}{7}$$
+We're going to add some notation and rewrite the equation above as:
+
+$$P(\text{"the"}|\text{Spam}) = \frac{N_{\text{"the"}|Spam}}{N_{Spam}} = \frac{0}{7}$$
+Here the $N$ still represent the number of times a word appears in the message. To address the problem of zeroes in our product, we're going to use a technique called additive smoothing, where we add a smoothing parameter $\alpha$. The smoothing parameter will prevent the numerator from being zero, without changing the original probability too much. In the equation below, we'll use $\alpha = 1$(below, $N_{Vocabulary}$ represents the number of unique words in all the messages — both spam and non-spam).
+
+$$P(\text{"the"}|\text{Spam}) = \frac{N_{\text{"the"}|\text{Spam}} + \alpha}{N_{\text{Spam}} + \alpha \times N_{Vocabulary}} = \frac{0 + 1}{7 + 1 \cdot 9} = \frac{1}{16}$$
+
+The additive smoothing technique solves the issue and gets us a non-zero result. However, if we want to introduce additive smoothing, we have to add it too all of the word probabilities, not just the words that are absent from our vocabulary. In more general terms, this is the equation that we'll need to use for every word probability:
+
+
+$$P(\text{word}|\text{Spam}) = \frac{N_{\text{word}|\text{Spam}} + \alpha}{N_{\text{Spam}} + \alpha \times N_{Vocabulary}}$$
+As an interesting side note, the value for $alpha$ changes what we call the smoothing process. When $\alpha = 1$,  the additive smoothing technique is most commonly known as Laplace smoothing (or add-one smoothing). However, it is also possible to use $\alpha < 1$in which case the technique is called Lidstone smoothing. If you want to learn more about additive smoothing, you can start here. 
+
+
+Let's now recalculate the probabilities for the message "secret code to unlock the money" using additive smoothing and try to classify the message.
+
+$P(\text{Spam}|\text{"secret code to unlock the money"})$ is already calculated for you. Use the table below to calculate $P(\text{Spam}^C|\text{"secret code to unlock the money"})$ using additive smoothing.
+
+![](https://dq-content.s3.amazonaws.com/474/cpm4_viz7.png)\
+
+
+1. Using the additive smoothing technique, calculate $P(\text{Spam}^C|\text{"secret code to unlock the money"})$. Assign your answer to` p_non_spam_given_message`.
+2. Compare `p_spam_given_message` and `p_non_spam_given_message` to classify the message as spam or non-spam. If you think it's spam, then assign the string `'spam'` to `classification`. Otherwise, assign `'non-spam'`.
+
+```{r}
+p_spam <- 2/4
+p_secret_given_spam <- (4 + 1) / (7 + 9)
+p_the_given_spam <- (0 + 1) / (7 + 9)
+p_money_given_spam <- (2 + 1) / (7 + 9)
+p_spam_given_message <- (p_spam * p_secret_given_spam *
+                        p_the_given_spam * p_money_given_spam)
+p_non_spam <- 2/4
+p_secret_given_non_spam <- (2 + 1) / (9 + 9)
+p_the_given_non_spam <- (1 + 1) / (9 + 9)
+p_money_given_non_spam <- (0 + 1) / (9 + 9)
+p_non_spam_given_message <- (p_non_spam * p_secret_given_non_spam *
+                            p_the_given_non_spam * p_money_given_non_spam)
+
+classification <- 'spam'
+```
+
+
+## Multinomial Naive Bayes
+
+
+The Naive Bayes algorithm has applications other than building spam filters. For instance, we could use it to perform sentiment analysis for Twitter messages — the input is a Twitter message, and the output is the sentiment type (positive or negative). This follows the same pattern we saw with our spam filter, where the input is a new SMS message and the output is a classification: positive or negative.
+
+Depending on the math and the assumptions used, the Naive Bayes algorithm has a few variations. The three most popular Naive Bayes algorithms are:
+
+- Multinomial Naive Bayes
+- Gaussian Naive Bayes
+- Bernoulli Naive Bayes
+
+In this lesson, we learned the multinomial Naive Bayes version of the algorithm. Explaining the mathematical differences between the various versions is out of the scope of this course, but it's important to keep in mind that all the Naive Bayes algorithms build on the conditional independence assumption we learned about earlier in this lesson.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
