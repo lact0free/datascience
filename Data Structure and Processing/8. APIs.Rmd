@@ -1,0 +1,1318 @@
+---
+title: "8. APIs"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(httr)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. Working with APIs in R
+
+## What's an API
+
+APIs (application programming interfaces) are tools that allow different applications to interact. Programmers use APIs to query and retrieve data --- which they can then integrate into their apps. Github, Reddit, Spotify, Twitter, Facebook, and many other companies provide free APIs for accessing the information they store on their servers --- other companies charge for access.
+
+You can check out several public APIs here, grouped by category.
+
+In this lesson, we'll learn how to request data using an API. We submit a request that follows specific programmatic rules, and we get a response containing content in an expected format. Here are a few takeaways you can expect by the end of this lesson:
+
+-   How to create and process API requests
+-   How the JSON format works
+-   The advantages of working with APIs
+
+<center>![](https://dq-content.s3.amazonaws.com/554/path.svg)\
+</center>
+
+To get the most out of this lesson, you'll need to be comfortable with programming in R, and you'll also need to understand data structures in R, such as vectors, lists, matrices, and DataFrames. You'll also benefit from knowing function basics in R and map and anonymous functions.
+
+Typically, working with an API involves three main steps:
+
+<center>![](https://dq-content.s3.amazonaws.com/554/api_process.svg)\
+</center>
+
+## Querying an API
+
+In this lesson, we'll query the World Bank(WB) APIs and parse its responses into DataFrames. WB APIs provide access to several datasets and time series covering multiple topics (e.g., agriculture, economy, health, and more).
+
+The main goal of this lesson is to build the custom `wb_api_json_get_df()`function that we can use to query WB APIs --- and that we can use as an inspiration for other APIs.
+
+First, let's look at what the `wb_api_json_get_df()` function can do, and then we'll learn to build it step-by-step.
+
+Let's use the `wb_api_json_get_df()` function to query the topics covered by the WB APIs. (Don't worry if everything isn't clear about this function at this point.)
+
+This lesson does not use answer checking, but the correct answer is available should you need it.
+
+1.  Use this command to query the topics covered by the World Bank APIs: `wb_api_json_get_df("v2/topic?format=json")`.
+
+-   Copy and paste this command in the "Editor."
+-   Assign its result to the variable `wb_topic`.
+
+2.  Explore the `wb_topic` DataFrame to see the topics that the World Bank APIs cover.
+
+```{r}
+# wb_topic <- wb_api_json_get_df("v2/topic?format=json")
+# 
+# c("wb_topic")
+```
+
+## Introduction to API Requests
+
+Before making API requests, we have to understand the API documentation. In this lesson, we've already done this part of the work for the World Bank APIs. Now, we'll show you how to use it.
+
+Organizations host their APIs on web servers. When we type `www.google.com` into our browser's address bar, our computer is actually asking the `www.google.com` server for a web page. We call this request a Hypertext Transfer Protocol (HTTP) request. The server returns a page to us as a response.
+
+<center>![](https://dq-content.s3.amazonaws.com/554/apis_servers.gif)\
+</center>
+
+APIs work much the same way, except instead of our web browser asking for a web page, a program, called the client, asks the server for data. The server returns a response to the client. The response contains status information about the request, and it may also include the requested content. A typical format for this content is JavaScript Object Notation (JSON). We often use map and anonymous functions to manipulate and transform JSON objects into DataFrames.
+
+The Uniform Resource Locator or URL is a string (of characters) that uniquely identifies a web resource. For example, `www.google.com` is the URL that identifies Google's homepage. The URL is the input of any API request. It consists of two parts: - The fixed part: base URL --- the base URL is the main address of the API web server - The variable part: endpoint --- an endpoint is a server route for retrieving specific data from an API
+
+For example, you locate the API for topics covered by the World Bank with the following URL.
+
+<center>![](https://dq-content.s3.amazonaws.com/554/url.svg)\
+</center>
+
+Basically, we follow four steps for API requests.
+
+<center>![](https://dq-content.s3.amazonaws.com/554/api_process_detail_1.svg)\
+</center>
+
+Most of the functions we need to complete these steps are in the `httr` package.
+
+One of the first functions that we will see from this library is `modify_url()`, which allows us to combine base URLs and endpoints appropriately.
+
+```{r}
+url <- modify_url("http://api.worldbank.org", path = "v2/topic")
+# url contains: 'http://api.worldbank.org/v2/topic'
+```
+
+On the previous screen, we queried the topics covered by WB datasets. On this screen, let's start building our `wb_api_json_get_df()` function by preparing the url to identify the countries covered by these topics.
+
+We've already loaded the `httr` package.
+
+1.  Create a function named `wb_api_json_get_df()`.
+
+-   Add a parameter named `endpoint` to this function.
+-   Inside this function, use the `modify_url()` function to combine the base URL `"http://api.worldbank.org"` and the endpoint in the parameter `endpoint`.
+-   Return the modified URL.
+-   We name the modified URL as `url`, but feel free to name it differently.
+
+2.  Use the `wb_api_json_get_df()` function to output the proper link for the World Bank country endpoint: `"v2/country"`.
+
+Save the output as `wb_country_url`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # Returning the URL
+  url
+}
+
+wb_country_url <- wb_api_json_get_df("v2/country")
+
+# Check vars
+c("wb_country_url")
+```
+
+## Types of Requests
+
+The URL is ready, and we can use it to request data. We send an API request to the webserver, and it replies with the data.
+
+<center>![](https://dq-content.s3.amazonaws.com/554/api_process_detail_1.svg)</center>
+
+APIs use HTTP verbs for data requests. One of the most common is a GET request. You submit it within the URL with each parameter separated by an ampersand (&). For example, in `'http://api.worldbank.org/v2/topic?format=json'`, the `format=json` part is a GET request to send data in JSON format. GET requests vary by API.
+
+As you can probably see, the World Bank has several API endpoints. For example, the `/country` endpoint provides information about countries covered by the World Bank datasets. The `/region` endpoint might provide data about available regions. (Check out the complete list of World Bank endpoints.)
+
+The endpoint that interests us is `/indicator`. This endpoint provides information about the time series indicators, like total population, gross national income, energy use, and many more. Indicator queries return the following information in the response using the `GET()` function from the `httr` package:
+
+```{r}
+GET("http://api.worldbank.org/v2/indicator?format=json")
+```
+
+The API response contains, among other information, the query URL and date, the response status, and the content type and size. It might also include the content itself, but this part isn't visible here.
+
+Let's use the `GET()` function to fetch the API's response.
+
+We've provided the previous `wb_api_json_get_df()` function in the Editor as a reminder.
+
+1.  Edit the previous `wb_api_json_get_df()` function.
+
+-   Use the `GET()` function to query the API with the modified URL.
+-   Return the API response.
+-   We name the API response as `response`, but feel free to name it differently.
+
+2.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in JSON format: `"v2/indicator?format=json"`.
+
+-   Save the output as `wb_indicator_response`
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+  
+  # Returning the API Response
+  response
+}
+
+wb_indicator_response <- wb_api_json_get_df("v2/indicator?format=json")
+# Check code run
+check_API_response <- function(questionstr) {
+  if (exists(questionstr)) {
+    if (class(eval(parse(text = questionstr))) == 'response') {
+      if ( !http_error(eval(parse(text = questionstr))) ) {
+        return(TRUE)
+      } else {
+        status <- http_status(eval(parse(text = questionstr)))
+        return(c(FALSE, paste("Something went wrong in the request.", status$message)))
+      }
+    } else {
+      return(c(FALSE, "Something went wrong in the request. The answer must an API response. Make sure you use the GET() function."))
+    }
+  } else {
+    return(c(FALSE, paste(questionstr, "not found!") ))
+  }
+}
+
+print(check_API_response("wb_indicator_response"))
+```
+
+## Tracking Errors
+
+When we're making queries, it's entirely possible that something will go wrong or that the output isn't the right type. Therefore, it's important to track these errors.
+
+The request that we made in the previous screen yields this:
+
+```{r}
+wb_indicator_response
+```
+
+We can see the **status code** of `200`. Web servers return status codes every time they receive an API request. A status code reports what happened with a request. Here are some codes that are relevant to GET requests:
+
+-   `200` --- Everything went as expected, and the server returned a result (if any).
+-   `301` --- The server is redirecting us to a different endpoint. It can happen when a company switches domain names or when an endpoint's name has changed.
+-   `401` --- The server thinks we're not authenticated. It happens when we don't send the right credentials to access an API.
+-   `400` --- The server thinks we made a bad request. This can happen when we don't send the API's required information to process our request (among other things).
+-   `403` --- The resource we're trying to access is forbidden, and we don't have the right permissions to see it.
+-   `404` --- The server didn't find the resource we tried to access.
+
+For example, introduce an error in the endpoint of the previous example ("indicatdor" instead of "indicator"). We will see a 404 error because the server can't find the endpoint.
+
+For example, introduce an error in the endpoint of the previous example ("indicatdor" instead of "indicator"). We will see a 404 error because the server can't find the endpoint.
+
+```{r}
+GET("http://api.worldbank.org/v2/indicatdor?format=json")
+```
+
+The `httr` package provides us with several functions to track these errors.
+
+-   The `http_error(response)` function checks if something went wrong and returns a logical value.
+-   The `status_code(response)` function returns the status code and its meaning.
+-   The `http_type(response)` function returns the format of the content, so we can see if it is what we expected.
+
+When something goes wrong in our function, we don't want it to continue executing. We use an `if` statement to check if an error occurs. If yes (the error function returns `TRUE`) then we stop the function execution using the `stop()` function. This function receives an error message. We also use the parameter `call. = FALSE` to simplify the display. Here is the syntax.
+
+```{r}
+# if (check_error_function(response)) {
+#     stop("Something went wrong.", call. = FALSE)
+# }
+```
+
+We've provided the previous `wb_api_json_get_df()` function in the editor.
+
+1.  Use an `if` statement and the `http_error()` function to check if an error happens.
+
+-   If an error happens, print the status code using the `status_code()` function.
+-   Then use this command to stop the function execution: `stop("Something went wrong.", call. = FALSE)`.
+-   These `if` instructions must come before the return instruction in the function.
+
+2.  Use an `if` statement to check if the format of the content is not JSON.
+
+-   Check if `http_type(response)` is different than `"application/json"`
+-   If so, use this command to stop the function execution: `stop("API did not return json", call. = FALSE)`.
+-   These `if` instructions must come after the previous one and before the return instruction in the function.
+
+3.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in JSON format: `"v2/indicator?format=json"`.
+
+-   Save the output as `wb_indicator_response`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Returning the API Response
+  response
+}
+
+wb_indicator_response <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check code run
+check_API_response <- function(questionstr) {
+  if (exists(questionstr)) {
+    if (class(eval(parse(text = questionstr))) == 'response') {
+      if ( !http_error(eval(parse(text = questionstr))) ) {
+        return(TRUE)
+      } else {
+        status <- http_status(eval(parse(text = questionstr)))
+        return(c(FALSE, paste("Something went wrong in the request.", status$message)))
+      }
+    } else {
+      return(c(FALSE, "Something went wrong in the request. The answer must an API response. Make sure you use the GET() function."))
+    }
+  } else {
+    return(c(FALSE, paste(questionstr, "not found!") ))
+  }
+}
+
+print(check_API_response("wb_indicator_response"))
+```
+
+## Extracting API Responses Content
+
+We're now sure that no errors occurred during our API requests. Now, we can extract the content of the API response.
+
+<center>![](https://dq-content.s3.amazonaws.com/554/api_process_detail.svg)\
+</center>
+
+We use the `httr` package function `content()` to extract this content.
+
+```{r}
+# content(response)
+```
+
+The `content()` function tries to find the best output type based on the content format. Since our content here is JSON, it yields a list. These are the first items in the list.
+
+This list contains several nested lists, so this format isn't easy for us to parse. So, we'll ask the `content()` function to output plain text instead. Then, we can parse it ourselves. To do so, we use its parameter `as`.
+
+```{r}
+# content(response, as = "text")
+```
+
+This yields an object of character type in JSON format. ![](https://dq-content.s3.amazonaws.com/554/json_text.svg)\
+
+We'll elaborate on JSON data on the next screen. For now, let's use the `content()` function to extract the content from our `wb_api_json_get_df()` function.
+
+We've provided the previous `wb_api_json_get_df()` function in the Editor as a reminder.
+
+1.  Modify the `wb_api_json_get_df()` function by adding the line `json_text <- content(response, as = "text")` after checking for JSON format.
+
+-   Return the `json_text` variable from the `wb_api_json_get_df()` function.
+
+2.  Use the `wb_api_json_get_df()` function with the endpoint `"v2/indicator?format=json"`.
+3.  Save the output of the `wb_api_json_get_df()` function as `wb_indicator_json_text`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Returning the content as plain text 
+  json_text
+}
+
+wb_indicator_json_text <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check vars
+c("wb_indicator_json_text")
+```
+
+## Converting JSON into DataFrame
+
+On the previous screen, we successfully retrieved the indicator list content in the World Bank APIs. However, this content is in plain text containing JSON data. On this screen, we'll learn how to convert JSON data into a DataFrame to manipulate it properly.
+
+JSON data nests lists of values and collections of name/value pairs as many times as you want.
+
+-   The square brackets (`[]`) identify a list of values. This is a set of values or objects separated by commas.
+-   The curly brackets (`{}`) identify a collection of name/value pairs. Each name/value pair of the collection should be in the following format `"name" : value`. Commas separate the pairs.
+
+Here is an example of JSON:
+
+![](https://dq-content.s3.amazonaws.com/554/r_json_type_1.svg)\
+
+In R, we can parse this JSON string and convert it into a DataFrame using the function `jsonlite::fromJSON()`. The `jsonlite::` code part means the function `fromJSON()` loads from the `jsonlite` package.
+
+If we store our JSON example in the `json_string` variable, we can write the following code snippet to convert it into a DataFrame.
+
+```{r}
+# json_df  <- jsonlite::fromJSON(json_string)
+```
+
+Which yields this DataFrame.
+
++----------+----------+----------+---------------------------+
+|          | \        | age      | favorite_foods            |
+|          | name     |          |                           |
++==========+==========+==========+===========================+
+|          |          |          |                           |
++----------+----------+----------+---------------------------+
+| 1        | Sabine   | 36       | Pumpkin, Oatmeal          |
++----------+----------+----------+---------------------------+
+| 2        | Zoe      | 40       | Chicken, Pizza, Chocolate |
++----------+----------+----------+---------------------------+
+| 3        | Heidi    | 40       | Caesar Salad              |
++----------+----------+----------+---------------------------+
+
+The result of the function is a DataFrame. Some columns (e.g., `favorite_foods`) convert into a list if necessary. The structure of the output object of this function depends on the complexity of the JSON data. It's common to do other manipulations or transformations to get a clean DataFrame. (You can explore some techniques for doing this in the Map and Anonymous Functions lesson.)
+
+Let's use the `fromJSON()` function to convert our content into a DataFrame.
+
+We've provided the previous `wb_api_json_get_df()` function in the Editor as a reminder.
+
+1.  Edit the previous `wb_api_json_get_df()` function.
+
+-   Use the`jsonlite::fromJSON()` function to convert the extracted content into a DataFrame.
+-   Return this output.
+-   We name this output as `dataframe`, but feel free to name it differently.
+
+2.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in DataFrame: `"v2/indicator?format=json"`.
+
+-   Save the output as `wb_indicator_json_df`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe
+}
+
+wb_indicator_json_df <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check vars
+
+c("wb_indicator_json_df")
+```
+
+## [**Adapting the Function to Our APIs**]{color="red"}
+
+Let's display the structure of the `wb_indicator_json_df` object we created in the previous exercise.
+
+```{r}
+str(wb_indicator_json_df)
+```
+
+The output object of our function, `wb_api_json_get_df()`, isn't a DataFrame; it's a complex list containing nested DataFrames and lists. This is because the complexity of the World Bank APIs' JSON. [The APIs return not only the expected data but also information about this data.]{color="red"}
+
+-   The first element of `wb_indicator_json_df` gives us information about the extracted data. In particular, it tells us that we have extracted only 50 lines of data from page 1 of 493 out of a total of 24,601 indicators.
+
+-   The second element of `wb_indicator_json_df` is a DataFrame with 50 rows and 7 columns. It contains the first 50 indicators. Since this is what we want, we can modify the `wb_api_json_get_df()` function to return only this element.
+
+Keep in mind that most of the time, when manipulating APIs, we spend the majority of our time here. This because it isn't trivial to transform a JSON into a useful object.
+
+Let's keep only the second element of the complex list as the desired DataFrame.
+
+We've provided the previous `wb_api_json_get_df()` function in the Editor as a reminder.
+
+1.  Edit the previous `wb_api_json_get_df()` function.
+
+-   Change the return object to access only the second element of the list, which is a DataFrame.
+
+2.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in DataFrame: `"v2/indicator?format=json"`.
+
+Save the output as `wb_indicator_json_df`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe[[2]]
+}
+
+wb_indicator_json_df <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check vars
+
+c("wb_indicator_json_df")
+```
+
+# 2. Intermediate APIs in R
+
+## Introduction
+
+We looked at a basic API in the "Working with APIs" lesson, and we developed a four-step process to query an API.
+
+![](https://dq-content.s3.amazonaws.com/555/api_process_detail_fct.svg)
+
+Our example used the World Bank(WB) APIs. WB APIs provide access to several datasets and time series covering multiples topics (agriculture, economy, health, etc.).
+
+We built this function to query these APIs.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+
+  # Return the dataframe  
+  dataframe[[2]]
+}
+```
+
+In this lesson, we'll continue working with this API. We will also discover the GitHub API, specifically how to query it with authentication. Our goal is to develop a greater understanding of APIs.
+
+As a reminder, let's use the `wb_api_json_get_df()` function to query the indicator time series available in the World Bank datasets.
+
+1.  Use this command to query the indicators covered by the World Bank APIs: `wb_api_json_get_df("v2/indicator?format=json")`.
+
+-   Copy-paste this command in the "Editor".
+-   Assign its result to the variable `wb_indicator_df`.
+-   Click the "Submit Answer" button to check if the answer is correct.
+
+2.  Explore the `wb_indicator_df` dataframe to see the indicators the World Bank APIs cover.
+
+```{r}
+wb_indicator_df <- wb_api_json_get_df("v2/indicator?format=json")
+```
+
+## Adding Query Parameters
+
+On this screen, we'll see how to add new parameters to refine our API requests. In the "Working with APIs" lesson, we discovered that one of the most common API requests is the GET request. For example, in the `'http://api.worldbank.org/v2/indicator?format=json'` URL, the `format=json` part is a GET request to send data in JSON format.
+
+You can often add several other GET requests to the URL. We can find those available in the documentation for each API. To avoid cluttering the URL, in R, we use the query parameters to add those requests.
+
+We can use the `query` parameter of the `GET()` function from the `httr` package to add the query parameters to our request.
+
+```{r}
+response <- httr::GET("http://api.worldbank.org/v2/indicator", query = list(format="json"))
+json_df <- jsonlite::fromJSON(httr::content(response, "text"))[[2]]
+str(json_df)
+```
+
+To make our function fully functional, we can add an optional parameter to our `wb_api_json_get_df()` function. We can use this parameter to pass other query parameters to our function if necessary.
+
+We've provided the previous `wb_api_json_get_df()` function in the Editor as a reminder.
+
+1.  Edit the previous `wb_api_json_get_df()` function.
+
+-   Add a new parameter named `queries` to the function and assign `list()` to it to make it an optional parameter: `queries = list()`. We assign a `list()` here so that multiple optional parameters can be passed to our function.
+-   Edit the `GET(`) function to set its `query` parameter to our function parameter `queries`.
+
+2.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in dataframe `"v2/indicator"` with the query parameter `format="json"`.
+
+-   Save the output as `wb_indicator_df_with_param`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint, queries = list()) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe[[2]] ## double bracket indexes the elements inside the second list 
+}
+
+wb_indicator_df_with_param <- wb_api_json_get_df("v2/indicator", list(format="json"))
+```
+
+Sometimes, a request can return many objects. This might happen when we're listing out all 17,513 indicators, for example. Returning too much data will take a long time and slow the server down.
+
+<center>![](https://dq-content.s3.amazonaws.com/555/server_down.gif)\
+</center>
+
+This isn't a great user experience, so API providers typically implement pagination. This means that the API provider will only return a certain number of records per page. We can specify the page number that we want to access. To access all of the pages, we need to extract each page and then combine them.
+
+<center>![](https://dq-content.s3.amazonaws.com/555/server_returns_one_page.gif)\
+</center>
+
+We can add two pagination query parameters to our API request: `page` and `per_page`.
+
+-   The `page` parameter is the page we want to access.
+-   The `per_page` parameter is the number of records we want to see on each page. These parameters are optional and by default the first page is extracted when `page` is not used.
+
+Typically, API providers enforce a cap on how high `per_page` can go because setting the value too high defeats the purpose of pagination.
+
+Let's display the new structure of the `wb_indicator_df` object we created before.
+
+```{r}
+str(wb_indicator_json_df)
+```
+
+Now, we have a dataframe as output of our function.
+
+Let's display the complex list from which we extracted this dataframe.
+
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+
+  # Return the dataframe  
+  dataframe
+}
+
+str(wb_api_json_get_df("v2/indicator?format=json"))
+
+```
+
+We can see that our dataframe represents only the first page of 493 pages with `50` indicators per page.
+
+[Suppose now we want the page `2` when the pagination is `100` lines per page. To request this information, we need to pass the optional query parameters `page` and `per_page` to the `GET()` function using the `query` parameter. We can add these parameters to the `queries` list object, like this:]{color="red"}
+
+```{r}
+response <- httr::GET("http://api.worldbank.org/v2/indicator", 
+                      query = list(format = "json", page=2, per_page = 100))
+json_df <- jsonlite::fromJSON(httr::content(response, "text"))[[2]]
+str(json_df)
+```
+
+Let's use this technique to query the third page of the indicators when the pagination set `75` lines per page
+
+We've loaded `wb_api_json_get_df()` function.
+
+1.  Use the `wb_api_json_get_df()` function to output the World Bank API response for the indicator endpoint in dataframe `"v2/indicator"`. You don't need to modify the function for this operation because you can pass these optional query parameters directly to the `queries` list object we added in the previous screen. Set the following query parameters:
+
+-   Set the output to JSON format: `format="json"`.
+-   Extract the third page.
+-   Set the number of indicators per page to `75`.
+
+2.  Save the output as `wb_indicator_json_df_3`.
+
+```{r}
+wb_api_json_get_df <- function(endpoint, queries = list()) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe[[2]] ## double bracket indexes the elements inside the second list 
+}
+
+wb_indicator_json_df_3 <- wb_api_json_get_df("v2/indicator", 
+                                             queries = list(format="json", page=3, per_page = 75))
+
+```
+
+## APIs authentification
+
+We looked at World Bank APIs in the "Working with APIs" lesson and on the previous screens. These APIs didn't require authentication, but most do. Imagine that we're using the Reddit API to pull a list of our private messages. It would be a huge privacy breach for Reddit to give that information to anyone, so requiring authentication makes sense.
+
+![](https://dq-content.s3.amazonaws.com/555/content_key_wall.svg)\
+
+Typically APIs use the following authentication types:
+
+-   Username-password authentication: requires a username and password. We can use the `authenticate("username", "password")` function in the API requests to achieve this.
+
+-   API key authentication: requires an API "key" or "token." We can use the `api_key = "key"` parameter request to achieve this.
+
+Using a token/API key is better than using a username and password for a few reasons:
+
+-   Typically, we'll access an API from a script. If we put our username and password in the script and someone finds it, they can take over our account. However, we can revoke an access token to cancel an unauthorized person's access if there's a security breach.
+
+-   Access tokens can have scopes and specific permissions. For example, we can make a token with permission to write to our GitHub repositories and make new ones. We can also make a token that can only read from our repositories. Using read-access-only tokens in potentially insecure or shared scripts improves security.
+
+APIs also use authentication for **rate limiting**. Developers typically use APIs to build interesting applications or services. Ensuring an API is available and responsive for all users will prevent us from making too many requests too quickly. We call this **restriction rate limiting**.
+
+Data Gov API is an API you can use to access and manipulate many datasets about the United States (US) covering several topics.
+
+Take a look at the documentation for the Data Gov API, specifically the United States Agriculture Department dataset.
+
+## Data Gov API Authentification
+
+To authenticate with the Data Gov API, we need to use an access token. An access token is a credential we can generate on the Data Gov's website. The token is a string that the API can read and associate with our account.
+
+We need to pass our token to the Data Gov API through the query parameter `api_key`, just like we did before for pagination.
+
+```{r}
+queries = list(api_key = "1f36137fbbe1602f779300dad26e4c1b7fbab631")
+```
+
+In this case, our access token is `1f36137fbbe1602f779300dad26e4c1b7fbab631`. Data Gov generated this token and associated it with our account.
+
+![](https://dq-content.s3.amazonaws.com/555/content_revealed.gif)\
+
+We should never share our token with anyone we don't want to have access to our account. We've revoked the token we'll use throughout this lesson, so it isn't valid anymore. Consider a token equivalent to a password, and store it securely.
+
+We've provided the `gov_api_json()` custom function to access the Data Gov API.
+
+```{r}
+
+gov_api_json <- function(endpoint, queries = list()) {
+
+  # Preparing the URL 
+  url <- modify_url("https://api.ers.usda.gov", path = endpoint)
+
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+    # Return the json_text  
+  jsonlite::fromJSON(json_text)$data
+
+
+}
+```
+
+Let's use this function to extract the agriculture dataset categories from the Data Gov API. You have to generate your API key that you will use to solve this exercise.
+
+1.  Use this link to generate an API key for Data Gov API.
+
+-   We recommend that you generate a key for yourself:
+    -   It will give you experience with how to do it.
+    -   We will also use it in the screens and the following lesson. You can also use it for your personal projects.
+-   If you prefer not to, you may simulate doing this by entering `api_key = your_key` for the next few exercises.
+
+2.  Use the `gov_api_json()`function to output the Data Gov API response for the agriculture dataset categories in dataframe: `"data/arms/category"`.
+
+-   Set the `api_key` query parameter to your API key.
+-   Save the output as `agriculture_categories`.
+
+```{r}
+agriculture_categories <- gov_api_json("data/arms/category", queries = list(api_key = "FJBOTokvsP5MV9EAmzaVAhAcuAKg8AtshXbQYxx8"))
+```
+
+## POST Requests
+
+So far, we've been making GET requests. We use GET requests to retrieve information from a server (hence the name GET). However, there are a few other types of API requests.
+
+We use POST requests to send information (instead of retrieving it) and create objects on the API's server. For instance, with the Reddit API, we can use POST requests to create or update new messages or comments.
+
+![](https://dq-content.s3.amazonaws.com/555/post_content.gif)\
+
+Different API endpoints choose what types of requests they will accept. Not all endpoints will accept a POST request, and not all will accept a GET request. We'll have to consult the API's documentation to figure out which endpoints accept which types of requests.
+
+We'll use `httpbin`, which accepts many HTTP request types. `httpbin` is interesting for us because it returns the request's content if the operation succeeds. This allows testing many request types quickly.
+
+We can make POST requests using the `POST()` function. POST requests almost always include data because we need to send information to the server to create or extract an object.
+
+We pass in the data with the `body` parameter like we do with query parameters and GET requests:
+
+```{r}
+POST("http://httpbin.org/post", body = list(comment = "Hello world", name = "authordq"))
+```
+
+The API response shows that our request was a success (`status = 200`), and the server returns the content we've sent. We can see it under the `"form"` key.
+
+Typically, we use the `http_error()` function from `httr` package we saw in the "Working with APIs" lesson to check if the request succeeded.
+
+We won't be working with POST Requests extensively, but we think it's important to be aware of this concept. Usually, data professionals extract data from APIs and barely send information.
+
+Let's use the `POST()` function to send another message to `httpbin`.
+
+We've loaded the `httr` library for you.
+
+1.  Send information to the `http://httpbin.org/post` with the `POST()` function.
+
+-   Send the following message: `message = "this is a test"`.
+-   Send your name: `name = "write your name here"`.
+-   Store the API response as `httpbin_response`
+
+2.  Use the `http_error()` function to make sure that there was no error.
+
+-   Store the output of the function as `check_error` Display `httpbin_response` using the `print()` function.
+
+```{r}
+httpbin_response  <-  POST("http://httpbin.org/post", body = list(message = "this is a test", name = "authordq"))
+check_error  <-  http_error(httpbin_response)
+
+print(httpbin_response)
+```
+
+# 3. Challenge: Working with Different APIs in R
+
+## Introduction
+
+This lesson is a "challenge lesson." That means we will guide you less than we have in previous lesson exercises. We don't expect you to immediately figure this out, so don't become frustrated if these exercises take more attempts than the others did. In the real world, the data professional workflow includes a lot of trial and error.
+
+The purpose of this lesson is to allow you to try several APIs and gain experience by practicing the various subtleties that each one will present.
+
+If you get stuck, you might try one or more of the following:
+
+-   First, check the API's documentation. If something is possible, it should be included there.
+-   Try to follow the steps we've practiced in other lessons.
+-   We've also provided some hints. However, we strongly recommend trying to complete the challenge without them. The skills you build as you try to solve the challenge will be important as you continue on your journey to becoming a data expert!
+
+The structure of the screens in this challenge is as follows:
+
+1.  A brief API description
+2.  Our goal (including the expected output)
+3.  Some instructions
+
+Here is the basic code snippet to query an API and get the desired content.
+
+```{r}
+# API requests
+# response <- GET(url)
+# 
+# Check the status of the request
+# status <- status_code(response)
+# 
+# Extracting content
+# content <- content(response)
+```
+
+This lesson will require a lot of experimentation to build or modify functions. Feel free to work out the body of the function line by line on its own, and then wrap it in a function when you've got all of the pieces together and working. This lesson does not use answer checking, but the correct answer is available should you need it.
+
+## xMath API: Extract Random Math Expression
+
+Brief API description: xMath API generates random math expressions that is customizable.
+
+Our goal: we want to extract a random expression with specifications for the multiplication of two-digit numbers.
+
+1.  Search the API documentation to determine the endpoint for a random product of two-digit numbers.
+
+2.  Query the API to request a random product of two-digit numbers and get the status code of your request.
+
+3.  Extract the content from the API response and display it to see the expression.
+
+```{r}
+# Answer
+response <- GET("https://shadify.dev/api/math/mul")
+response
+
+status <- status_code(response)
+status
+
+expression <- content(response)
+expression
+
+# Check vars
+c("status")
+```
+
+## Zippopotamus API: Extract ZIP Code Information with a Query Parameter
+
+Brief API description: Zippopotamus API is a data store with information regarding ZIP codes around the world.
+
+Our goal: we want to extract the city of a specific ZIP code. The ZIP of interest is `48080` and is in Spain which has an endpoint `es`.
+
+1.  Search the API documentation to determine the URL for a specific ZIP code and country endpoint.
+
+-   Edit this URL for the ZIP equal to `48080`.
+
+2.  Use this URL to query the API to request the selected city description and get your request's status code.
+
+3.  Extract the content from the API response and display it to see this position.
+
+```{r}
+# Answer
+response <- GET("https://api.zippopotam.us/es/48080")
+response
+
+status <- status_code(response)
+status
+
+the_city <- httr::content(response)
+the_city
+
+# also feasible to replace es with gb to index the places in the UK
+# Check vars
+c("status", "the_city")
+```
+
+## Meetup API: Extract JSON Data
+
+Brief API description: Meetup API --- finding and interacting with meetup platforms.
+
+Our goal: we want to extract the data analytics meetups and convert the output into a dataframe. The output dataframe only contains id, name, and description columns.
+
+Here is the `wb_api_json_get_df()` function as a reminder. Feel free to modify it for your purposes. Mainly, you should specify the correct URL and adjust how you get the dataframe. Thanks to the optional parameter `queries`, you can specify parameters that you will find in the documentation for this function. If you're stuck, feel free to print out each step inside the function to see where the problem comes from.
+
+```{r}
+wb_api_json_get_df <- function(endpoint, queries = list()) {
+
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+# Check if the JSON file is properly retreived
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+
+  # Return the dataframe  
+  dataframe[[2]]
+}
+```
+
+1.  Check the API documentation.
+
+-   Find how to filter meetup's topics containing `"data analytics"`.
+-   Find how to specify that we only want the `id`, `name`, and `description` columns.
+
+2.  Query the API to request the data analytics meetups data.
+
+-   Don't forget to specify the desired columns.
+-   Convert the API response's content into a dataframe.
+
+3.  Display the dataframe
+
+```{r}
+# Answer
+meetup_api_json_get_df <- function(endpoint, queries = list()) {
+  
+  # Preparing the URL 
+  url <- modify_url("https://api.meetup.com", path = endpoint)
+  
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+    
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe
+}
+
+data_analytics_meetups <- meetup_api_json_get_df("find/topics", list(query = "data analytics",
+                                                                     only = "id,name,description"))
+head(data_analytics_meetups)
+
+# Check code run
+DQ_check_meetup_api_data_analytics <- function() {
+  
+  # Check if the variable `data_analytics_meetups` exists
+  if (!exists("data_analytics_meetups")) {
+    return(c(FALSE, "The variable `data_analytics_meetups` does not exist. Make sure you have defined it correctly."))
+  }
+  
+  # Check if `data_analytics_meetups` is a data frame
+  if (!is.data.frame(data_analytics_meetups)) {
+    return(c(FALSE, "The variable `data_analytics_meetups` is not a data frame. Make sure you have assigned the result of the API call to it."))
+  }
+  
+  # Check if the data frame has the correct columns
+  expected_columns <- c("id", "name", "description")
+  if (!all(expected_columns %in% colnames(data_analytics_meetups))) {
+    return(c(FALSE, "The data frame `data_analytics_meetups` does not have the expected columns. Make sure the API call returns the necessary information."))
+  }
+  
+  return(c(TRUE))
+}
+
+# Execute the custom checking function
+DQ_CUSTOM_CHECK_OUTPUT <- DQ_check_meetup_api_data_analytics()
+```
+
+## World Bank API: Extract Data and Visualize it
+
+Brief API description: World Bank APIs provide access to several datasets and time series covering multiples topics (agriculture, economy, health, etc.). We have already worked on some of these APIs in the previous lessons of this course.
+
+Here, we want to look at poverty indicators, particularly the real agricultural GDP per capita growth rate (%) from Africa Development Indicators. Its code is `NV.AGR.PCAP.KD.ZG`.
+
+Our goal: we want to extract this indicator data from `1989` to `2000` in JSON format and convert it into a dataframe. Then we can visualize the result to see the trend of this indicator.
+
+1.  Check the API basic call structures.
+
+-   Find how to query data for a specific country.
+-   Find how to query data for a specific indicator.
+-   Find how to extract data between two years.
+-   Find how to specify that the output should be in the JSON format.
+
+2.  Query the API to request the `afr` country data for the `NV.AGR.PCAP.KD.ZG` indicator between `1989` and `2000`.
+
+-   Don't forget to specify the output format.
+-   Convert the API response's content into a dataframe.
+
+3.  Use the `str()` function to see the structure of the dataframe.
+4.  Use the `ggplot()` function to create a line plot to see the real agricultural GDP per capita growth rate trend from `1989` to `2000`.
+
+```{r}
+# We use the existing `wb_api_json_get_df()` function as is.
+
+wb_poverty_level <- wb_api_json_get_df("v2/country/afr/indicator/NV.AGR.PCAP.KD.ZG", list(format = "json", 
+                                                                                 date="1989:2000"))
+str(wb_poverty_level)
+
+library(ggplot2)
+ggplot(data = wb_poverty_level, aes(x = date, y = value, group = 1)) + geom_line() + ylab("Real agricultural GDP per capita growth rate (%)")
+
+# Check vars
+c("wb_poverty_level")
+```
+
+## World Bank API: Extract Data and Visualize USA Population
+
+In the previous screen, we were able to see the trend in real agricultural GDP per capita growth rate (%). In this screen, we want to further explore the World Bank API, focusing on the USA population.
+
+To retrieve the USA population, we will use the endpoint `v2/country/USA/indicator/SP.POP.TOTL`, which specifies the country (USA) and the indicator (SP.POP.TOTL) for the total population.
+
+Let's now visualize the population of the USA between the years `2011` and `2021`.
+
+1.  Use the `wb_api_json_get.df()` function to retrieve data from the World Bank API as a dataframe and assign it to a variable named wb_population.
+
+-   Remember to use the API endpoint `v2/country/USA/indicator/SP.POP.TOTL`.
+-   In the list, specify the response format and the date range.
+
+2.  Use the `str()` function to see the structure of the dataframe.
+3.  Use the `ggplot()` function to create a line chart and visualize the trend in the total population of the USA over the given period.
+
+```{r}
+# Answer
+wb_population <- data.frame(wb_api_json_get_df("v2/country/USA/indicator/SP.POP.TOTL", list(format = "json", date="2011:2021")))
+str(wb_population)
+
+ggplot(data = wb_population, aes(x = date, y = value, group = 1)) +
+  geom_line() + xlab("Year") + ylab("Total Population") 
+
+# Check code run
+DQ_check_wb_api_population <- function() {
+  
+  # Check if the variable `wb_population` exists
+  if (!exists("wb_population")) {
+    return(c(FALSE, "The variable `wb_population` does not exist. Make sure you have defined it correctly."))
+  }
+  
+  # Check if `wb_population` is a data frame
+  if (!is.data.frame(wb_population)) {
+    return(c(FALSE, "The variable `wb_population` is not a data frame. Make sure you have assigned the result of the API call to it."))
+  }
+  
+  # Check if the data frame has the correct columns
+  expected_columns <- c("date", "value")
+  if (!all(expected_columns %in% colnames(wb_population))) {
+    return(c(FALSE, "The data frame `wb_population` does not have the expected columns. Make sure the API call returns the necessary information."))
+  }
+  
+  # Check if the ggplot chart was created
+  if (!exists("last_plot") || !is.ggplot(last_plot())) {
+    return(c(FALSE, "The ggplot chart was not created. Make sure you have used the `ggplot()` function to visualize the data."))
+  }
+  
+  return(TRUE)
+}
+
+# Execute the custom checking function
+DQ_CUSTOM_CHECK_OUTPUT <- DQ_check_wb_api_population()
+```
+
+## World Bank API: Extract Data and Visualize it
+
+So far, we have seen how we can use the World Bank API to retrieve data of various information, including agriculture, where we worked with real agricultural GDP per capita growth rate (%) from Africa Development Indicators and demographic indicator, where we considered the total population of the USA within a given range of periods. In this last screen of working with World Bank API,we want to consider economic indicator focusing on the economic trend in South Africa.
+
+The endpoint `v2/country/ZA/indicator/NY.GDP.MKTP.CD` is specific to South Africa (ZA) and represents the GDP (Gross Domestic Product) indicator (NY.GDP.MKTP.CD). This endpoint is structured in a way that it identifies the version of the API (v2), the country code (ZA), and the indicator code (NY.GDP.MKTP.CD), allowing us to retrieve the GDP data for South Africa.
+
+NY.GDP.MKTP.CD- The GDP deflator series based upon the U.S. dollar series is defined as the ratio of the GDP at market prices in current U.S. dollars) to the GDP at market prices in constant (2000) U.S. dollars.
+
+Let's now write a script that retrieves the GDP data for South Africa from the World Bank API and creates a line plot to visualize the trend.
+
+We recommend you build a custom function piece-by-piece in your local setup using RStudio to solve this problem. If you've never heard of RStudio find our guided project about it here.
+
+1.  Prepare the URL for the API request by specifying the endpoint.
+
+-   Use <http://api.worldbank.org> as the base url.
+
+2.  Send an API request using the `GET()` function.
+
+-   Have the format as json
+-   Use the date range (`2010` to `2021`)
+
+3.  Extract the content as a text using the `content()` function.
+4.  Convert the content into a list and assign it to a variable named `wb_economic`.
+5.  Access the relevant dataframe within the list(`wb_economic`) and assign it to a variable named `df_economic_ZA`.
+6.  Use the `ggplot()` function to create line plot to visualize the GDP data for South Africa.
+
+Here, find the code snippet to plot the dataframe:
+
+```{r}
+# Preparing the URL 
+endpoint <- "v2/country/ZA/indicator/NY.GDP.MKTP.CD"
+url <- modify_url("http://api.worldbank.org", path = endpoint)
+
+# API request
+response <- GET(url, query = list(format = "json", date = "2010:2021"))
+
+# Extracting content
+json_text <- content(response, "text")
+
+# Converting content into Dataframe
+wb_economic <- jsonlite::fromJSON(json_text)
+
+# Accessing the relevant data frame within the list
+df_economic_ZA <- wb_economic[[2]]
+
+# Plotting the GDP data for South Africa
+ggplot(data = df_economic_ZA, aes(x = date, y = value, group = 1)) +
+  geom_line() +
+  ylab("GDP in US Dollars") +
+  labs(title = "GDP Trend: South Africa")
+
+
+
+# Check code run
+DQ_check_wb_api_gdp <- function() { 
+  # Check if the variable `wb_economic` exists
+  if (!exists("wb_economic")) {
+    return(c(FALSE, "The variable `wb_economic` does not exist. Make sure you have defined it correctly."))
+  }
+  
+  # Check if `wb_economic` is a list
+  if (!is.list(wb_economic)) {
+    return(c(FALSE, "The variable `wb_economic` is not a list. Make sure you have assigned the result of the API call to it."))
+  }
+  
+  # Check if the list has at least two elements
+  if (length(wb_economic) < 2) {
+    return(c(FALSE, "The list `wb_economic` does not have the expected number of elements. Make sure the API call returns the necessary information."))
+  }
+  
+  # Check if the relevant dataframe (`df_economic_ZA`) exists
+  if (!exists("df_economic_ZA")) {
+    return(c(FALSE, "The variable `df_economic_ZA` does not exist. Make sure you have extracted the relevant dataframe correctly."))
+  }
+  
+  # Check if `df_economic_ZA` is a data frame
+  if (!is.data.frame(df_economic_ZA)) {
+    return(c(FALSE, "The variable `df_economic_ZA` is not a data frame. Make sure you have extracted the relevant dataframe correctly."))
+  }
+  
+  # Check if the ggplot chart was created
+  if (!exists("last_plot") || !is.ggplot(last_plot())) {
+    return(c(FALSE, "The ggplot chart was not created. Make sure you have used the `ggplot()` function to visualize the data."))
+  }
+  
+  return(TRUE)
+}
+
+# Execute the custom checking function
+DQ_CUSTOM_CHECK_OUTPUT <- DQ_check_wb_api_gdp()
+```
