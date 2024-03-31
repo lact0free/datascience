@@ -1,0 +1,1040 @@
+---
+title: "3. Control Flow, Iteration, and Functions"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# **1. Control Flow in R**
+
+In the past two lessons, you've gotten introduced to R and the tidyverse way of programming. R is one of the most widely used programming languages in data analysis, and you've started to produce readable, analysis-ready code. We've learned about the basic data types and data structures in R, which allow you to bringing datasets so that you can start manipulating them. These are excellent first steps in the journey to be a career-ready analyst.\
+Developing as a programmer and analyst means being exposed to more tools that you can use in future data analysis. These tools can come in the form of mastered programming concepts or functions that may perform a specific task. As you master more tools, you will be able to tackle more analysis tasks and be more flexible as a programmer. A good analyst knows the basic functions needed to solve a problem, but a great one can come up with multiple ways to approach it. In this course, we will learn more programming concepts and functions that will allow us to tackle more problems.\
+In this lesson specifically, we'll tackle the concept of control flow and see how it is used in a data analysis context. Control flow is just a technical term for something we do in everyday life: decision making. Imagine going to a supermarket to get some fruit for yourself. As you walk into the produce section, you find your favorite fruit: apples. When picking fruit to buy, we normally want to buy apples that look juicy and healthy and avoid fruit that looks rotten or bruised. As we pick up apples and inspect them, we are actually using control flow:\
+![](https://dq-content.s3.amazonaws.com/494/buying-apples.png)
+
+We are using different characteristics of the apples to guide our purchasing. This concept of guiding decisions also appears in programming, where we may need to use different code for different situations. This is the essence of control flow in programming in general. On the next screen, we will set ourselves up to understand and use control flow in R.
+
+## Review of Comparison Operators
+
+In order to move through this decision process, we need to answer either "Yes" or "No" to each question. A series of "Yes" answers will lead us to buy a given apple. As you might recall from our Introduction to R course, R has a dedicated data type to represent the idea of "Yes" and "No: the `logical` data type, otherwise known as `TRUE` and `FALSE`.\
+
+In order to use control flow, we need to create statements that will turn out to be either `TRUE` or `FALSE`. In the apple example, the questions "Does the apple look fresh?" and "Is the apple big enough?" are the statements that yield `TRUE` ("Yes") or `FALSE` ("No"). In R, the most fundamental way to evaluate something as `TRUE` or `FALSE` is through comparison operators. In the Working With Tibbles course, we were introduced to comparison operators that allowed us to filter a tibble's rows based on a given comparison. [The `filter()` function kept all rows where the comparison operator was `TRUE` for the row.]{color="red"}
+
+[The `filter()` function applies the comparison operator to an entire column, but we can also use comparison operators for single values.]{color="red"} Take for example the statement `x < 5`, where x can be some variable that we assign. If x were in fact less than 5, then the statement `x < 5` would evaluate to `TRUE` and `FALSE` otherwise.\
+
+Recall that we learned six essential comparison operators in Working With Tibbles that we'll use more throughout this lesson:
+
+-   `==` means equality. The statement `x == a` means "Does the value of `x` equal the value of `a`?"
+-   !=: means "not equal". The statement `x != b` means "Does the value of `x` not equal the value of `b`?"
+-   `<`: means "less than". The statement `x < c` means "Is the value of `x` less than the value of `c`?"
+-   `<=`: means "less than or equal". The statement `x <= d` means "Is the value of `x` less or equal to the value of `d`?"
+-   `>`: means "greater than". The statement `x > e` means "Is the value of `x` greater than the value of `e`?"
+-   `>=`: means "greater than or equal". The statement `x >= f` means "Is the value of `x` greater than or equal to the value of `f` ?
+
+We'll learn more comparison operators as we progress through the course, but these six are crucial to know as we move to our first example of control flow: the `if` statement. You can use this screen to practice using these different comparison operators.
+
+## The if Statement
+
+On the last screen, we did a quick review of comparison operators. They provide us with ways to create R statements that evaluate either to `TRUE` or `FALSE`, in the same way that "Yes" and "No" allowed us to move through the decision tree of purchasing an apple. Here, we will learn how to create this branching path through the `if` statement.
+
+We show an example case of an `if` statement below:
+
+```{r}
+recent_grads <- read_csv("recent_grads.csv")
+major <- "Engineer"
+if (major =="Chemistry") { 
+    print("This person majored in Chemistry.")
+} else {
+  print("This person did not major in Chemistry.")
+}
+```
+
+When we start running code, R starts with the top line: `major <- "Engineer"`. After storing that string to the variable `major`, R will see the `if` statement and will check the condition `major == "Chemistry"`. Since `major` is "Engineer", this comparison operator will evaluate to `FALSE`. Since the condition was false, R will skip the code that will print "This person majored in Chemistry.", and it will jump to the second statement that prints "This person did not major in Chemistry."\
+To use the decision tree illustration, the above `if` statement can be illustrated as:
+
+![](https://dq-content.s3.amazonaws.com/494/major-diagram.png)
+
+```{r}
+# if (condition) { # If condition is true, this code will run } 
+# else { # If condition is false, this code will run }
+```
+
+The `recent_grads` data is available to us. Using this data:
+
+Write an `if` statement that creates a new variable `data_size`. If the number of rows in `recent_grads` is greater than 1000, then `data_size` should be equal to "Large". If not, then `data_size` should be equal to "Small".
+
+```{r}
+data_size <- nrow(recent_grads)
+if (data_size > 1000) {print("Large")
+}else{
+  print("Small")}
+```
+
+## The if_else() Function
+
+On the last screen, we learned about the `if` statement and its ability to create branching paths in our code. A singular `if` statement is useful if we need to perform different code for a single condition, but it's not useful in cases where there are a lot of values that need comparison.
+
+For example, let's say that we want to create a new column in the `recent_grads` dataset that helps us know whether or not a major was associated with Engineering. We have the `Major_category` column that contains information on the majors, but we need some way to vectorize the `if` statement to all of the values in this column. A single `if` statement won't be able to handle this.
+
+Thankfully, the `dplyr` library within the `tidyverse` has such a function: the `if_else()` function. We will showcase an example use below:
+
+```{r}
+new_recent_grads <- recent_grads %>% 
+  mutate(
+    is_engineering = if_else(Major_category == "Engineering", TRUE, FALSE)
+  )
+```
+
+In the above code, we are creating a new column `is_engineering` based on the values of the `Major_category` column. For each row, the `if_else`() function takes the value in `Major_category` and checks if it is equal to the string "Engineering". If that row's `Major_category` value is "Engineering", then the corresponding "is_engineering" value will be `TRUE.` If not, then it will be `FALSE.` The `if_else()` function takes that single comparison operator `Major_category == "Engineering"` and vectorizes it.
+
+To generalize the `if_else()` function, it needs three arguments:
+
+1.  A statement (e.g. comparison operator) that evaluates to `TRUE` or `FALSE.` Instead of passing it a single value, you need to give it a specific column in the data.
+
+2.  The value that the new column should take if the comparison operator is `TRUE.` In this case, we also want the column to be `TRUE`, *but it can be any single value that we would want it to be.*
+
+3.  The value that the new column should take if the comparison operator is `FALSE.` Like the second argument, *it can be anything you specify*.\
+
+The `if_else()` function is a potent function to use in data analysis. It allows us to use `if` statements and apply them to our data as a whole in a single line. Take some time to practice using the function before moving forward.
+
+1.  Create a new column `median_level` in the `recent_grads` data. If `Median` is greater than 50000, then median_level should take the value`"Above Average"`. If not, then `median_level` should take the value `"Below Average"`.
+
+2.  Create another new column called `greater_prop_gender.` If the value in the `Women` column is greater than the `Men` column, then `greater_prop_gender` should be `"Women"`. If not, then `greater_prop_gender` should be `"Men"`. The tibble with these two columns should be assigned to a new tibble called `new_recent_grads.`
+
+```{r}
+new_recent_grads <- recent_grads %>% mutate(median_level = if_else (Median > 50000, "Above Average", "Below Average"), greater_prop_gender = if_else(Women > Men, "Women", "Men"))
+```
+
+## Moving Beyond Two Branches
+
+So far in our course, we've worked under the assumption that each of the decisions in our tree had only two branches: one corresponding to `TRUE` and another to `FALSE.` There are plenty occasions where we have more than two since some decisions don't boil down to a "Yes" vs "No". Let's expand our apple example to include a case with three branches.\
+![](https://dq-content.s3.amazonaws.com/494/three-branch.png)
+
+R provides a way to incorporate more than two branches in an `if` statement with the `else if` keyword. The `else if` keyword provides another code block to use in an `if` statement, and we can have as many as we see fit. An example follows:
+
+```{r}
+color <- "Yellow"
+if (color == "Yellow") {
+  purchase <- TRUE
+} else if (color == "Green") {
+  purchase <- FALSE
+} else if (color == "Red") {
+  purchase <- FALSE
+} else {
+  purchase <- FALSE
+}
+purchase
+```
+
+The above code recreates the three-branched illustration. Each potential apple color gets its own branch and associated code block. The `else` code block helps cover us for any other potential color that we might have missed in the diagram. Without the `else` keyword, the `purchase` variable never gets assigned a value.
+
+Using the above code as a model, get some practice creating multi-branch `if` statements. We'll learn another way to make our `if` statements more flexible in the next screen.
+
+We are given a variable that contains information on how many words we can write per minute: `wpm.` Using this variable, create a new variable `classification` that describes our pace with a single word. - If `wpm` is less than 58, assign `"Below Average"` to `classification.` - If `wpm` is greater than 82, assign `"Above Average"` to `classification.` - Otherwise, assign `"Average"` to `classification.`
+
+```{r}
+wpm <- 58
+if (wpm < 58) {
+  classification <- "Below Average"
+}else if (wpm > 58){
+  classification <- "Above Average"
+} else {classification <- "Average"}
+classification 
+```
+
+## Using Multiple Conditions
+
+As of now, we have only been using one condition in our `if` statements. There will certainly be times where you'll need to apply more than one condition to a branch to be more specific, catch more detailed cases, etc. In order to use multiple conditions, you'll need to familiarize yourself with the concept of **compound conditions**. As their name suggests, compound conditions are higher level conditions that have multiple parts to them. We'll develop our intuition on compound conditions using the examples below:
+
+```{r}
+x <- 7
+x > 5 && x < 10
+```
+
+The above compound condition uses the `&&` (double-ampersand) symbol to combine the conditions `x > 5` and `x < 10` together. We would read the`&&` as "and". That is to say, the compound condition is asking, "Is `x` greater than 5 and is `x` less than 10?" The variable x must satisfy both of these conditions for the compound condition to evaluate to `TRUE.` In this case, `x` satisfies both of the conditions, so this should evaluate to `TRUE.`\
+
+Our second example looks like the following:
+
+```{r}
+y <- 7
+y < 5 || y > 10
+```
+
+Here, the compound condition is using the `||` (double pipe, not to be confused with `%>%`). The `|` character is read as "or", so the compound condition overall is asking, "Is `y` either less than 5 or greater than 10?". Unlike`&`where all the conditions need to be met for the compound condition to be `TRUE`, `||` only asks that at least one of them be `TRUE.` Compound conditions can be used in if statements just like regular conditions since they ultimately evaluate to either `TRUE` or `FALSE.`
+
+Before we leave you to the practice problem, we must note an important caveat to using `if` statements. In general, `&&` and `||` make conditions more specific, which means they require more detail to satisfy. R reads `if`statements from top-to-bottom and will stop at the first condition that is satisfied. Even if another condition might be satisfied below, R will use the first code block where the condition is `TRUE.` Because of this, it is best practice to put your more specific conditions higher in your `if` statements so that they are not accidentally missed.
+
+We are given a `wpm` variable again, but instead of classifying with 3 levels. We want to distinguish between `"Average"` and `"Not Average"`. Using `wpm`, create a new variable `classification` that describes the typing rate. If `wpm` is between than 68 and 82, assign`"Average"`to `classification.` Otherwise, assign `"Not Average"` to `classification.`
+
+```{r}
+wpm <- 80
+if (wpm <82 && wpm >68) {
+  classification <- "Average"
+}else {classification <- "Not Average"}
+classification
+```
+
+## A Technical Note on Multiple Conditions
+
+In the last screen, we learned how to incorporate multiple conditions into an `if` statement using`&&`and `||`. Since we also know about `if_else()` function, it's tempting to think that we can use`&&`and`||`to use multiple conditions in the `if_else()` function. Unfortunately, this isn't the case. We'll demonstrate in a code example below:
+
+```{r}
+a <- 1:3
+b <- 4:6
+# c <- if_else(a > 2 && b > 5, TRUE, FALSE)
+```
+
+Looking at the above code, you might expect the variable `c` to contain multiple values that correspond to the multiple comparison `a > 2 && b > 5`. On inspection, we see that this is not the case:
+
+`c` only contains one value! Why is this? The reason behind this is actually the`&&`and `||` operators themselves. To summarize why only one value appears in c, it boils down to the fact that`&&`and `||` are only expecting single values to be used in the multiple comparison. In this case, the multiple comparison `a > 2 && b > 5` is only using the first values from the vectors `a` and `b`, which are `1` and `4.` The other values in `a` and `b` are not used at all.
+
+The `if_else()` function is designed to be used with multiple values, like with a vector or a column in a tibble. Using it with`&&`or`||`will produce unexpected answers because they are designed to only be used with single values. Thankfully, we do not need to change the code much in order to fix it. Instead of the double`&&`and `||`, we only need to use `&` and `|`.
+
+```{r}
+# Incorrect usage
+a <- 1:3
+b <- 4:6
+
+# c <- if_else(a > 2 && b > 5, TRUE, FALSE)
+
+# Correct usage
+
+a <- 1:3
+b <- 4:6
+
+d <- if_else(a > 2 & b > 5, TRUE, FALSE)
+
+d
+```
+
+The vector `d` uses`&`instead of`&&`and produces the output we originally expected. The same logic would also apply to \| vs \|\|. So, if you plan to use multiple conditions in an `if_else()`function, you must use`&`or`|`to do so. The explanation for this is out of scope for this lesson, but we will come back to it later.
+
+## The case_when() Function
+
+On the last screen, we learned that we could use the `else if` keyword to incorporate more than two branches into an `if` statement. On this screen, we will learn about a new function that will allow us to vectorize a 2+ branch `if` statement.
+
+We know about the `if_else()` function, but it works best with simpler conditions that evaluate to `TRUE` or `FALSE.` We could potentially nest `if_else()` functions in other functions, but this could make for hard-to-read code. There is a more elegant solution in the `case_when()` function.
+
+You can think of the `case_when()` function as a generalization of the `if_else()` function, which incorporates more branches. We'll demonstrate a use case below with the `recent_grads` data:
+
+```{r}
+new_recent_grads <- recent_grads %>% 
+  mutate(
+    size_classification = case_when(
+      Total < 2000 ~ "Small",
+      Total > 20000 ~ "Large",
+      TRUE ~ "Medium"
+    ) 
+  )
+```
+
+Within the `case_when()` function, we have a series of conditions and assignments. The first example is `Total < 2000 ~ "Small"`. The condition `Total < 2000` is separated from the assignment "Small" by the character `~` (pronounced "til-deh"). You can think of each of these lines as shortened `if` branches. The last line, `TRUE ~ "Medium"`, acts as a catch-all in case the `Total` amount does not fall into either of the conditions above. Another way of interpreting the `TRUE ~ "Medium"` line is that it is a safety net: if the `Total` satisfies neither the `Total < 2000` or the `Total > 20000` condition, then it will be "caught" by the `TRUE ~ "Medium"` line.
+
+The combination of `if_else()` and `case_when()` will help cover most situations where you will need to use the `if` statement on your data. After finishing this exercise, we'll finish off our overview of `if` statements.
+
+Use the `case_when()` function to create a new column in the `recent_grads` dataset called `unemployment_level.` This new column should have the following:
+
+-   If `Unemployment_rate` is less than 5%, `unemployment_level` should be "Low"
+-   Between 5% and less than 10%: "Moderate"
+-   Greater than or equal to 10%: "High"
+-   Assign your tibble with the new column to the variable `new_recent_grads`.
+
+```{r}
+new_recent_grads <- recent_grads %>% mutate(
+unemployment_level = case_when(Unemployment_rate < 0.05 ~ "Low", Unemployment_rate >= 0.1 ~ "High", Unemployment_rate > 0.05 & Unemployment_rate < 0.1 ~"Moderate")
+)
+```
+
+## Other Useful Comparison Operators
+
+You've learned about the `if` statement and two functions that enable you to use control flow to do some data cleaning. Before we move onto another type of control flow, we will wrap up `if` statements by covering some other useful comparison operators.
+
+Currently, we know how to do comparisons on equality and how to determine whether or not one value is greater or smaller than another (`==`, `!=`, `>`, `>=`, `<`, and `<=`). One task that these comparison operators have trouble with is identifying membership in a group. That is to say, given a value, is it present in a collection of values like a vector?
+
+Say that we are performing an analysis on the `recent_grads` data that involves engineering majors, but only on a particular subset of them. It will be important for us to filter the dataset to just these majors, so we could do something like the following:
+
+```{r}
+recent_grads %>% 
+  filter(
+    Major == "AEROSPACE ENGINEERING" | Major == "BIOMEDICAL ENGINEERING" | Major == "CHEMICAL ENGINEERING"
+  )
+```
+
+The above compound condition grabs these three majors, but there are plenty more majors that we need for the analysis. As we add more, the compound condition will become longer and longer. There is a shorthand way to do this through a membership test. The below code performs the same operation as the one above.
+
+```{r}
+recent_grads %>% 
+  filter(
+    Major %in% c("AEROSPACE ENGINEERING", "BIOMEDICAL ENGINEERING", "CHEMICAL ENGINEERING")
+  )
+```
+
+Here, we collect all of the three engineering majors and put them into a vector. Then, we use the `%in%`comparison operator to see if the `Major` column contains any of these values. If it is in the vector of engineering majors, then this will evaluate to `TRUE.` Using `%in%` also makes it much more apparent what the code is doing. Instead of having long streaks of `||`, the `%in%` operator makes it immediately clear that we are testing for membership in a vector. It's important to note that the entire expression `Major %in%` `c("AEROSPACE ENGINEERING", "BIOMEDICAL ENGINEERING", "CHEMICAL ENGINEERING")` is a comparison operator.
+
+For the sake of teaching, let's say that we actually wanted to exclude these majors from the analysis. We could reverse the filtering by inverting the comparison operator. Inverting a logical means to change it to its opposite. `TRUE` inverts to `FALSE` and vice versa. We can invert the `%in%` operator to exclude these majors like below:
+
+```{r}
+recent_grads %>% 
+  filter(
+    !(Major %in% c("AEROSPACE ENGINEERING", "BIOMEDICAL ENGINEERING", "CHEMICAL ENGINEERING"))
+  )
+```
+
+Here, we've wrapped the entire `%in%` operation in parentheses and prefixed a`!`at the beginning. By prefixing the comparison statement with a `!`, the resulting boolean is inverted. Now, any rows that have these three majors will evaluate to `FALSE` and will be filtered out. You can prefix any comparison operator with`!` if you want to invert it.
+
+The `%in%` operator and logical inversion will help you be more flexible and succinct in your **data cleaning and analysis**. Take some time to practice using them on the `recent_grads` data before moving on.
+
+We want to conduct an analysis on all of the majors with "Arts" in its name. In the context of the data, these are rows where `Major_category` is either "Arts" or "Humanities & Liberal Arts". Filter the `recent_grads` data and assign this new tibble to the variable `arts_grads.`
+
+We want to conduct an analysis on all of the majors that are not "Engineering" or "Physical Sciences". Assign this new tibble to the variable `non_engineering_science_grads.`
+
+```{r}
+arts_grads <- recent_grads %>% filter(
+  Major_category %in% c("Humanities & Liberal Arts", "Arts")
+)
+```
+
+```{r}
+non_engineering_science_grads <- recent_grads %>% filter(
+  !Major_category %in% c("Engineering", "Physical Sciences")
+)
+```
+
+# **2. Iterations in R**
+
+## Introduction
+
+In the last lesson, we learned about control flow. Control flow gives us the ability to tell R what specific code it should run given a condition. What's special about control flow is that it actually changes how R reads through your code. When we are not using control flow, R reads your code much like a list. R reads the first line, performs the code there, moves to the second line, and repeats until it's read through all of the code.
+
+\
+![](https://dq-content.s3.amazonaws.com/514/code-flow.png)\
+
+You might recall that control flow creates a branching path in your code. After encountering an `if` statement, R looks at the condition and decides which branch, or line of code, it should jump to before continuing to read down the code.\
+
+![](https://dq-content.s3.amazonaws.com/514/code-flow-2.png)\
+
+In this lesson, we'll discuss another way that we can change how R reads through your code. There are many instances where you need to repeat the same code multiple times. For example, we saw this with the`if_else()` function that repeated the same comparison operator on each row of the `recent_grads` data set. In this lesson, we'll explore this idea more. This repetition of code is called iteration, and it is a key concept to grasp and master in programming. After you get through the exercises, you will have a solid grasp of how to use iteration in your own programming.
+
+## Motivation For Iteration
+
+Now, why is iteration important for us to know? Iteration is important because using it correctly can save us time and mindless effort. To demonstrate this, we'll consider a real-life example. Imagine that you are an analyst for a company that sells programming textbooks. You are in charge of considering a range of prices to set for a new textbook, and you want to choose the one that will create the most profit for your company. The range of prices are as follows:
+
+```{r}
+prices <- c(10, 20, 30, 40, 50)
+```
+
+The marketing team tells you that if the price is too low, the company does not reap enough profit from each book. If it's too high, then not enough people will buy the books. They give you a formula that describes how much profit you'll get as a function of price:
+
+$$
+Profit = -Price^2 +60*Price
+$$ With this convenient equation, we can calculate the profit for each price. However, we only have the prices, so how should we calculate the profits from each of them?
+
+One way is to just calculate everything by hand:
+
+```{r}
+profits <- c(
+  -1 * 10^2 + 60 * 10,
+  -1 * 20^2 + 60 * 20,
+  -1 * 30^2 + 60 * 30,
+  -1 * 40^2 + 60 * 40,
+  -1 * 50^2 + 60 * 50)
+
+profits
+```
+
+That certainly does the job, but notice that we've essentially written out the same formula five times, only changing a small portion of it each time to represent a different price. In this case, we only have five prices, but what if we had 20? 100? Writing out such a long list of numbers that essentially perform the same operation would take a lot of effort, just to do one type of calculation.
+
+This is where iteration comes in. Instead of having to write the same equation five times, we could write it just once using iteration. All of the prices would go through this calculation, and we would store the result somewhere else.
+
+In essence, iteration allows us to repeat code many times without having to type it out again and again. This allows us to write less code (which means less possibility for mistakes) and it can express our intent better. In R, there are two types of iteration that we will cover.
+
+## The for Loop
+
+Now that you understand why iteration is useful, it's time to see how to use it in R. Iteration itself is just an idea: repeating code again using the elements of a vector. There are two ways that R lets us use iteration: **a `for` loop and a `while`, loop**. On this screen, we'll learn how to use a for loop.
+
+On the last screen, we started an example problem with a vector of prices, for which we want to calculate a vector of profits. We know how to calculate profit given the price, but our problem is that we want to simplify our code so that we don't have to repeat ourselves too much. We can use a `for` loop to solve this problem. We'll show an example below, and then we'll dissect it:
+
+```{r}
+prices <- c(10, 20, 30, 40, 50)
+profits <- c()
+
+for (price in prices) {
+  calc <- -1 * price^2 + 60 * price
+  profits <- c(profits, calc)
+}
+profits
+```
+
+The code above follows a specific structure:
+
+1.  The first things we see are the `prices` vector and a new `profits` vector.
+
+-   The `prices` vector is what we originally had, but now we have a `profits` vector that has no elements in it. **This empty vector will act as a storage for all of the profit calculations.**
+
+2.  Afterwards, we see the `for` keyword being used followed by an expression in the parentheses.
+
+-   The `price in prices` expression tells R that we want to iterate over all of the elements in the `prices` vector.
+-   [The `price` variable is special because it represents a single element in the `prices` vector, what we call a **placeholder variable**.]{color="red"}
+
+3.  When the `for` loop first starts, `price` is the first element in `prices`, which is 10.
+
+-   As we've mentioned, there is a code chunk denoted by the curly brackets `{}` that follows the `for` keyword. [This code chunk is what will be repeated for every price that's in the `prices` vector.]{color="blue"}
+
+-   Within the code chunk itself, we have a `calc` variable that actually uses the profit calculation, based on the current `price` placeholder.
+
+-   After the calculation is done, it is appended, or added, to the `profits` vector.
+
+4.  After all of the calculation in the code chunk is done when `price = 10`, the loop will go back to the top and `price` will become the second element in `prices`: 20. This process repeats until all of the elements in `prices` have been exhausted.
+
+We've also visualized this process below: ![](https://dq-content.s3.amazonaws.com/514/code-flow-3.png) The end result is exactly what we got from the last screen, without having to type out the calculation by hand. Instead of having to repeat ourselves, we could use the for loop to write the calculation once and just change out what price is being used.
+
+[**To make our own `for` loop, we would need the following:**]{color="Green"}
+
+1.  A vector that we want to iterate over (e.g. `prices`). This can also be called an iterable.
+
+2.  The `for` keyword and a placeholder variable to represent a single value in the iterable (e.g. `price`).
+
+-   [Note that we can actually name the placeholder variable anything we want.]{color="red"} It could be `p` or `pr`, but it is often best practice to give it a name that makes it immediately clear what it is supposed to represent. Whatever you choose as the placeholder variable, it should be consistent within the following code chunk.
+
+3.  A code chunk that we want repeated for each element in the iterable (e.g. the profit calculation and appending to `profits`)
+
+This procedure can also be applied when iterating through columns of a tibble using the following method:
+
+```{r}
+# create a sample tibble
+df <- tibble(a = 1:5, b = letters[1:5], c = c(TRUE, FALSE, FALSE, TRUE, TRUE))
+
+# iterate through columns using a for loop
+for (col_name in names(df)) {
+  col_data <- df[[col_name]]
+  # do something with the column data
+  print(col_data)
+}
+```
+
+You are given a vector of measurements that are in terms of millimetres (mm). For this exercise, we actually want to convert all of these measurements in terms of meters (m). For reference, 1 meters is the same as 1000 millimetres.
+
+Using a for loop, create and append to a new vector called `meter_measurements` that contains the values converted to meters.
+
+```{r}
+millimeter_measurements <- c(10000, 54900, 94312, 49185, 2100)
+meter_measurements <- c()
+
+for (measurement in millimeter_measurements) {
+  meter <- measurement / 1000
+  meter_measurements <- c(meter_measurements,meter)
+}
+meter_measurements
+```
+
+## Another Way to Write for Loops
+
+On the last screen, we learned how to make our own `for` loop. For the most part, writing `for` loops in this way satisfies most of the situations that you'll need. There is another way of writing `for` loops that work exactly as in the last screen, but differs in how we get the elements of the vectors.
+
+On the last screen, the `for` loop was written like below:
+
+```{r}
+prices <- c(10, 20, 30, 40, 50)
+profits <- c()
+
+for (price in prices) {
+  calc <- -1 * price^2 + 60 * price
+  profits <- c(profits, calc)
+}
+```
+
+In the above example, the placeholder variable `price` uses values directly from the `prices` vector. The alternative way to use `for` loops is to take advantge of indexing. Recall that we can access the elements of a vector directly using indexes, which represent their place in the vector. Instead of iterating through the actual elements of the iterable, we can iterate though indices instead. We can rewrite the above `for` loop below:
+
+```{r}
+prices <- c(10, 20, 30, 40, 50)
+profits <- integer(length(prices))
+indices <- 1:length(prices)
+
+for (i in indices) {
+  calc <- -1 * prices[i]^2 + 60 * prices[i]
+  profits[i] <- calc
+}
+```
+
+The two `for` loops perform exactly the same function, but have different presentations.
+
+Since there's a profit for each price, we're guaranteed that both `profits` will be the same size as `prices.` The `for` loop iterates through each of the numbers between `1` and `5`. In the calculation, the price that is being used in the profit calculation is accessed using these numbers. `prices[1]` gets the first price, `prices[2]` gets the second price, and so on.
+
+When we iterate over indices, we need to construct a vector of zeroes instead of an empty vector. If we start with an empty vector, then trying to access `profits` through an index wouldn't work. [To create this vector of zeroes, we use the `integer()` function and `length()` function.]{color="red"} Using these two functions together creates a vector of zeroes that is the same length as the `prices` vector. For every index, we are reassigning the zero with the result of the calculation `calc`. This is what you see with `profits[i] <- calc`.
+
+In general, looping through indices makes your code less readable compared to looping through elements. "Less readable" really means that it's less apparent what your code is doing. The trade-off is that you have more flexibility to incorporate more data (ie more vectors) into the `for` loop. In this case, we're only dealing with `prices`, so it's not as useful here but it's important that you are aware of this other style of writing `for` loops.
+
+We have provided the same measurements as on the last screen. Rewrite your for loop to use indices instead of the actual elements of prices.
+
+1.  Using a for loop, create and append to a new vector called meter_measurements that contains the converted millimetre values.
+
+-   For answer checking purposes, make sure to use i as your placeholder variable
+
+```{r}
+millimeter_measurements <- c(10000, 54900, 94312, 49185, 2100)
+meter_measurements <- integer(length(millimeter_measurements))
+indices <- 1:length(millimeter_measurements)
+
+for(i in indices){
+  meter <- millimeter_measurements[i] / 1000
+  meter_measurements[i] <- meter
+}
+meter_measurements
+```
+
+## Intuition Behind the While Loop
+
+We've covered the `for` loop in great detail in this lesson because it's the loop that you'll deal with the most practically. The second type of loop is still useful to know, but it's better suited to analytical situations that are outside the scope of this course. This second loop type is called a `while` loop.
+
+To distinguish between these two lists, it's useful to think of a `for` loop as dealing with a chore list. The idea being that you have a set amount of chores to finish, and once you do all of your chores, you're done. The key here is that there is a set amount of items that we need to loop through in a `for` loop.
+
+On the other hand, a `while` loop is like trying to reach a milestone, like raising a target amount of money for a charity event. For charity events, you typically perform and do things to raise money for your cause, like running laps or giving services to people. You do these tasks until you reach your target goal, and it's not clear from the beginning how many tasks you need to do to reach the goal. That's the key idea behind a `while` loop: repeat some actions (read: a code chunk) **until a condition or goal is met**.\
+![](https://dq-content.s3.amazonaws.com/514/loop-viz.png)
+
+## A while Loop Example
+
+Unlike their counterparts, `while` loops require more preparation to use. If this preparation is not done, then we could run into serious problems with our loop. We provide a small example of a `while` loop below:
+
+```{r}
+# Loop set up
+nums <- 1:10
+is_condition_met <- FALSE
+i <- 1
+
+# Loop execution
+while (!is_condition_met) {
+  current_num <- nums[i] # Grab a number using the index
+  is_condition_met <- current_num > 7 # Recheck the condition
+  i = i + 1 # Increase the index
+}
+current_num
+```
+
+In this example, the `while` loop is searching for the first number in the `nums` vector that is greater than seven. Keep this in mind as we dissect its key parts. It's best to break down a `while` loop into two parts: **1) the set up and 2) the loop itself.**
+
+As we mentioned before, a `while` loop repeats a code chunk until a condition is met. The set up is designed to create the condition and other items needed for the loop.
+
+-   In this case, we are making the `nums` vector and creating a variable that represents the condition: `is_condition_met.`
+-   Since we are looking through the `nums` vector, we also create a variable that indexes the `nums` vector, the `i` variable.
+
+We need all of these variables to correctly use the while loop.
+
+As you might expect, the `while` keyword is what starts the loop. Right next to it is a condition that the loop uses to decide if it will run the accompanying code chunk. When this condition next to the `while` keyword evaluates to `TRUE`, the code chunk next to `while` will run. [In this case `is_condition_met` is initially to FALSE in the set up.]{color="red"} Within the parentheses, we see that this logical is reversed using the`!`operator, so `!is_condition_met` evaluates to `TRUE.` This inverting of logicals may be confusing, but it's useful to try to translate the code into plain speak. [The first line in the loop `while (!is_condition_met)` may be read as while the conditions aren't met, run the code.]{color="red"} The variables are worded very specifically to try to best capture what the code is trying to do.
+
+After all the set up , the `while` loop goes through this process:
+
+1.  When the `while` loop first runs, [`!is_condition_met` evaluates to `TRUE`]{color="red"}, and the loop runs the code chunk.
+
+-   First, it grabs a number from `nums` and assigns it to the variable `current_num.`
+
+2.  The next line of code is crucial: it reassigns the `is_condition_met` variable using a conditional operator.
+
+-   If `current_num` is greater than `7`, it is `TRUE` or `FALSE` otherwise. Since the first item in `nums` is 1, it becomes `FALSE.`
+-   It is essential that the `is_condition_met` variable change within the loop itself. If not, the condition always evaluates to TRUE, and the loop will run forever. Finally, the indexing variable i increases by one.
+
+3.  With the new `is_condition_met` variable, the while loop rechecks the condition`!is_condition_met` at the top of the loop.
+
+-   Since it still evaluates to `TRUE`, the loop runs again.
+
+You can imagine that this process repeats again and again until `current_num` reaches the number `8`. Once this happens, `is_condition_met`becomes `TRUE`, which means `!is_condition_met` will be `FALSE.`
+
+It's worth mentioning what happens when we don't change the `is_condition_met` variable. If this variable never changes, then the condition that runs the loop never stops. Your code will look as if it's "frozen" up, but it's actually just running your code infinitely!
+
+![](https://dq-content.s3.amazonaws.com/514/code-flow-4.png) Don't worry if this whole process seems daunting. `while` loops take a bit to understand, but they can be powerful tools once mastered. There are a lot of different variables to juggle, but the key to understanding the `while` loop is to know how these variables change everytime the loop runs. In the next screen, you'll have your turn to create your own `while` loop, but for now, explore the code we've provided to you.
+
+We've provided the example code in the console, along with some extra`print()` statements to show you what the current variables are at each iteration. Take some time to run the code and investigate the output. You should pay special attention to how the loop progresses through the variables.
+
+```{r}
+nums <- 1:10
+is_condition_met <- FALSE
+i <- 1
+
+# Loop execution
+while (!is_condition_met) {
+  print(paste("The loop has run", i, "time(s)"))
+  current_num <- nums[i] # Grab a number using the index
+  print(paste("current_num is currently:", current_num))  
+  is_condition_met <- current_num > 7 # Recheck the condition
+  print(paste("is_condition_met is currently:", is_condition_met))
+  i = i + 1 # Increase the index
+  print(paste("The index i has been set to:", i))
+}
+```
+
+## Your Own While Loop
+
+We've covered the `while` loop in great detail over the past two screens. On this screen, you'll finally have a go at constructing your own loop. For your convenience, we've also provided the `while` loop we covered before to let you review its structure.
+
+```{r}
+# Loop set up
+nums <- 1:10
+is_condition_met <- FALSE
+i <- 1
+
+# Loop execution
+while (!is_condition_met) {
+
+  current_num <- nums[i] # Grab a number using the index
+  is_condition_met <- current_num > 7 # Recheck the condition
+  i = i + 1 # Increase the index
+}
+```
+
+Before we move onto the exercise, it's worth mentioning why `while` loops are important. [For the curious, `while` loops play a major roles in heavy analytical tasks like simulation and optimization.]{color="red"} Optimization is the act of looking for a set of parameters that either maximize or minimize some goal. Think back to the price-profit example from the `for` loop example; that was an example of an optimization problem. We were given a vector of prices to use, but there are times that we won't know what prices to try. In this case, it's better to use a `while` loop to experiment with many, many prices until we see a clear "peak" in the profits.
+
+In other data analysis tasks, like cleaning data or calculating statistics, `while` loops are not so useful. These tasks form the brunt of what you encounter in the Data Analyst track and perhaps your career, but it's always good to know what tools are available to you as a programmer.
+
+We have provided a vector of numbers in the `prices` variable. These numbers represent the stock price of a company that you want to own a small part of. Imagine that you are a trader that is looking at these prices, and you want to purchase the stock at the lowest price that you can see. You can use the code described above as a template for your own `while` loop.
+
+1.  Your exercise is to write a `while` loop that tells you the price you should purchase the stock for.
+
+-   Imagine that you decide to buy a stock as soon as you see that the price has dipped below \$70.
+-   What price will you end up purchasing the stock for? Assign this price to the variable `buy_price`
+
+```{r}
+prices <- c(138.19, 82.72, 118.97, 77.55, 62.28, 89.71, 97.36, 91.98, 113.45, 73.93)
+is_below_70 <- FALSE # To make sure the following while loop would initiate at TRUE
+k <- 1
+
+while (!is_below_70) { # read as while the condition that share price is below 70 is not met
+  buy_price <- prices[k]# grab data from the vector by indexing using []
+  is_below_70<- buy_price < 70 # stating the condition mathematically
+  k = k +1 # create a loop til the condition is met
+}
+buy_price
+```
+
+## Iteration vs Vectorisation
+
+`for` and `while` loops are the main methods that R enables you to use iteration. As we wrap up this lesson, we need to discuss how iteration will fit into your workflow as a programmer. You might recall from the Control Flow lesson that we used the `if_else()` function function to apply an `if` statement on a whole column of values to create a new column of `TRUE` and `FALSE.` In other words, the `if_else()` function vectorizes the `if` statement.
+
+Roughly speaking, we can also use a `for` loop to get the same output that the `if_else()` function produces. So this raises the question, "If iteration and vectorization can produce the same output, which one should I use?"
+
+[The answer is almost always `vectorization.`]{color="red"} The reason for this is how vectorization calculates its output compared to iteration. A brief example illuminates this. Let's say that we have a vector of numbers, and all we want to do is divide all of them by 1000. We'll show you how to do this through both iteration and vectorization.
+
+```{r}
+nums <- c(1000, 2000, 3000, 4000, 5000)
+```
+
+```{r}
+# Approach 1: Iteration
+divided_nums <- c()
+for (n in nums) {
+  calc <- n / 1000
+  divided_nums <- c(divided_nums, calc)
+}
+divided_nums
+```
+
+```{r}
+# Approach 2: Vectorization
+divided_nums <- nums / 1000
+divided_nums
+```
+
+[It's clear that vectorization can produce the same output as iteration in less code!]{color="blue"} In iteration, we are changing values one at a time. Each time we are in the loop, we are only changing one value of `nums.` With vectorization, the division is applied to all the values in `nums` at the same time. Typically, it's easier to think how a `for` loop works: consider a single object, perform some calculations on it, and then move on to the next one. Vectorization just considers all of the elements at once, so it's faster.\
+
+You may have noted that we have followed a particular way of teaching you new functions throughout our Intermediate R lessons. We always try to teach you a function that vectorizes some particular operation. The `if_else()` function vectorizes `if` statements, the `mutate()` function vectorizes the creation of new columns, etc. [Vectorization is the reason that we use `&` and `|` in `if_else()` functions instead of `&&` or `||`.]{color="red"} The single-character versions are vectorized versions of their double-character counterparts. Vectorization works well with the `tidyverse` libraries, and [as a rule of thumb, you should always try to use functions that vectorize the thing you're trying to do.]{color="red"}\
+
+This doesn't mean that iteration is useless though! While there are many functions out there that vectorize particular calculations, there are still some tasks that cannot be vectorized. This is where iteration becomes useful. While we should always be looking to vectorize calculations, we can take comfort knowing that we have a back up tool to use just in case it fails us.
+
+# **3. Functions in R**
+
+## Introduction
+
+In the last lesson, we covered control structures and various functions that we could use to implement with `tibbles` and the `tidyverse` libraries. Throughout the course, we learned about functions and just described how to use them in particular contexts. As we continue our learning journey with R, it is time for us to look at functions at a deeper level.
+
+**Functions** are a fundamental tool in a programmer's toolkit. You can think of a function as a sort of recipe. A cooking recipe describes how to take raw ingredients and manipulate them according to a set of steps that ultimately produces a finished meal. A programming function is similar: take some input in the form of data (numbers, strings, etc.), process this data with some code, and return a processed form of the data that we can also use.
+
+![](https://dq-content.s3.amazonaws.com/495/coding-cooking.png) We learned plenty of functions so far that follow this blueprint. The `if_else()`function takes a column of values and pushes all these values through an`if-else` statement. The `read_csv()` function takes a string that represents the location of a CSV dataset and outputs a tibble that contains a copy of this data.
+
+Functions are important to programmers because it allows us to reuse code in quick, readable lines. We can take one complicated operation and wrap it up inside a function and use it wherever we need. For example, take the `mean()` function from base R that calculates the average value of a given vector --- we could write out the average calculation by hand:
+
+```{r}
+nums <- 1:10
+mean_nums <- sum(nums) / length(nums) # 5.5
+```
+
+Nothing stops us from writing out `sum(nums) / length(nums)` every time we need to calculate an average and this can get tiring. If you were not familiar with how to calculate an average, you might look at this bit of code and not know what it does. Having a code that reads like:
+
+```{r}
+nums <- 1:10
+mean_nums <- mean(nums)
+```
+
+makes it more readily apparent what that particular code is doing. Another benefit of having a dedicated function is it can greatly reduce the amount of code we have to write. If you ever find yourself writing the same code over and over again, it might be worth it to turn it into a function. If you need to change this code, all you need to do is change the function code instead of having to look for all your repeat code. In this lesson, we'll learn how to create our own functions instead of having to rely purely on R's already built functionality.
+
+## Components of A Function
+
+On the last screen, we made a comparison between a programming function and a recipe
+
+These three ingredients are what make up a function: inputs, an internal code chunk, and an output. We'll take these three different components and show how they appear in how functions are actually built in R. We'll make our own version of the `mean()` function to demonstrate this:
+
+```{r}
+nums <- 1:50
+example_mean <- function(nums) {
+  sum_nums <- sum(nums)
+  length_vec <- length(nums)
+
+  return(sum_nums / length_vec)
+}
+example_mean(nums)
+
+test_function <- function(x){
+  test_sum <- sum(x)
+  test_length <- length(x)
+  return(test_sum/test_length)}
+test_function(c(100,200,45))
+
+```
+
+The above code creates and assigns a function named `example_mean.` The function specification tells R that we are creating a `function.` After the function keyword, we have a `nums` variable inside some parentheses. These parentheses help define the input of our `example_mean` function --- the data that the function will take and transform.
+
+Now that we have the `nums` input, we need to create code that transforms the `nums` input into an average. After the `function` keyword, we have a code chunk surrounded by curly brackets. Within this code chunk, we calculate the two components that are needed to calculate an average. The only time that this code will be run is when the `example_mean()` function is being used.
+
+Finally, we have the `return` keyword. Once we have all of the values we need, we need to tell the function what value it should give back to the user. [For our function, we want to output the average, so this is what we put inside the `return`'s parentheses.]{color="red"}
+
+To recap, all functions have this essential format: - Name the inputs - Write out code in the code chunk - Return the output.
+
+In order to use the function, you would need to refer to it by the variable you assigned it to. For example:
+
+```{r}
+example_mean <- function(nums) {
+  sum_nums <- sum(nums)
+  length_vec <- length(nums)
+
+  return(sum_nums / length_vec)
+}
+
+avg <- example_mean(1:10) 
+```
+
+1.  Create a function called `find_longer_vector()` which takes two vectors and tells you which one is longer.
+
+-   If the first vector is longer, the function should return the string `"First"`.
+-   If the second vector is longer, it should return the string `"Second"`.
+-   If they are equal, it should return the string `"Equal Length"`.
+
+2.  Using the two given vectors, `first_vec` and `second_vec`, use your `find_longer_vector()` function to see which one was longer. Assign your answer to the variable `first_vs_second`.
+
+3.  Using the two given vectors, `first_vec` and `third_vec`, use your `find_longer_vector()` function to see which one was longer. Assign your answer to the variable `first_vs_third.`
+
+```{r}
+first_vec <- c(1, 5, 4, 2, 3, 7, 6)
+second_vec <- c(9, 2, 1, 8, 3, 4, 5, 6, 10, 7, 12, 11)
+third_vec <- c(8, 3, 5, 1, 7, 1, 10)
+
+find_longer_vector <- function(x, y) {
+
+  if (length(x) > length(y)) {
+      return("First")
+  } else if (length(x) < length(y)) {
+      return("Second")
+  } else {
+      return("Equal Length")
+  }
+}
+
+first_vs_second <- find_longer_vector(first_vec, second_vec)
+first_vs_third <- find_longer_vector(first_vec, third_vec)
+first_vs_second
+first_vs_third
+```
+
+## Namespaces For Functions
+
+On the last screen, we defined our own function which calculates the mean of a vector of numbers.
+
+```{r}
+example_mean <- function(nums) {
+  sum_nums <- sum(nums)
+  length_vec <- length(nums)
+
+  return(sum_nums / length_vec)
+}
+```
+
+Within the code chunk for our `example_mean()` function, we defined two variables `sum_nums` and `length_vec.` These two variables are special because they only exist when the function is used. After the function calculates and returns its value, we won't be able to access `sum_nums` and `length_vec.` For example, calculating a mean and then trying to access `sum_nums` will throw you an error:
+
+```{r}
+test_mean <- example_mean(1:20)
+# sum_nums
+# Error: object 'sum_nums' not found
+```
+
+To use a technical term, the `sum_nums` and `length_vec` variables only exist in the namespace of `example_mean()`. The namespace is essentially the environment that variables live in. Once we create the `example_mean()` function, it is also stored in the overall namespace. Once the `example_mean()` function is called, it will have its own namespace as well. The diagram below summarizes this: ![](https://dq-content.s3.amazonaws.com/495/namespaces.png) In the outer namespace, only `example_mean()` has been defined. It's only when `example_mean()` is being used that its namespace is created. Furthermore, any variable in the outer namespace cannot access variables in the inner namespace. [The important takeaway from namespaces is to understand and recognize where your variables are defined.]{color="red"} As you make your functions, you may try to reference a variable that only exists inside of a function. You can save yourself some time and frustration by keeping track of which namespace your variables are in.
+
+## Using Multiple Inputs
+
+In our first function example, we created our own version of the `mean()` function which took a single input `nums` and output the average of these numbers. Functions can be extremely flexible, but there's still some ideas we need to learn to use them to their full potential.
+
+The first idea is using more than one input in our function. If we were to restrict ourselves to using only one input in our functions, we would be severely limited in what we could do with them. Thankfully, passing multiple inputs into a function doesn't require too much extra work. Let's say that we want to make a function that takes two numbers, divides them and returns the remainder, much like the modulo operator`%%`. We would write this function as follows:
+
+```{r}
+remainder <- function(dividend, divisor) {
+  whole <- floor(dividend / divisor)
+  rem <- dividend - (whole * divisor)
+
+  return(rem)
+}
+
+remainder(10,3)
+```
+
+Our `remainder()` function takes two inputs, `divisor` and `dividend`, does some calculation and returns the remainder when the dividend is divided by the divisor. In order to give the function two inputs, we needed to separate them with a comma. This will apply to any number of inputs that you give a function: all of them must go inside the parentheses next to the `function` keyword, and they must be separated by commas.
+
+It's important to know that order matters when we pass in inputs to a function. For our `remainder()` function, the first input will be used as `dividend`, and the second one will be used as `divisor.` Another way of saying this is that the output of `remainder(4,3)` will be different from `remainder(3,4)` because different numbers get assigned to different inputs. For this reason, these types of inputs are called positional input: their position in the function when you call it matters.
+
+[The `floor()` function is a built-in R function that rounds a number down to the nearest integer that is `less than` or `equal to` it.]{color="green"} It takes a numeric input and returns a numeric output. For example, `floor(3.9)` returns `3` because `3` is the largest integer that is less than or equal to 3.9.
+
+In the context of the `remainder()` function, the `floor()` function is used to calculate the number of times the `divisor` can be divided into the `dividend` without a remainder. This is the whole number part of the division operation, or the quotient rounded down to the nearest integer. For example, if `dividend` is `10` and `divisor` is `3`, then `floor(10 / 3)` returns `3`, which is the number of times `3` can be divided into 10 without a remainder. This value is stored in the variable `whole`, which is then used in the next line of the code to calculate the remainder of the division operation.
+
+The third line of the code `rem <- dividend - (whole * divisor)` is calculating the remainder of the division operation between dividend and divisor.
+
+With this knowledge, you'll make your own multiple input function before moving on.
+
+1.  Create a function called `is_divisible` that takes two numbers and calculates if the first one is divisible by the second one. Divisible means that two numbers can be divided, and there will be no remainder. If the two numbers are divisible, return `TRUE.` If not, return `FALSE`.
+
+2.  Use your `is_divisible()` function to check if 5731 is divisible by 11. Assign your answer to the variable `div_5731_by_11.`
+
+```{r}
+is_divisible <- function (x, y) {
+  if (remainder(x, y) == 0) {
+    return("TRUE")
+  }else {
+    return("FALSE")
+  }
+}
+is_divisible (5731,11)
+```
+
+```{r}
+is_divisible <- function(dividend, divisor) {
+  whole <- floor(dividend / divisor)
+  rem <- dividend - (whole * divisor)
+  
+  if (rem == 0) {
+      return(TRUE)
+  } else {
+      return(FALSE)
+  }
+}
+div_5731_by_11 <- is_divisible(5731, 11)
+div_5731_by_11
+```
+
+## Default Arguments
+
+On the last screen, we learned how to use more than one input in our functions. On this screen, we'll learn how to differentiate between and use different types of inputs. A synonym for input is argument. For the most part, we will refer to the items we give to functions as inputs, but it's important to be aware that they can be referred to with other names on this screen.
+
+In order to use a function, it must be supplied with all of the inputs that it expects. The `example_mean()` function took one input, and that's what we gave it. The `remainder()` function took two, and it will only work if given two inputs. You can think of these as required inputs/arguments.
+
+There is another type of input/argument where we can tell the function to assume a certain value. If the function can assume an input takes a particular value, it will use that value unless told otherwise. Let's examine a slight variant of the `remainder()` function:
+
+```{r}
+remainder2 <- function(dividend, divisor = 2) {
+  whole <- floor(dividend / divisor)
+  rem <- dividend - (whole * divisor)
+
+  return(rem)
+}
+```
+
+The above `remainder2()` function is similar to the `remainder()` from the last screen, but with a slight tweak. Instead of requiring the programmer to provide an input for the `divisor` parameter, [`remainder2()` will assume that `divisor = 2` if not otherwise specified.]{color="red"} Instead of giving `remainder2()` two inputs, it can just be given one, which will be supplied to `dividend.`
+
+In `remainder2()`, `divisor` is what we call a keyword argument. Keyword arguments are useful because we can specify default values for functions. If you wanted to use a different value for the keyword argument, you will actually need to refer to it by its input name. For example, if we wanted to use `remainder2()` to divide by 3 instead, we would need to write the following:
+
+```{r}
+remainder2(9, divisor = 3)
+```
+
+If we wanted to, we could write out all of the inputs as keyword arguments. This could be valuable in cases where you're working with other programmers and you want to be as explicit as possible in your code.
+
+```{r}
+remainder2(dividend = 9, divisor = 3)
+```
+
+On the other end of the spectrum, we may also simply write `remainder2(9, 3)`, but this assumes some more knowledge of the function itself. By specifying `divisor = 3` in the code, it gives some more information to others who might be reading your code. Keyword arguments are a useful tool to be aware of when creating and using functions.
+
+## Handling Variable Numbers of Arguments
+
+In this lesson, we learned about both positional and keyword/default arguments. Both of these arguments are important because they are how you give your data a variable name within the namespace of your function. When we use positional and keyword arguments in our functions, we are also implyfing that there is **a set number of variables** that a function needs to run. The `is_divisible()` function we created earlier expects and will take only two arguments: `divisor` and `dividend.` This brings us to the question of this screen: what do we do if we don't know the number of arguments we need ahead of time? In other words, what if we need a function to handle a variable number of inputs?
+
+This situation comes up frequently in a programming problem that we will discuss more on the next screen. For now, we will use an example. Let's say that we have a function that performs a simple calculation: adding two numbers together.
+
+```{r}
+add <- function(x, y) {
+  return(x + y)
+}
+```
+
+As you might expect, this function just takes in two arguments x and y and returns the result of their addition. Let's say that we want to expand the usefulness of this function to add up any amount of numbers that we pass to it, so we don't limit ourselves. In other words, we want our better `add()` function to take a variable number of arguments. How would we do this?
+
+[R gives us a special construct to represent extra arguments that we add to a function. We call it the **three-dot construct**. We'll create a new function called `new_add()` function and build it up]{color="red"}
+
+```{r}
+new_add <- function(x, y, ...) {
+  return(list(...))
+}
+```
+
+In its form above, the `new_add()` function doesn't do any adding. It just returns the three-dot construct in the form of a list. To see why this is useful, let's use our `new_add()` function in two ways:
+
+```{r}
+new_add(1, 2, z = 3)
+
+new_add(1, 2, z = 3, w = 4)
+
+```
+
+In both of the examples above, the numbers 1 and 2 are used for the `x` and `y` arguments respectively. What's new here is that we are adding new arguments that are not specified in `new_add()`. Since they are not specified, R assumes that they will be a part of the three-dot construct. In the first use of `new_add()`, we see that the `z` argument is put in a list. We put it in a list because it allows us to see exactly what was in the `...` construct. The `z` name is associated with what we originally assigned it (z = 3). We see the same for the second use: both `z` and `w` are a part of the list that we pass `...` into. [This is what allows us to handle a variable amount of arguments.]{color="red"} Anything that cannot be used as a positional or keyword argument will be assumed to be a part of the three-dot construct, and we can access all this information as long as we put it in a list. You can imagine if we added a fifth argument to `new_add()` that it will also be put in the list the same way as `z` and `w`.
+
+Now let's finish up our `new_add()` function:
+
+```{r}
+new_add <- function(x, y, ...) {
+  current_num = x + y
+
+  for (num in list(...)) { 
+    current_num = current_num + num
+  }
+
+  return(current_num)
+}
+
+new_add(1, 2, z = 3)
+
+new_add(1, 2, z = 3, w = 4)
+
+```
+
+Above, the `new_add()` function uses a `for` loop to iterate through all of the numbers that are contained in `list(...)`. We don't know how many numbers will be in ... ahead of time, so we just iterate through all of the elements that would be in it once the function is run. Don't worry if you don't understand this right away, variable arguments are less intuitive to use than positional or keyword arguments, but they can add another degree of flexibility in your code.
+
+Now that you know about the three-dots construct, get some practice using it in your own function. On the next screen, we'll learn a more realistic, everyday use case for the three-dots construct in functions.
+
+1.  Create a function called `subtract_all()` that takes a starting number as the first argument and then a variable amount of numbers. The `subtract_all()` function should subtract all the numbers that are given to it from the starting number and then return the result of all of the subtraction.
+
+2.  Using your `subtract_all()` function, start with the number `10` and subtract the numbers, `1`, `2`, and `3`, from it. Assign the result to the variable `first_subtraction`.
+
+3.  Using your `subtract_all()` function, start with the number `100` and subtract the numbers, `71` and `22`, from it. Assign the result to the variable `second_subtraction`.
+
+```{r}
+subtract_all <- function(x, ...){
+  current_num = x
+  for (num in list(...)){
+    current_num = current_num - num
+  } 
+  return(current_num)
+}
+
+first_subtraction <- subtract_all(10, 1,2,3)
+second_subtraction <- subtract_all(100, 71, 22)
+
+first_subtraction
+second_subtraction
+```
+
+## Nested Functions
+
+As we wrap up this lesson, we'll discuss one last use case for the three-dots construct, which lets us handle a variable number of arguments. This use case strikes at the heart of why functions are useful to us. In short, functions allow us to take a more complicated operation/calculation and perform it in one line of code.
+
+Functions make themselves even more helpful in problems where there might be multiple types of calculations to perform. Let's say that we have a process that can be contained in three functions:
+
+```{r}
+clean_data <- function(data) {
+  # Data cleaning code is contained in here
+}
+
+analyze_data <- function(data, analysis_parameters) {
+  # This function takes clean data and does analysis on it
+}
+
+create_report <- function(analyzed_data, report_parameters) {
+  # This function creates a nicely formatted report from the analysis
+}
+```
+
+The actual code is not important, but this represents a common situation that you might find yourself in. Starting with raw data, you create different functions to handle some of the basic tasks in data analysis: cleaning, the analysis itself, and reporting the results.
+
+Now, you might be tempted to stop here and just run each of the functions one after the other, but there is another alternative. Instead of running these three functions every time you need to, you could also write another function that contains all of them and just returns the final report. In other words, you can simplify your entire workflow into one line by writing a function that contains or nests, the other functions in it.
+
+```{r}
+# A workflow function that nests the entire process
+perform_workflow <- function(data, ...) { 
+
+  # Store all the extra parameters in a list to access later
+  varargs <- list(...)
+
+  final_report = data %>%
+    clean_data() %>%
+    analyze_data(analysis_parameters = varargs$analysis_parameters) %>%
+    create_report(report_parameters = varargs$report_parameters)
+
+  return(final_report)
+}
+
+# data <- read_csv("some/path/to/data.csv")
+# example <- perform_workflow(data, 
+                            # analysis_parameters = "setting1", 
+                            # report_parameters = "setting2")
+```
+
+In the above example, we create a new function `perform_workflow()` that nests the three functions for our data analysis workflow. The `analyze_data()` and `create_report()` functions take parameters that need to be passed into it, so we use the three-dots construct to hold these when we need them. The three-dots construct gives us a lot of flexibility when we make our workflow function. This particular process only takes 3 functions, but your own workflows can contain many more functions, each with their own argument needs. The `...` allows us to keep our `perform_workflow()` function short, while allowing us to add as many functions and extra arguments that we might need.
+
+We could specify an `analysis_parameters` and `report_parameters` in the arguments list of `perform_workflow()`, but this could get long fast, especially if we're working with more functions with their own parameters.
+
+## Next Steps
+
+In this lesson, we learned how to create our own functions and vectorize them to create new columns. Functions allow us to take code and wrap it up in a resuable code chunk. Earlier in the lesson, you wrote a remainder() function that returned the remainder after a division of two numbers. If you were writing some code that dealt with remainders a lot, having a remainder() function can save you a lot of time and effort since you can just use the function instead of copying the code chunk repeatedly. Like control flow, functions are an essential programming skill to learn. As you progress through the R path, you will be introduced to more and more functions.

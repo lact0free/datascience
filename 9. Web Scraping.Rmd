@@ -1,0 +1,1149 @@
+---
+title: "9. Web Scraping"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(stringr)
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(httr)
+library(rvest)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. Fundamental
+
+## Introduction
+
+Datasets and APIs aren't the only way to access data. A great deal of data exists on the internet in the form of web pages. One way to access the data without waiting for the provider to create an API is to use web scraping.
+
+Web scraping loads a web page so we can extract the information we want. We can then analyze the data using standard tools like tidyverse packages.
+
+Typically, scraping web pages involves three main steps:
+
+1.  Determine the web page's structure.
+2.  Identify the information to extract.
+3.  Extract the data and convert it for manipulation.
+
+## Web Page Structure
+
+Web pages use HyperText Markup Language (HTML). HTML isn't a programming language like R or Python. Rather, it's a markup language with its own syntax and rules. When a web browser like Safari, Chrome, or Firefox downloads a web page, it reads the HTML to determine how to render and display it.
+
+### Anatomy of an HTML element
+
+![](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics/grumpy-cat-small.png)
+
+The main parts of our element are as follows:
+
+1.  **The opening tag:** This consists of the name of the element (in this case, p), wrapped in opening and closing **angle brackets**. This states where the element begins or starts to take effect --- in this case where the paragraph begins.
+
+2.  **The closing tag:** This is the same as the opening tag, except that it includes a *forward slash* before the element name. This states where the element ends --- in this case where the paragraph ends. Failing to add a closing tag is one of the standard beginner errors and can lead to strange results.
+
+3.  **The content:** This is the content of the element, which in this case, is just text.
+
+4.  **The element:** The opening tag, the closing tag, and the content together comprise the element.
+
+Elements can also have attributes that look like the following:
+
+![](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics/grumpy-cat-attribute-small.png)
+
+Attributes contain extra information about the element that you don't want to appear in the actual content. Here, `class` is the attribute *name* and `editor-note` is the attribute *value*. The `class` attribute allows you to give the element a non-unique identifier that can be used to target it (and any other elements with the same `class` value) with style information and other things. Some attributes have no value, such as required.
+
+Attributes that set a value always have:
+
+1.  A space between it and the element name (or the previous attribute, if the element already has one or more attributes).
+
+2.  The attribute name followed by an equal sign.
+
+3.  The attribute value wrapped by opening and closing quotation marks.
+
+### Nesting Elements
+
+You can put elements inside other elements too --- this is called **nesting**. If we wanted to state that our cat is **very** grumpy, we could wrap the word "very" in a `<strong>` element, which means that the word is to be strongly emphasized:
+
+```{r}
+# <p>My cat is <strong>very</strong> grumpy.</p>
+```
+
+Here's the HTML for an elementary web page:
+
+![](https://dq-content.s3.amazonaws.com/557/html_simple_code.svg)\
+
+We can see what this page looks like [on our GitHub site](http://dataquestio.github.io/web-scraping-pages/simple.html)
+
+HTML consists of tags.
+
+![](https://dq-content.s3.amazonaws.com/557/html_tags.svg)\
+
+We open and close a tag like this:
+
+![](https://dq-content.s3.amazonaws.com/557/html_p_open_close.svg)\
+
+Anything between the opening and closing tags makes up the content of that tag. We can nest tags to create complex formatting rules. From our example, we can identify several nested tags: head and body are within html tags, and p is within the body tags.
+
+![](https://dq-content.s3.amazonaws.com/557/html_tags_structure.svg)\
+
+HTML documents contain a few major sections. The `head` section contains information that's useful to the web browser that's rendering the page. (The user doesn't see it.) The `body` section contains the bulk of the content user will see in their browser.
+
+Different tags have different purposes. For example, the `title` tag tells the browser what to display at the top of our tab. The `p` tag indicates that the content inside it is a single paragraph.
+
+We won't cover tags comprehensively here, but the [Mozilla Developer Network's (MDN) article on HTML basics](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics) is a good resource for learning more HTML. (Check out MDN's guide to the HTML element for a list of all possible HTML tags.) To scrape web pages effectively, we need to understand the various tags and how they work.
+
+We can use a GET request with the `GET()` and `content()` functions of `httr` that we used in previous lessons to see the structure of webpages.
+
+In this exercise, we'll make a GET request to `http://dataquestio.github.io/web-scraping-pages/simple.html`.
+
+We've imported the `httr` package for you already, so you don't need to do it again in this lesson.
+
+1.  Make a GET request to `http://dataquestio.github.io/web-scraping-pages/simple.html`.
+
+-   Assign the result to the variable `response`.
+
+2.  Use the `content()` function to get the content of `response` as "parsed" text.
+
+-   Assign the result to `content`.
+-   Print `content` and note the similarity to the HTML above.
+
+```{r}
+response  <-  GET("http://dataquestio.github.io/web-scraping-pages/simple.html")
+
+content  <- content(response, as = "parsed")
+
+print(content)
+```
+
+## From httr to rvest
+
+Downloading the page is the easy part. On the previous screen, we combined the `GET()` and `content()` functions from the `httr` package.
+
+If we want to extract specific information from this HTML document, we need to parse the HTML document and extract the information.
+
+Now, the `rvest` package comes into play. The `httr` package allowed querying and manipulating APIs. The `rvest` package allows parsing and extracting tags from an HTML document.
+
+Importing `rvest` also imports the `xml2` package, which contains the `read_html()` function that combines the `GET()` and `content()` functions. This function receives a URL link and yields its content as an HTML document.
+
+```{r}
+new_content <- read_html("http://dataquestio.github.io/web-scraping-pages/simple.html")
+print(new_content)
+```
+
+## Retrieving an Element from a Page
+
+Let's review the structure of our previous example.
+
+![](https://dq-content.s3.amazonaws.com/557/html_p_open_close_.svg)\
+
+If we want to get the text (content) in the p tag element from the HTML document contained in new_content, we use the following code snippet.
+
+```{r}
+p_text <- new_content %>% 
+    html_nodes("p") %>%
+    html_text()
+print(p_text)
+```
+
+-   The `html_nodes()` function extracts all `p` tag elements. Its syntax is: `html_nodes("the name of the tag")`.
+-   The `html_text()` function extracts the text (the content) from the `p` tag elements.
+-   Note the use of pipes (`%>%`) for cascade operations.
+
+![](https://dq-content.s3.amazonaws.com/557/html_p_tag_extraction.svg)\
+
+Let's use the same technique to get the text inside the title tag.
+
+1.  Get the text inside the `title` tag.
+
+-   Assign the result to `title_text`.
+
+```{r}
+title_text <- new_content %>% 
+    html_nodes("title") %>%
+    html_text()
+print(title_text)
+```
+
+## Retrieving Elements from a Page
+
+Let's consider a [new example](http://dataquestio.github.io/web-scraping-pages/simple_classes.html). The `b` tag creates bold text, and the `div` tag creates a divider that splits the page into units. We can think of a divider as a "box" that contains content. For example, different dividers hold a web page's footer, sidebar, and horizontal menu.
+
+![](https://dq-content.s3.amazonaws.com/557/html_example_4.svg)\
+
+Assuming that we got the content of this example and stored it in the variable `content_2`, then we can write the following code snippet to extract all the `p` tag elements.
+
+```{r}
+content_2 <- read_html("http://dataquestio.github.io/web-scraping-pages/simple_classes.html")
+p_text <- content_2 %>%
+    html_nodes("p") %>%
+    html_text()
+print(p_text)
+```
+
+Note that this is the same code we used on the previous screen.
+
+-   It finds all occurrences of the `p` tag and returns a character vector.
+-   It extracts the text with all the white spaces, like spaces and line breaks (`\n`). If we only want the first occurrence of an item, we'll need to index the vector to get it. Let's extract all occurrences of text inside the `b` tag from `content_2`.
+
+We've provided the code to get `content_2` in the Editor.
+
+1.  Get all occurrences of text inside the `b` tag.
+
+-   Assign the result to `b_text`.
+
+2.  Extract the first outer paragraph from `b_text`.
+
+-   Assign the result to the `first_outer_paragraph` variable.
+
+```{r}
+content_2 <- read_html("http://dataquestio.github.io/web-scraping-pages/simple_classes.html")
+
+# Type your answer below
+b_text <- content_2 %>% 
+    html_nodes("b") %>%
+    html_text()
+print(b_text)
+first_outer_paragraph <- b_text[1]
+first_outer_paragraph
+```
+
+## Element IDs
+
+Let's consider a [new example](http://dataquestio.github.io/web-scraping-pages/simple_ids.html).
+
+![](https://dq-content.s3.amazonaws.com/557/WBG4aCQ.svg)\
+
+Notice the new elements `id="first"` and `id="second"` in the opening `p` tags. These represent IDs. (We will talk about them later.)
+
+If we want to get the text (content) in the first `p` tag, we could use the following code snippet, assuming that we got the content of this example and stored it in the variable `content_3`.
+
+```{r}
+content_3 <- read_html("http://dataquestio.github.io/web-scraping-pages/simple_ids.html")
+p_text <- content_3 %>% 
+    html_nodes("p") %>%
+    html_text()
+
+print(p_text[1])
+```
+
+Alternatively, we can access content by IDs. HTML allows elements to have IDs. Because IDs are unique, we can use them to refer to specific elements. In our example, we assign the `"first"` ID to the first paragraph and `"second"` ID to the second one using attributes.
+
+Attributes contain extra information about the element that we don't want to appear in the actual content. Here, we don't want IDs information to appear in the `p` tag content.
+
+To access the IDs, we can still use the `html_nodes()` function. However, instead of indicating the tag name, we provide the ID name preceded by #.
+
+For our example, we can use `html_nodes("#first")` to get the first paragraph's text using the `first` ID.
+
+Let's use this method to access the first and second paragraphs.
+
+We've loaded the example for you and saved it as `content_3`.
+
+1.  Get the text of the first paragraph using the `first` ID.
+
+-   Assign the result to `first_paragraph_text`.
+
+2.  Get the text of the first paragraph using the `second` ID.
+
+-   Assign the result to `second_paragraph_text`.
+
+```{r}
+first_paragraph_text <- content_3 %>% 
+    html_nodes("#first") %>%
+    html_text()
+first_paragraph_text
+second_paragraph_text <- content_3 %>% 
+    html_nodes("#second") %>%
+    html_text()
+second_paragraph_text
+```
+
+## Element Classes
+
+In HTML, elements can also have classes as attributes. Instances of classes aren't necessarily unique. Many different elements can belong to the same class, usually because they share a common purpose or characteristic.
+
+For example, we may want to create three dividers to display three of our photographs. We can create a typical look and feel for these dividers, such as a border and caption style.
+
+This is when we use a class. We could create a class called `"gallery"`, define a style for it once, and then apply that class to all of the dividers we'll use to display photos. One element can even have multiple classes.
+
+![](https://dq-content.s3.amazonaws.com/557/T2TguLL.svg)\
+
+Look at [this page](http://dataquestio.github.io/web-scraping-pages/simple_classes.html) to see how we've used classes to style paragraphs.
+
+To access the classes, we can still use the `html_nodes()` function. However, instead of indicating the tag name, we provide the class name preceded by a period (`.`).
+
+In our example, we can use `html_nodes(".inner-text")` to get the text of the "inner" paragraphs using the `inner-text` class.
+
+Let's use this method to access the outer paragraphs.
+
+We've loaded the example for you and saved it as `content_4`.
+
+1.  Get the text of the outer paragraphs using the `outer-text` class.
+
+-   Assign the result to `outer_paragraph_text`.
+
+```{r}
+content_4 <- read_html("http://dataquestio.github.io/web-scraping-pages/simple_classes.html")
+
+# Type your answer below
+outer_paragraph_text <- content_4 %>% 
+    html_nodes(".outer-text") %>%
+    html_text()
+outer_paragraph_text
+```
+
+## Extracting a Table as Dataframe
+
+Let's consider this [new example](http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html). The table tag is a structured set of data made up of rows and columns (tabular data). It allows displaying a dataset.
+
+Our example is an excerpt from the 2014 Super Bowl box score, a National Football League (NFL) game in which the New England Patriots played the Seattle Seahawks. The box score contains information on how many yards each team gained, how many turnovers each team had, and other statistics that pertain to the sport.
+
+Check out the web page this HTML renders. The page renders as a table with column and row names. The first column is for the Seattle Seahawks (SEA), and the second column is for the New England Patriots (NWE). Each row represents a different statistic.
+
+Suppose we want to get this tabular data. Assume that we got the content of this example and stored it in the variable `content_5`. We can use the same technique from the previous screens to get this content.
+
+```{r}
+content_5 <- read_html("http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html")
+table_text <- content_5 %>% 
+    html_node("table") %>%
+    html_text()
+
+print(table_text)
+```
+
+Note that we use `html_node()` instead of `html_nodes()` because there is only one `table` to extract. If there are several tables in the page and we use `html_node()`, we will only extract the first `table`.
+
+However, we want to get a dataframe instead of text. We can't use `html_text()` anymore. Luckily, `rvest` provides the `html_table()` function for this purpose.
+
+Let's use this function to get the dataframe representing the table from our example.
+
+We've loaded the example for you and saved it as `content_5`.
+
+1.  Get the dataset inside the first and unique `table` tag.
+
+-   Select the data inside the `table` tag.
+-   Replace the `html_text()` function by `html_table()`.
+-   Assign the result to `super_bowl_df`.
+
+```{r}
+super_bowl_df <- content_5 %>% 
+    html_node("table") %>%
+    html_table()
+
+super_bowl_df
+```
+
+## Extracting Attributes Information
+
+Let's consider another [new example](http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html).
+
+![](https://dq-content.s3.amazonaws.com/557/uOaCMeY.svg)\
+
+Sometimes the information we're looking for isn't the content of elements but attribute values---for example, the list of classes or IDs in the extracted nodes.
+
+Assume that we got the content of this example and stored it in the variable `content_6`. We can use the `html_attrs()` function instead of `html_text()` to extract all attributes values.
+
+```{r}
+content_6 <- read_html("http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html")
+p_attrs <- content_6 %>% 
+    html_nodes("p") %>%
+    html_attrs()
+
+print(p_attrs)
+```
+
+This output shows all the classes and IDs that we have in `p` tag elements.
+
+We can also get specific attribute values using `html_attr("name_of_attribute")`. For example, we can extract the list of IDs by doing the following:
+
+```{r}
+content_6 <- read_html("http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html")
+p_attr_id <- content_6 %>% 
+    html_nodes("p") %>%
+    html_attr("id")
+
+print(p_attrs)
+```
+
+In short, if we have a tag node obtained from `html_nodes()`, we can apply either `html_attrs()` to get all the attributes and their values or `html_attr()` specifying an attribute name to get its values.
+
+![](https://dq-content.s3.amazonaws.com/557/tag_parsed.svg)\
+
+We've loaded the example for you and saved it as `content_6`.
+
+1.  Extract the list of the `class` attribute value in the `p` tag.
+
+-   Select the element inside the `p` tag.
+-   Use the `html_attr()` function to get the class attribute values.
+-   Assign the result to `p_class_values`.
+
+```{r}
+p_class_values <- content_6 %>% 
+    html_nodes("p") %>%
+    html_attr("class")
+
+p_class_values
+```
+
+# 2. Intermediate
+
+## Introduction
+
+In the first "Web Scraping in R" lesson. we explored the basic processes and functions for scraping simple web pages.
+
+![](https://dq-content.s3.amazonaws.com/558/web_scraping_code.svg)\
+
+In this lesson, we will develop skills that will help us work with more complex web pages.
+
+Using this previous example, as a reminder, let's extract all text inside the `b` tag.
+
+![](https://dq-content.s3.amazonaws.com/558/T2TguLL.svg)\
+
+1.  Load the `rvest` and `dplyr` packages. Remember that importing `rvest` also imports the `xml2` package.
+
+2.  Use `read_html()` to load the page `"http://dataquestio.github.io/web-scraping-pages/simple_classes.html"`.
+
+-   Assign the result to `content_1`.
+
+3.  Extract the content inside the `b` tag.
+
+-   Assign the result to `b_text`.
+
+```{r}
+content_1 <- read_html("http://dataquestio.github.io/web-scraping-pages/simple_classes.html")
+
+b_text <- content_1 %>% 
+    html_nodes("b") %>%
+    html_text()
+b_text
+```
+
+## CSS Selectors
+
+Cascading Style Sheets, or CSS, is a language for adding styles to HTML pages. You may have noticed that our simple HTML pages from the past few screens didn't have any styling (all of the paragraphs had black text and the same font size). Most Web pages use CSS to display a lot more than basic black text.
+
+![](https://dq-content.s3.amazonaws.com/558/html_to_display.gif)\
+
+CSS uses selectors to add styles to the elements and classes of elements we specify. We can use selectors to add background colors, text colors, borders, padding, and many other style choices to the elements on HTML pages.
+
+This lesson doesn't include an in-depth lesson on CSS. If you'd like to learn more about CSS, [MDN's guide](https://developer.mozilla.org/en-US/docs/Web/Guide/CSS/Getting_started) is a great place to start.
+
+However, we do need to know how CSS selectors work.
+
+![](https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/CSS_basics/css-declaration-small.png)\
+
+This CSS will make the text inside all paragraphs red:
+
+```{r}
+# p{
+#     color: red
+#  }
+```
+
+We can see what this style looks like on our [GitHub site](http://dataquestio.github.io/web-scraping-pages/simple_red.html).
+
+This CSS will change the text color to red for any paragraphs that have the class `inner-text`. We select classes with the period or dot symbol (`.`):
+
+```{r}
+# p.inner-text{
+#     color: red
+#  }
+```
+
+We can see what the result looks like [here](http://dataquestio.github.io/web-scraping-pages/simple_inner_red.html).
+
+This CSS will change the text color to red for any paragraphs that have the ID `first`. We select IDs with the pound or hash symbol (`#`):
+
+```{r}
+# p#first{
+#     color: red
+#  }
+```
+
+Take a look at the results on our [GitHub site](http://dataquestio.github.io/web-scraping-pages/simple_ids_red.html).
+
+We can also style IDs and classes without using any specific tags. For example, this CSS will make the element with the ID first red (not just paragraphs):
+
+```{r}
+# #first{
+#     color: red
+#  }
+```
+
+This CSS will make any element with the class `inner-text` red:
+
+```{r}
+# .inner-text{
+#     color: red
+#  }
+```
+
+In the examples above, we used CSS selectors to select one or more elements and then apply styles to only those elements. CSS selectors are very powerful and flexible.
+
+As you can see `tag_name`, `.class_name`, and \#`ID_name` that we used in the previous lesson in the `html_nodes()` function are CSS selectors. Hence, we use CSS selectors to select elements when we do web scraping.
+
+## Using CSS Selectors
+
+Here's the HTML we'll work with on this screen:
+
+<center>![](https://dq-content.s3.amazonaws.com/558/uOaCMeY.svg)</center>
+
+You may have noticed that the same element can have both an ID and a class. We can also assign multiple classes to a single element. We'll separate the classes with spaces.
+
+Look at the [web page](http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html) that corresponds to that example.
+
+As a reminder, let's use CSS selector to select the content we want.
+
+1.  Use `read_html()` to load the page `"http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html"`.
+
+-   Assign the result to `content_2`.
+
+2.  Use the CSS Selector to get the first outer paragraph.
+
+-   Assign the result to `first_outer_text`.
+
+2.  Use the CSS Selector to get the first inner and outer paragraphs.
+
+-   Assign the result to `first_items_text`.
+
+```{r}
+content_2 <- read_html("http://dataquestio.github.io/web-scraping-pages/ids_and_classes.html")
+
+first_outer_text <- content_2 %>% 
+    html_nodes("#second") %>%
+    html_text()
+first_outer_text
+first_items_text <- content_2 %>% 
+    html_nodes(".first-item") %>%
+    html_text()
+first_items_text
+```
+
+## Nesting CSS Selectors
+
+We can nest CSS selectors similar to the way HTML nests tags. For example, we could use selectors to find all of the paragraphs inside the `body` tag. Nesting is a powerful technique that uses CSS for complex web scraping tasks.
+
+This selector will target any paragraph inside a `div` tag:
+
+```{r}
+# div p
+```
+
+This selector will target any item inside a `div` tag that has the class `first-item`:
+
+```{r}
+# div .first-item
+```
+
+This one is even more specific. It selects any item that's inside a `div` tag inside a `body` tag, but only if it also has the ID `first`:
+
+```{r}
+# body div #first
+```
+
+This selector will target any items with the ID `first` that are inside any items with the class `first-item`:
+
+```{r}
+# .first-item #first
+```
+
+We can nest CSS selectors in infinite ways. This allows us to extract data from websites with complex layouts.
+
+## Using Nested CSS Selectors
+
+Now that we know about nested CSS selectors, let's try them out. We can use the same technique we've used so far with CSS selectors.
+
+We'll be practicing on the following HTML:
+
+<center>![](https://dq-content.s3.amazonaws.com/558/H34hK8I.svg)\
+</center>
+
+This is an excerpt from a box score of the 2014 Super Bowl, a National Football League (NFL) game in which the New England Patriots played the Seattle Seahawks. The box score contains information on how many yards each team gained, how many turnovers each team had, and other statistics that pertain to the sport. Check out the [web page](http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html) this HTML renders.
+
+The page renders as a table with column and row names. The first column is for the Seattle Seahawks (SEA), and the second column is for the New England Patriots (NWE). Each row represents a different statistic.
+
+The URL of the example is `"http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html"`.
+
+1.  Find the Total Plays for the New England Patriots.
+
+-   Use the CSS selector to get the Total Plays row cells.
+
+2.  Index the third element of the output vector.
+
+-   Assign the result to `patriots_total_plays_count`.
+
+3.  Find the Total Yards for the Seahawks.
+
+-   Use the same technique as in the previous instruction.
+
+4.  Assign the result to `seahawks_total_yards_count`.
+
+```{r}
+content_3 <- read_html("http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html")
+
+total_plays <- content_3 %>% 
+    html_nodes("#total-plays td") %>%
+    html_text()
+
+patriots_total_plays_count <- total_plays[3]
+
+patriots_total_plays_count
+
+total_yards <- content_3 %>% 
+    html_nodes("#total-yards td") %>%
+    html_text()
+
+seahawks_total_yards_count <- total_yards[2]
+seahawks_total_yards_count
+```
+
+## Mastering CSS Selectors
+
+Selectors are essential in web scraping, but it's not easy to master them. If you want to practice, we recommend visiting this [Flukeout website](https://flukeout.github.io/) to learn by playing. The Flukeout interface looks like this:
+
+1.  Box 1 displays the exercise to complete.
+2.  Box 2 is the edit field where you enter your result.
+3.  Box 3 shows the html code.
+4.  Box 4 describes the selector to use.
+
+
+![](https://dq-content.s3.amazonaws.com/558/flukeout.png)\
+
+However, we can't wait to master the selectors to extract the data. Several solutions are available to solve this problem.
+
+- Retrieve the expected data programmatically. This solution assumes that we understand the web page's structure.
+- Use a tool to find the suitable selector.
+In practice, we often find ourselves combining both approaches — especially since most people won't give you the code for their pages as we have done here for the sake of education and simplicity. We have to try to understand web pages' structures by ourselves.
+
+## Retrieving Data Programmatically
+
+
+Here is the example we used to practice nested selectors.
+
+
+<center>
+![](https://dq-content.s3.amazonaws.com/558/H34hK8I.svg)\
+</center>
+
+
+
+One of the challenges was to find the Total Plays for the New England Patriots. To do so, we used the nested selector `#total-plays` td to get the Total Plays row cells. Then, we indexed the third element of the output vector.
+
+
+```{r}
+content_3 <- read_html("http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html")
+
+total_plays <- content_3 %>% 
+    html_nodes("#total-plays td") %>%
+    html_text()
+
+patriots_total_plays_count <- total_plays[3]
+
+patriots_total_plays_count
+```
+
+
+Accessing the third cell by indexing the output vector (`total_plays[3]`) is a programming solution. Otherwise, we could have used the :`nth-child(element_position)` selector to get the result directly.
+
+
+```{r}
+patriots_total_plays_count <- content_3 %>% 
+    html_nodes("#total-plays td:nth-child(3)") %>%
+    html_text()
+patriots_total_plays_count
+```
+If we don't know how to properly nest the selectors, we can stack several `html_nodes()` like this:
+
+```{r}
+patriots_total_plays_count <- content_3 %>% 
+    html_nodes("#total-plays") %>%
+    html_nodes("td:nth-child(3)") %>%
+    html_text()
+patriots_total_plays_count
+```
+
+In this code snippet, `html_nodes("#total-plays")` selects all nodes with `total-plays` ID, then `html_nodes("td:nth-child(3)")` selects the third elements in these nodes. It is equivalent to `html_nodes("#total-plays td:nth-child(3)")`.
+
+Typically, there is a selector for everything you might want to extract, but sometimes it can be quite complex. In these cases, you have to think about programming solutions.
+
+Let's programmatically retrieve the second column (NWE) from our example table.
+
+
+The `content_3` variable is available from previous screens.
+
+1. Extract all information about the New England Patriots (NWE).
+
+- Use the CSS selector to get the table as a dataframe.
+- Name this dataframe `table_df`.
+2. Extract the `NWE` column data from the `table_df` dataframe using the `$` operator.
+
+- Assign the result to `nwe_vector`.
+
+
+
+
+```{r}
+table_df <- content_3 %>% 
+    html_node("table") %>%
+    html_table()
+
+nwe_vector <- table_df$NWE
+nwe_vector
+```
+
+## Finding Web Page Structure with Browser Developer Tools
+
+Basically, two kinds of tools are useful for scraping web pages:
+
+- A tool to display the web page HTML code and its structure, such as Browser Developer Tools
+- A tool to test the selectors directly on the web page to scrape
+Every modern web browser includes a powerful suite of developer tools. These tools can help you inspect currently loaded HTML and understand its structure.
+
+- With Chrome, we can double-click on the page and select `inspect`.
+- With Safari, Go to `Preferences > Advanced` and then check `"Show Develop menu in menu bar"`.
+- With Mozilla Firefox, we can double-click on the page and select `inspect element`.
+
+
+Let's see how Chrome Developer Tools look on the [Billboard Hot 100 page](https://www.billboard.com/charts/hot-100). This web page shows the current Hot 100 songs on the chart, and other information.
+
+
+![](https://dq-content.s3.amazonaws.com/558/hot100_1_new.png)\
+
+
+On the right, we have the Developer Tools. Under the (Elements) tab, we can see the currently-loaded HTML and its structure. When we click on an element there, it highlights it on the web page and provides its selector: `div.chart-results-list`. This selector will extract all the artist information. If we only want the first artist box, we can explore the `div.chart-results-list` child nodes to identify it.
+
+![](https://dq-content.s3.amazonaws.com/558/hot100_2_new.png)\
+
+
+This tool helps understand the web pages' structure and identify the data we want to extract.
+
+
+## Choosing Suitable Selectors
+
+The second tool we'll use is [Selector Gadget](http://selectorgadget.com/). It generates and discovers selectors in web pages. (Please refer to the video on the tool's page to see how it works in practice.) If you're interested in installing it, the procedure is on the page.
+
+Let's continue to use the Billboard Hot 100 page. We want to extract the artists of the top ten songs were on the chart at the [beginning of 2022](https://www.billboard.com/charts/hot-100/2022-06-08/).
+
+From the Developer Tools, we can see that the selector that would allow selecting the desired element begins with `span.c-label.a-no-trucate.a-font-primary-s`
+
+
+![](https://dq-content.s3.amazonaws.com/558/hot100_3_new.png)\
+
+
+We can enter this selector in Selector Gadget to see which elements this selector will take into consideration.
+
+![](https://dq-content.s3.amazonaws.com/558/selectorgadget_new.png)\
+
+
+We can delete all elements besides the second and third to see if we can still get the same information. We've ended up with this simplified selector: `.c-label.a-no-trucate`. We can see that only the top 100 elements are selected. Then this is a good selector. We can scrape the targeted content using this selector and select the first ten items. We can use the `str_replace_all()` function to remove the unnecessary HTML entities.
+
+
+
+
+```{r}
+# read in the htmnl file 
+content_hot_100 <- read_html("https://www.billboard.com/charts/hot-100/2022-06-08/")
+
+# Type your answer below
+hot_100_artists <- content_hot_100 %>% 
+    html_nodes(".c-label.a-no-trucate") %>%
+    html_text() %>%
+    head(10)
+
+hot_100_artists
+
+hot_100_artists <- str_replace_all(hot_100_artists, "\n", "")
+hot_100_artists <- str_replace_all(hot_100_artists, "\t", "")
+# \t are the represents the tab character. When printed or displayed, it causes the text to be formatted with horizontal space similar to pressing the "Tab" key on a keyboard.
+
+# \n represents the newline character. It signifies the end of a line in a text and causes the text cursor or output to move to the beginning of the next line.
+hot_100_artists
+```
+
+Now we want to extract the titles of the top ten songs. Selector Gadget also allows clicking on an object (on the web page) to discover its selector. If we click on the first title on the page, it suggests using the `.c-title`. As we can see below, the selection includes a duplicate of the top song:
+
+
+![](https://dq-content.s3.amazonaws.com/558/selectorgadget_2_new.png)\
+
+
+With this selector in mind, after inspecting the code again, we realize that this `.c-title.a-no-trucate` selector works.
+
+In practice, sometimes inspecting the code is enough; therefore, there's no need to use Selector Gadget. However, we recommend you use it often because a CSS selector can represent more or fewer elements (data) than we want to extract.
+
+Let's use the selector we found to extract the titles of the top ten songs. Notice we will no longer need Selector Gadget to resolve the exercise on this screen.
+
+The content_hot_100 variable is available in the Editor.
+
+1. Extract the titles of the top ten songs using the selector, `.c-title.a-no-trucate`.
+
+- Assign the result to `hot_100_top_10_songs`.
+2. Clean up the raw text by removing the HTML entities using the `str_replace_all()` function.
+- Remove both `\n` and `\t`.
+
+```{r}
+content_hot_100 <- read_html("https://www.billboard.com/charts/hot-100/2022-06-08")
+
+# Type your answer below
+hot_100_top_10_songs <- content_hot_100 %>% 
+    html_nodes(".c-title.a-no-trucate") %>%
+    html_text() %>%
+    head(10)
+
+hot_100_top_10_songs <- str_replace_all(hot_100_top_10_songs, "\n", "")
+hot_100_top_10_songs <- str_replace_all(hot_100_top_10_songs, "\t", "")
+
+hot_100_top_10_songs
+```
+
+
+
+
+
+# 3. Challenge: Working with Different Web Pages in R
+
+
+##  Introduction
+
+
+
+This lesson is a "challenge lesson." That means we will guide you less than we have in previous lesson exercises. We don't expect you to figure out this challenge immediately, so don't become frustrated if these exercises take more attempts than others you've completed. In the real world, a data professional's workflow includes a lot of trial and error.
+
+The purpose of this lesson is to scrape several web pages and gain experience by practicing the various subtleties that each one will present.
+
+If you get stuck, remember the following:
+
+- First, it's okay to get stuck. Our workflow includes a lot of trial and error.
+- If your code doesn't work, make sure that the selector can extract the desired data.
+- If you don't know the web page structure, it might be difficult to scrape it.
+The structure of the screens in this challenge is as follows:
+
+- A brief (web page) description
+- Our goal (including the expected output)
+- Some instructions
+Here is the basic code snippet for scraping a web page.
+
+
+```{r}
+# content <- read_html("the web page URL")
+# 
+# text <- content %>% 
+#     html_nodes("the right selector") %>%
+#     html_text()
+```
+
+This lesson will require many iterations. Feel free to use RStudio to experiment. We will provide guidance in the hints, but we encourage you to try the exercises on your own first.
+
+
+## Building a Web Scraping Function
+
+
+A brief description: you may have realized that the code to extract data from web pages is usually the same except for a few configurations.
+
+Our goal: we want to write a custom function, called `scraper()`, that allows us to scrape most websites.
+
+This function receives four parameters (two of which are optional):
+
+- The `url` parameter is the URL of the web page to scrape. This is a required parameter.
+- The `selector` parameter is the CSS selector of the data to extract. This is a required parameter.
+- The `output` parameter indicates the type of expected output. This parameter is optional. This type can be any of the following:
+
+- `"text"`, (default value)
+- `"table"` (a dataframe)
+- `"attrs"` (all the attribute names and values)
+- If `output` doesn't take one of the three previous values, it represents an attribute's name. For example, `output = "href"` indicates the attribute href values.
+The `all_nodes` parameter is set to `TRUE` if we want to extract all nodes; otherwise, only the first node is necessary.This parameter is optional. Its default value is `TRUE`.
+
+
+As a reminder, here is a function model that receives two parameters, the second of which is optional.
+
+
+```{r}
+# the_custom_function_name <- function(param_1, param_2 = default_value) {
+#     # Performing several operations here
+# 
+#     # Then, return the output
+#     the_output_variable_name
+# }
+```
+
+
+Write the `scraper()` function.
+
+1. The function has the four parameters described in the learning section.
+2. Load the web page content using the `read_html()` function and the `url` parameter.
+3. Use an `if` statement to extract one or all nodes:
+
+- If `all_nodes` is `TRUE`, use the `html_nodes()` function with the `selector` parameter.
+- Otherwise, use the `html_node()` function with the `selector` parameter.
+4. Use an `if` statement to extract the following from nodes: text, table, attributes, or attribute data.
+
+- If output is `"text"`, use the `html_text()` function.
+- If output is `"table"`, use the `html_table()` function.
+- If output is `"attrs"`, use the `html_attrs()` function.
+- Otherwise, use the `html_attr()` function with the output parameter.
+5. Return the extracted data
+
+6. Use this function to extract the cells of the third row of the table.
+
+- Copy-paste the following command after your function to do so.
+
+```{r}
+scraper <- function(url, selector, output = "text", all_nodes = TRUE) {
+    
+    # Loading the web page content
+    content <- read_html(url)
+
+    # Getting one or all nodes
+    if (all_nodes) {
+        nodes <- content %>% 
+            html_nodes(selector)
+    } else {
+        nodes <- content %>% 
+            html_node(selector)
+    }
+    
+    # Outputting text, table, attributes, or attribute
+    
+    if (output == "text") {
+        answer <- nodes %>% html_text()
+    } else if (output == "table") {
+        answer <- nodes %>% html_table()
+    } else if (output == "attrs") {
+        answer <- nodes %>% html_attrs()
+    } else {
+        answer <- nodes %>% html_attr(output)
+    }
+    
+   # Returning the output
+   answer 
+}
+
+scraper(url = "http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html", output = "text", 
+        selector = "table tr:nth-child(3) td")
+```
+
+
+## Extracting Historical Temperatures
+
+Web page description: [AccuWeather](https://www.accuweather.com/) provides data about past, present, and future weather worldwide. We're interested in the [Brussels (Belgium) temperature](https://www.accuweather.com/en/be/brussels/1000/daily-weather-forecast/412872_pc?day=48) at the beginning of 2020.
+
+Our goal: we want to extract the high and low temperatures recorded on the 2nd of January 2020. function we developed on the previous screen. This function gets loaded into memory, and we will use it throughout the rest of this lesson.
+
+1. Extract the high and low temperatures from this web page as text.
+
+To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/Brussels_Belgium_Weather_AccuWeather.html"`, which is a copy of the study page on our servers.
+2. Convert this text into `numeric` data type.
+
+3. For accuracy from our answer-checker, save these temperatures as `belgium_temperatures`.
+
+
+
+
+```{r}
+belgium_temperatures_text <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Brussels_Belgium_Weather_AccuWeather.html",
+                                     selector = ".half-day-card-header .temperature")
+belgium_temperatures <- readr::parse_number(belgium_temperatures_text)
+belgium_temperatures
+```
+
+
+## Extracting Earth Mean Radius
+
+Web page description: we need the Earth's mean radius to compute distances using the longitude and latitude coordinates in our dataset. We discovered that this information is available inside the left information box of the [Earth Wikipedia page](https://en.wikipedia.org/wiki/Earth).
+
+Our goal: we want to extract the Earth's mean radius on that page.
+
+
+
+1. Extract the `infobox` text from this [web page](https://en.wikipedia.org/wiki/Earth).
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/Earth-Wiki.html"`, which is a copy of the study page on our servers.
+2. Extract the Earth's mean radius from this text as numeric.
+
+3. For accuracy from our answer-checker, save these temperatures as `earth_mean_radius`.
+
+
+```{r}
+wiki_infobox <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Earth-Wiki.html", 
+                        selector = ".infobox")
+earth_mean_radius_matches <- stringr::str_match(wiki_infobox, "Mean radius(\\d+\\.\\d+)\\s*km")
+earth_mean_radius <- as.numeric(earth_mean_radius_matches[,2])
+earth_mean_radius
+```
+
+## Extracting Accepted Message from Stack Exchange Questions
+
+Web page description: Stack Exchange is several open question-and-answer communities covering various topics. For example, Stack Overflow is a Stack Exchange community that is well-known among developers for answering coding questions. These communities all rely on the same model. We ask a question, and people answer it. Then, we choose the best answer according to the solution that works, which we mark as accepted.
+
+Our goal: we want to automatically extract the accepted answer and the author of that answer.
+
+We will use the answers to [Web Scraping, Intellectual Property and the Ethics of Answering question](https://meta.stackexchange.com/questions/93698/web-scraping-intellectual-property-and-the-ethics-of-answering) for our experiments.
+
+Here are the elements that interest us.
+
+![](https://dq-content.s3.amazonaws.com/570/so_answer_author.png)\
+
+1. Extract the accepted answer from this web page as text.
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html"`, which is a copy of the study page on our servers.
+- We need to extract only one node here.
+- For accuracy from our answer-checker, save the result as `accepted_message`.
+
+2. Extract the accepted answer author name from the same web page as text.
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html"`, which is a copy of the study page on our servers.
+- We need to extract only one element here.
+- For accuracy from our answer-checker, save the result as `accepted_message_author`.
+
+
+
+```{r}
+accepted_message <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html", 
+                               selector = ".accepted-answer .s-prose", 
+                               all_nodes = F)
+
+accepted_message_author <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html", 
+                                      selector = ".accepted-answer .user-details a", 
+                                      all_nodes = F)
+accepted_message_author
+```
+
+##  Extracting the World Population Historical Data
+
+Web page description: [Worldometer](https://www.worldometers.info/) freely provides world statistics about many fields of interest over time in a suitable format. We are interested in the [world population](https://www.worldometers.info/world-population/world-population-by-year/) collected year by year.
+
+Our goal: we want to extract the yearly change percentage of the world's population from 1950 to 2019 and then visualize it.
+
+Here is the expected visualization:
+![](https://dq-content.s3.amazonaws.com/570/population_yearly_change.svg)\
+
+1. Extract the table from this web page as a dataframe.
+
+- To avoid external servers instability issues, use this link `"http://dataquestio.github.io/web-scraping-pages/Worldometer-Population.html"` which is a copy of the study page on our servers.
+
+2. Apply the following operations to the dataframe:
+
+- Convert the `YearlyChange` column into numeric data type.
+- Filter the dataframe to include only the rows from `1950` to `2019`.
+- For accuracy from our answer-checker, save the result as `world_population_df_1950_2019`.
+3. Visualize the result using the provided code snippet.
+
+
+```{r}
+world_population_df <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Worldometer-Population.html", 
+                               selector = "table", 
+                               output = "table", 
+                               all_nodes = F)
+
+world_population_df_1950_2019 <- world_population_df %>% 
+  mutate(YearlyChange = readr::parse_number(YearlyChange) ) %>%
+  filter(Year >= 1950 & Year < 2020)
+
+ggplot(data = world_population_df_1950_2019,
+       aes(x = Year, y = YearlyChange, group = 1)) + 
+  geom_line() + 
+  geom_point(size = 2) +
+  theme_bw() +
+  theme() +  ylab("Yearly Change")
+```
+
+
+## Extracting Image URLs
+
+Web page description: Billboard Hot 100 displays the current Hot 100 songs and other information. Suppose we want to build an image dataset for a machine learning project. In this case, we need to find (many) images. We will extract them from websites.
+
+Our goal: we want to extract the image links from the Hot 100 recorded on January 4, 2020.
+
+The expected result is the links behind the following images:
+
+
+![](https://dq-content.s3.amazonaws.com/570/hot100_images.png)\
+
+The tag that contains these images contains a style attribute that embeds CSS to load the image from the `background-image` instruction.
+
+
+![](https://dq-content.s3.amazonaws.com/570/hot100_images_style.png)\
+
+In the Editor, we provided a regular expression(`url_pattern`) that you can use to extract URLs from characters.
+
+1. From the image tag, extract `style` attribute values from this web page which is a copy of the study page on our servers. This is to avoid instability issues with external servers.
+
+2. Select only the first five `style` attribute values.
+
+3. From each `style` attribute value, extract the image URL.
+
+- For accuracy from our answer-checker, save this output as `hot_5_img_url`.
+
+```{r}
+url_pattern <- "(?i)http[s]?://(?:[a-z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-f][0-9a-f]))+\\.jpg"
+
+# Type your answer below
+hot_100_styledata <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/The%20Hot%20100%20Chart%20_%20Billboard.html", 
+                             selector = ".chart-element__image", 
+                             output = "style")
+
+hot_100_styledata_top5 <- head(hot_100_styledata, 5)
+
+hot_5_img_url <- stringr::str_extract(hot_100_styledata_top5, url_pattern)
+
+hot_5_img_url
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

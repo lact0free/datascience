@@ -1,0 +1,2519 @@
+---
+title: "6. SQL Fundamental"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(RSQLite)
+library(DBI)
+```
+
+```{cat, engine.opts = list(file = "color-text.lua")}
+Span = function(el)
+  color = el.attributes['color']
+  -- if no color attribute, return unchange
+  if color == nil then return el end
+  
+  -- transform to <span style="color: red;"></span>
+  if FORMAT:match 'html' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- use style attribute instead
+    el.attributes['style'] = 'color: ' .. color .. ';'
+    -- return full span element
+    return el
+  elseif FORMAT:match 'latex' then
+    -- remove color attributes
+    el.attributes['color'] = nil
+    -- encapsulate in latex code
+    table.insert(
+      el.content, 1,
+      pandoc.RawInline('latex', '\\textcolor{'..color..'}{')
+    )
+    table.insert(
+      el.content,
+      pandoc.RawInline('latex', '}')
+    )
+    -- returns only span content
+    return el.content
+  else
+    -- for other format return unchanged
+    return el
+  end
+end
+```
+
+# 1. Querying SQLite from R
+
+## Overview
+
+We've slowly learned the fundamentals of the SQL language to query data
+from a database. We know enough to incorporate subqueries and filters
+into the queries to get data that answers the questions we have.
+However, we have yet to make the leap from just asking for the data to
+putting ourselves into a position to actually analyze it.
+
+In this lesson, we'll learn how to interact with a SQLite database in R
+so you can start to incorporate databases into your data science
+workflow. Although we'll be working in R, knowing SQL will still play a
+big role here.
+
+Recall that one of the reason databases are useful to us is that it
+enables us to work with much larger datasets. SQLite stores the entire
+database as a file on your disk, rather than your memory. You can tell
+which files are database files from their `.db` extension.
+
+In R, we'll use the `RSQLite` and `DBI` libraries to interact with
+SQLite databases. In this lesson, we'll focus on learning how to use the
+this library to interact with the database.
+
+## Introduction to the data
+
+We'll work with the American Community Survey data on college majors and
+job outcomes
+
+The full data has many more columns, but you can learn more about it at
+FiveThirtyEight's GitHub repository, if you're interested.
+
+Here are the descriptions for the columns in the preview:
+
+-   `Rank` - The major's rank by median earnings
+-   `Major_code` - The major's code or ID
+-   `Major` - The name of the major
+-   `Major_category` - The broader category the major belongs to
+-   `Total` - The total number of people who studied the major
+-   `Sample_size` - The sample size (unweighted) of graduates with full
+    time jobs
+-   `Men` - The number of male graduates
+-   `Women` - The number of female graduates
+-   `ShareWomen` - Women as a proportion of the total number of
+    graduates (a number ranging from 0 to 1)
+-   `Employed` - The number of employed graduates
+
+We've loaded a subset of the data into a table named `recent_grads` into
+a database. The subset contains the 2010-2012 data for recent college
+grads only. The database file we'll be working with is called `jobs.db`.
+
+## Connecting to the Database
+
+In order to interact with SQLite, we need to use the `RSQLite` and `DBI`
+libraries. The `RSQLite` library embeds a SQLite database engine into R,
+while `DBI` is a collection of functions that make it easy to interact
+with said database. We'll be working in the IDE here, but if you want to
+try the lesson exercises out in RStudio or an R script, you'll need to
+install it.
+
+To use these libraries, we need to import them first.
+
+To connect with the database, we'll use the `dbConnect()` function.
+`dbConnect()` takes two parameters: the DBMS you want to work with and
+the file path of the `.db` file that you want to connect to. For
+example, if we want to connect to a file called `test.db`, we would
+write:
+
+```{r}
+# conn <- dbConnect(SQLite(), 'test.db')
+```
+
+`conn` (short for connection) is what we'll be using to communicate with
+the database engine. The first argument is the DBMS we want to work
+with, and the second specifies the file we want to connect to. With
+`conn`, we'll read into the `recent_grads` table and make our queries in
+later screens.
+
+Just to make sure that we've read in the correct file, we can use
+another function, `dbListTables()`, to list out all of the tables in the
+.db file we connected to. We only need to pass in our database
+connection into the function.
+
+```{r}
+# dbListTables(conn)
+```
+
+Which will return what we expect: `recent_grads`.
+
+With this in mind, let's get started and write up some code to connect
+to `jobs.db`.
+
+-   Import the RSQLite and DBI libraries into the environment.
+-   Use the `dbConnect()` function to connect to `jobs.db` and assign it
+    to the variable `conn`.
+-   Use `conn` in the `dbListTables()` function and assign it to the
+    variable `tables`.
+
+```{r}
+# set up connection
+conn <- dbConnect(SQLite(), "jobs.db")
+tables <- dbListTables(conn)
+```
+
+## Running queries with our connection
+
+This is where our knowledge of SQL will be combined with our R. In order
+to pass our queries to our database connection, we need to first write
+it up as a character vector, also known as a string in Python. There's
+no special formatting needed, but we still need to respect the basic
+structure of a SQL query.
+
+```{r}
+# query <- "SELECT * from recent_grads"
+```
+
+With query on hand, we can send it to our database with the
+`dbGetQuery()` function. This function requires a connection object and
+the query that we want to send.
+
+```{r}
+# result <- dbGetQuery(conn, query)
+```
+
+Now, the `result` variable contains all of the rows from `recent_grads`,
+just as our query specified. We could've placed the query straight into
+`dbGetQuery()`to save space, but many times we'll want to revise our
+query. Keeping them separate allows us to to clearly divide our code's
+responsibilities: query writing for `query` and storing results in
+`result`.
+
+Now it's your turn to write your own query!
+
+-   Write a query to return `Major` column from the `recent_grads`
+    table.
+-   Store the executed query in `majors`.
+
+```{r}
+# conn <- dbConnect(SQLite(), "jobs.db")
+# query <- "SELECT Major FROM recent_grads"
+# majors <- dbGetQuery(conn, query)
+```
+
+## Fetching a subset of results with dbFetch()
+
+`dbGetQuery()` makes it extremely easy to start querying data from a
+database and storing it in a variable for future use. But recall one of
+the motivations for using databases in the first place:
+
+What if we don't have enough memory to fit the returned data?
+
+Thankfully, we have another workflow to use if our database is too large
+for our memory. `dbGetQuery()` works by combining two actions into a
+single function: sending the query and returning the result. In cases
+where the returned dataset is too large, we need to separate these
+actions.
+
+`dbSendQuery()` is like `dbGetQuery()`, but only executes the query. It
+does not return the results to you. To actually see the results, you'll
+need to use the dbFetch() method. The code below recreates our use of
+`dbGetQuery()` in the last screen:
+
+```{r}
+query <- "SELECT Major FROM recent_grads"
+result <- dbSendQuery(conn, query)
+majors <- dbFetch(result)
+dbClearResult(result)
+```
+
+Let's consider a hypothetical situation where the `recent_grads` table
+is too large to fit into a variable. In order to allow ourselves to
+store the result into a variable, we need to limit how much data is
+returned back to us. We need to specify a parameter `n` in `dbFetch()`
+to limit how many rows are returned to us. Below, we'll limit `majors`
+to just the first 10 rows of the exectued query.
+
+```{r}
+query <- "SELECT Major FROM recent_grads"
+result <- dbSendQuery(conn, query)
+majors <- dbFetch(result, n = 10)
+dbClearResult(result)
+```
+
+Using `dbSendQuery()` and `dbFetch()` takes a few more lines than
+`dbGetQuery()`, but it allows us to work with larger datasets. Get some
+practice using this new workflow here.
+
+-   Write and run a query that returns the `Major` and `Major_category`
+    columns from `recent_grads`.
+-   Then, fetch the first five results and store them as `five_results`.
+
+```{r}
+query <- "SELECT Major, Major_category FROM recent_grads"
+result <- dbSendQuery(conn, query)
+five_results <- dbFetch(result, n = 5)
+```
+
+## Cleaning up after ourselves
+
+Before we wrap things up, there are a few more steps we need to take to
+work safely with our database. When you execute a query with
+`dbSendQuery()`, you dedicate some of your comptuer's resources to
+holding the results of the executed query. In order to free up these
+resources, we must call the `dbClearResult()` function and pass our
+result from `dbSendQuery()` into it.
+
+```{r}
+dbClearResult(result)
+```
+
+Finally, once we're done with our work, we'll also want to close our
+original connection to the database. Once someone connects to a
+database, SQLite prevents anyone else from connecting to it and changing
+it. Disconnecting after you're done allows your teammates to use it for
+their purposes. To disconnect from the database, we would write:
+
+```{r}
+dbDisconnect(conn)
+```
+
+It's easy to forget to clean up after your code, but doing so will
+prevent headaches in the future.
+
+Now that we know how to disconnect, let's go through the entire workflow
+we've learned so far, from start to finish.
+
+-   Connect to the database `jobs.db`
+-   Write and execute a query with `dbSendQuery()` that returns all of
+    the majors (`Major`) in reverse alphabetical order (Z to A)
+-   Assign the full result set to `reverse_alphabetical`
+-   Clear the result and disconnect from the database
+
+```{r}
+query <- "SELECT Major FROM recent_grads ORDER BY Major DESC"
+result <- dbSendQuery(conn, query)
+reverse_alphabetical <- dbFetch(result)
+
+dbClearResult(result)
+dbDisconnect(conn)
+```
+
+# 2. Introduction to SQL
+
+## Why SQL is Important to Learn
+
+![](https://dq-content.s3.amazonaws.com/252/info_card.svg)\
+
+Welcome to the fundamentals of SQL and databases! In this course, we'll
+explore and analyze data in SQL through hands-on learning. Before we get
+started, let's quickly cover why SQL is essential for working with data.
+
+Structured Query Language, or SQL, is more than forty years old, and it
+is one of the most popular technologies used by data professionals,
+including data analysts, data scientists, and data engineers.
+Understanding the fundamentals of a more general-purpose language like
+Python or R is critical for working with data, but knowing SQL helps
+data professionals do more with their data. And if working with R or
+Python is one of your goals, SQL can help gather insights from data.
+
+Here are a few key reasons why learning SQL will help anybody interested
+in working with data.
+
+SQL is everywhere.
+
+Almost all of the biggest names in tech use SQL --- which is pronounced
+either "sequel" or "S.Q.L." Companies like Facebook, Google, and Amazon
+have built their own high-performance database systems, but even their
+data teams use SQL to query data and perform data analysis. And it's not
+just tech companies: companies big and small around the world use SQL.
+
+SQL enables us to pull data from many sources.
+
+In many real-word situations, data is distributed across many sources.
+SQL allows us to select specific data and transform it to fit our needs.
+For example, working with spreadsheets can be difficult if the data we
+need to answer our question is distributed across many files. SQL allows
+us to structure our data in a way that makes it accessible from one
+place.
+
+![](https://dq-content.s3.amazonaws.com/252/database.svg)\
+
+SQL data is structured into multiple, connected tables. SQL is here to
+stay.
+
+The Stack Overflow annual Developer Survey, which is the largest and
+most comprehensive survey of programmers around the world, consistently
+reveals that SQL is one of the most popular technologies used today.
+
+## Introduction to Databases
+
+Before we get started, let's learn a little about databases. Don't
+worry: you'll start practicing on the next screen.
+
+When we work with data stored on our computers, we load the data from
+files like spreadsheets (and text files in several different formats).
+Working with files solely on our computer is fine most of the time, but
+we run into problems when we consider a few questions:
+
+-   What if the data is too big to fit into a single spreadsheet file?
+-   What if you share the data with team members and keep it updated?
+-   What if there's sensitive information in your data that needs
+    protection? Thankfully, these problems already have a solution: the
+    database. A database structures data just like a spreadsheet by
+    organizing data in different tables, which are comprised of rows and
+    columns. In the example below, we see a table in a spreadsheet where
+    each row represents a chess player and each column gives information
+    about the player.
+
+![](https://dq-content.s3.amazonaws.com/252/spreadsheet.png)\
+
+A database can store much more data more securely than a spreadsheet or
+a text file. Unlike simply opening a spreadsheet, we actually have to
+"ask" for data from the database.
+
+We primarily interact with a database using a database management system
+(DBMS) --- a computer program to help users interact with data by giving
+the computer instructions through the DBMS.
+
+We'll begin learning SQL with the DBMS SQLite. SQLite is a lightweight
+DBMS, and it is the most popular database management system in the
+world. Move on to the next screen to start learning some SQL code!
+
+## Your First Query
+
+In this course, we'll explore data from the American Community Survey on
+job outcome statistics based on college majors that we loaded into a
+SQLite database.
+
+In this table, each row represents a major, and each column gives us
+some information about that major. Head to the dataset page to become
+familiar with what each column represents.
+
+We provide a database, `jobs.db`, loaded with this data into a single
+table named `recent_grads` (in the next course, we'll learn how to work
+with a database containing multiple tables.)
+
+![](https://s3.amazonaws.com/dq-content/252/sql_table.svg)\
+
+In this screen's exercise we'll ask you to submit the SQL instruction
+(usually called a query) below. This query selects all columns from the
+`recent_grads` table.
+
+```{r}
+# SELECT *
+#   FROM recent_grads;
+```
+
+To run the query above in our interface, type the query in the code
+editor to the right and click Run Code. This will run the query against
+the database and display the results.
+
+To submit your answer and get feedback, click Submit Answer. This will
+run the query against the database, display the results, and give
+feedback on your answer. If your answer is correct, you'll hear a sound
+and a Next Screen button will appear, allowing you to proceed to the
+following screen.
+
+## Understanding Your First Query
+
+Congratulations on running your first SQL query in this course! The
+output was the entirety of the `recent_grads` table.
+
+The process you used to visualize `recent_grads` breaks down into two
+steps:
+
+-   Write a SQL query that expresses the request "fetch all the data in
+    the table."
+-   Ask the SQLite DBMS software to run the code and display the
+    results.
+
+The query you ran is an example of computer code. Writing computer code
+is called programming.
+
+SQL is one of many programming languages, and just like spoken
+languages, code in SQL has to follow a defined structure and vocabulary.
+To display `recent_grads`, you ran the following SQL query:
+
+```{r}
+# SELECT * 
+#   FROM recent_grads;
+```
+
+In the query above, we specified the following:
+
+-   The columns we wanted using `SELECT *` --- the symbol`*`selects all
+    the columns.
+-   The table we wanted to query using `FROM recent_grads`. The order of
+    the different words in this query and the space between `SELECT`,
+    `*`, `FROM`, and `recent_grads` are crucial features of SQL syntax.
+    If we don't follow the syntax, the database will probably not return
+    the information we want.
+
+The ; character signals the end of the query, [but it isn't
+mandatory.]{color="red"}
+
+Here's a visual breakdown of the different components of the query:
+
+![](https://s3.amazonaws.com/dq-content/252/select_breakdown.svg)\
+
+You may have noticed that `SELECT` and `FROM` use uppercase letters.
+This isn't required, but it makes your code easier to read.
+
+Since we often read code more often than we write it, it's common for
+coders to follow certain conventions, so that programs written by
+different people look the same, reducing the amount of work it takes to
+read them.
+
+A couple of other elements that aren't required are the line change and
+indentation right before `FROM`. The reason why we changed lines and
+indented this query is the same as above: stylistic conventions.
+
+You may also have noticed that some words are highlighted. This happens
+because they are reserved words, (i.e., they are words that serve a
+particular purpose, so you can't or shouldn't use them for anything
+else).
+
+In these courses, we'll be following this SQL Style Guide. We suggest
+that you explore it as you progress through the course.
+
+Let's confirm that line changes, capitalization, and indentation aren't
+crucial for the query to run.
+
+## Previewing a Table
+
+You may have noticed that in the last screen, despite the fact that we
+wrote two queries, we only saw the result of the second one.
+
+This isn't because the queries are the same. It's a quirk of the SQLite
+database that only the last query will display visually. If we want to
+see the results of multiple queries, we can run each query by itself.
+
+You may also have noticed that this table has 173 rows and over 20
+columns. For a computer, this isn't much information. For a human,
+however, it's difficult to make sense of this much data.
+
+![](https://dq-content.s3.amazonaws.com/252/whole_table.png)\
+
+In the following lessons and in the next course, we'll learn how to make
+sense of large amounts of data using SQL. For now, we'll focus on how we
+can preview a table without displaying it completely.
+
+In practice, you will often need to access a database without any
+documentation. In this situation, you'll have to rely on the surrounding
+context of the database and on your own exploration.
+
+Some tables have millions and millions of rows, so a task as simple as
+displaying a table can take a very long time, and if you're just trying
+to explore the table, it isn't really useful to see all of it.
+
+Fortunately, SQL allows us to limit the number of rows we see by using
+the LIMIT clause. Move on to the next screen to learn how.
+
+## The LIMIT Clause
+
+Think of a clause as an optional reserved word that doesn't need to be
+in the code for the query to execute successfully.
+
+Here's how we can use it to retrieve the first three rows (that we saw
+in a previous screen).
+
+```{r}
+# SELECT *
+#   FROM recent_grads
+#  LIMIT 3;
+```
+
+In the following animation, we see all the columns being selected, and
+then we see only the first three rows being included.
+
+![](https://dq-content.s3.amazonaws.com/252/limit_breakdown.gif)\
+
+SQL is a database-dependent language. This means that the SQL that
+you're learning here (for SQLite) isn't the same as SQL for other DBMSs,
+like PostgreSQL or Oracle.
+
+However, the different versions of SQL (also called dialects, or
+flavors) are more alike than they are different.
+
+Although `LIMIT` functions with all SQL dialects, it sometimes needs a
+different reserved word. For example, in T-SQL (Microsoft's SQL flavor),
+we would write the query above like this:
+
+```{r}
+# SELECT TOP 3, *
+#   FROM recent_grads;
+```
+
+Pay attention to these differences when switching between DBMSs.
+
+Now, let's practice LIMIT!
+
+Write a SQL query that returns the first five rows from `recent_grads`.
+
+```{r}
+# SELECT *
+#   FROM recent_grads
+#  LIMIT 5;
+```
+
+## Selecting Specific Columns
+
+So far, we wrote some queries to display the entirety of the
+`recent_grads` table, or the limit by the number of rows. Here's the
+result of the previous exercise:
+
+Often, we'll only want to look at data from specific columns. To return
+only the `Major` column, we need to add the specific column name in the
+`SELECT` statement part of the query (instead of using the \* character
+to return all columns):
+
+```{r}
+# SELECT Major 
+#   FROM recent_grads;
+```
+
+This will return all of the values in the `Major` column. Here's an
+animation illustrating the process of running this query:
+
+![](https://dq-content.s3.amazonaws.com/252/one_column.gif)\
+
+We can specify multiple columns this way, and the results table will
+preserve the order of the columns:
+
+```{r}
+# SELECT Major, Major_category 
+#   FROM recent_grads;
+```
+
+[Notice that we use commas to separate column names, and after the last
+column name there is no comma. When SQL finds a comma, it expects a
+column to follow, so we need to make sure we don't include a comma after
+the last column.]{color="red"} Here's a visual breakdown of this query:
+
+[]([[https://dq-content.s3.amazonaws.com/252/two_columns.gif\\\\](https://dq-content.s3.amazonaws.com/252/two_columns.gif){.uri}](%5Bhttps://dq-content.s3.amazonaws.com/252/two_columns.gif%5D(https://dq-content.s3.amazonaws.com/252/two_columns.gif)%7B.uri%7D){.uri}
+
+SQLite accepts the columns with any choice of case; however, for
+answer-checking purposes --- and also for style and consistency --- in
+the remainder of the SQLite content you should specify the column names
+as we do in the instructions.
+
+Let's practice next.
+
+Write a SQL query that returns only the `Major` and `ShareWomen` columns
+(in that order).
+
+```{r}
+# SELECT Major, ShareWomen 
+#   FROM recent_grads;
+```
+
+## Filtering Rows Using WHERE
+
+Next, let's use SQL to answer a more specific question: which majors had
+students who were mostly women?
+
+The SQL workflow translates the question we want to answer to the subset
+of data we want from the database. To determine which majors had mostly
+students who were women, we want the following subset:
+
+-   Only the `Major` columns
+
+-   Only the rows where `ShareWomen` is greater than `0.5`
+    (corresponding to 50%) To filter rows by specific criteria, we can
+    use the WHERE statement. A WHERE statement commonly uses three
+    things:
+
+-   The column we want the database to filter on: ShareWomen
+
+-   A comparison operator that specifies how we want to compare a value
+    in a column: `>=`
+
+-   The value against which we want the database to compare each value:
+    0.5 Here are the comparison operators we can use:
+
+-   Less than: `<`
+
+-   Less than or equal to: `<=`
+
+-   Greater than: `>`
+
+-   Greater than or equal to: `>=`
+
+-   Equal to: `=`
+
+-   Not equal to: `!=` or `<>` To return only the values where
+    `ShareWomen` is greater than or equal to `0.5`, we can use the
+    following `WHERE` clause:
+
+```{r}
+# SELECT Major 
+#   FROM recent_grads
+#  WHERE ShareWomen >= 0.5;
+```
+
+Running this query will return the following results table (the first
+five results only):
+
+| Major                              |
+|------------------------------------|
+| ACTUARIAL SCIENCE                  |
+| COMPUTER SCIENCE                   |
+| ENVIRONMENTAL ENGINEERING          |
+| NURSING                            |
+| INDUSTRIAL PRODUCTION TECHNOLOGIES |
+
+Here's a breakdown of the different components:
+
+![](https://s3.amazonaws.com/dq-content/252/where_breakdown.svg)\
+
+We express the specific column we want in the `SELECT` part of the query
+and the specific rows we want in the `WHERE` part. Note that most
+database systems require that the `SELECT` and `FROM` statements come
+first, before `WHERE` or any other statements.
+
+Write a SQL query that returns the majors in the `recent_grads` table
+where students who were men outnumbered students who were women. - Only
+return the `Major` and `ShareWomen` columns (in that order). - Return
+only the values where `ShareWomen` is less than 0.5. - Don't limit the
+number of rows returned.
+
+```{r}
+# SELECT Major, ShareWomen
+    # FROM recent_grads
+    # WHERE ShareWomen < 0.5;
+```
+
+## Expressing Multiple Filter Criteria Using 'AND'
+
+In the previous exercise, we wrote a query to return majors where
+students who were men outnumbered students who were women:
+
+```{r}
+# SELECT Major, ShareWomen  
+#   FROM recent_grads 
+#  WHERE ShareWomen < 0.5;
+```
+
+The comparison value after the `<` operator must be either text or a
+number, depending on the field. Because `ShareWomen` is a numeric
+column, we just write the number `0.5`.
+
+For text values, we need to enclose the value in quotes. For example, if
+we wanted to select only the rows where the `Major_category` equaled
+`Engineering`, we would write the following:
+
+```{r}
+# SELECT Major 
+#   FROM recent_grads
+#  WHERE Major_category = 'Engineering';
+```
+
+We can also use the `AND` operator to combine multiple filter criteria.
+For example, to determine which engineering majors had a majority of
+female students, we specify two filtering criteria:
+
+```{r}
+# SELECT Major 
+#   FROM recent_grads
+#  WHERE Major_category = 'Engineering'
+#    AND ShareWomen > 0.5;
+```
+
+| Major                              |
+|------------------------------------|
+| ENVIRONMENTAL ENGINEERING          |
+| INDUSTRIAL PRODUCTION TECHNOLOGIES |
+
+Write a SQL query that returns all majors that had a majority of female
+students and a median salary greater than `50000`. - Only include the
+following columns in the results and in this order: - `Major` -
+`Major_category` - `Median` - `ShareWomen` - Return only the values
+where `ShareWomen` is greater than `0.5` and `Median` is greater than
+`50000`.
+
+```{r}
+# SELECT Major, Major_category, Median, ShareWomen 
+#   FROM recent_grads 
+#  WHERE ShareWomen > 0.5 
+#    AND Median > 50000;
+```
+
+## Returning One of Several Conditions With OR
+
+We used the `AND` operator to specify that our filter needs to pass two
+Boolean conditions. Both of the conditions had to evaluate to `True` for
+the record to appear in the result set. If we wanted to specify a filter
+that meets either of the conditions instead, we would use the `OR`
+operator.
+
+```{r}
+# SELECT [column1, column2,...] 
+#   FROM [table1]
+#  WHERE [condition1] 
+#     OR [condition2];
+```
+
+We won't go into more detail regarding `OR` because we use the `OR` and
+`AND` operators in similar ways.
+
+One other important feature is that we don't need to compare a column
+with a value, but we can also compare columns to other columns.
+
+For example, we've been using the condition `WHERE ShareWomen > 0.5`. We
+can obtain an equivalent condition by using `WHERE Men < Women`.
+
+Write a SQL query that returns the first 20 majors that either:
+
+-   Have a `Median` salary greater than or equal to `10,000`, or
+
+-   Have more men than women
+
+-   Only include the following columns in the results and in this order:
+
+-   `Major`
+
+-   `Median`
+
+-   `Unemployed`
+
+```{r}
+# SELECT Major, Median, Unemployed 
+#   FROM recent_grads 
+#  WHERE Median >= 10000 
+#     OR Men > Women
+#  LIMIT 20;
+```
+
+## Grouping Operators with Parentheses
+
+There's a certain class of questions that we can't answer using only the
+techniques we learned so far. For example, if we wanted to write a query
+that returned all `Engineering` majors that either had mostly female
+graduates or an unemployment rate below 5.1%, we would need to use
+parentheses to express this more complex logic.
+
+The three raw conditions we'll need are the following:
+
+```{r}
+# Major_category = 'Engineering'
+# ShareWomen >= 0.5
+# Unemployment_rate < 0.051
+```
+
+What the SQL query looks like using parentheses:
+
+```{r}
+# SELECT Major, Major_category, ShareWomen, Unemployment_rate
+#   FROM recent_grads
+#  WHERE (Major_category = 'Engineering') 
+#    AND (ShareWomen > 0.5 OR Unemployment_rate < 0.051);
+```
+
+You may notice that we have enclosed the logic we want to evaluate
+together in parentheses. This is very similar to how we group
+mathematical calculations together in a particular order. The
+parentheses make it clear to the database that we want all of the rows
+where both of the expressions in the statements evaluate to `True`:
+
+```{r}
+# (Major_category = 'Engineering') -> True or False
+# (ShareWomen > 0.5 OR Unemployment_rate < 0.051) -> True or False
+```
+
+If we had written the WHERE statement without any parentheses, the
+database would guess what our intentions are, and it would actually
+execute the following query instead:
+
+```{r}
+# WHERE (Major_category = 'Engineering' AND ShareWomen > 0.5) OR (Unemployment_rate < 0.051)
+```
+
+Leaving the parentheses out implies that we want the calculation to
+happen from left to right in the order we wrote the logic, so we
+wouldn't get the data we want. Now let's run our intended query and see
+the results!
+
+Run the query we explored above, which returns all majors that meet
+these criteria:
+
+-   Fell under the category of `Engineering` and either
+
+-   The majority of the graduates were women
+
+-   Or had an unemployment rate below 5.1%, which was the rate in August
+    2015
+
+-   Only include the following columns in the results and in this order:
+
+-   `Major`
+
+-   `Major_category`
+
+-   `ShareWomen`
+
+-   `Unemployment_rate`
+
+```{r}
+# SELECT Major, Major_category, ShareWomen, Unemployment_rate
+#   FROM recent_grads
+#  WHERE (Major_category = 'Engineering') 
+#    AND (ShareWomen > 0.5 OR Unemployment_rate < 0.051);
+```
+
+## Ordering Results Using ORDER BY
+
+The results of every query we've written so far have returned in order
+according to the Rank column. Early in the lesson, we wrote a query that
+returned all of the columns and didn't filter rows according to any
+specific criteria (SELECT \* FROM recent_grads LIMIT 5)
+
+If we modify the query from the last screen to include the Rank column,
+the results are ordered by the Rank column as well
+
+As the questions we want to answer get more complex, we want more
+control over the ordering of the results. We can specify the order using
+the ORDER BY clause. For example, we may want to understand which majors
+that met the criteria in the `WHERE` statement had the lowest
+unemployment rate:
+
+```{r}
+# SELECT Rank, Major, Major_category, ShareWomen, Unemployment_rate
+#     FROM recent_grads
+#    WHERE (Major_category = 'Engineering') 
+#      AND (ShareWomen > 0.5 OR Unemployment_rate < 0.051)
+#    ORDER BY Unemployment_rate;
+```
+
+This will return the results in ascending order (increasing) by the
+`Unemployment_rate` column:
+
+If we instead want the results ordered by the same column but in
+descending order, we can add the DESC keyword:
+
+```{r}
+# SELECT Rank, Major, Major_category, ShareWomen, Unemployment_rate
+#     FROM recent_grads
+#    WHERE (Major_category = 'Engineering') 
+#      AND (ShareWomen > 0.5 OR Unemployment_rate < 0.051)
+#    ORDER BY Unemployment_rate DESC;
+```
+
+Write a query that returns all majors that meet the following criteria:
+
+-   `ShareWomen` is greater than `0.3`
+-   And `Unemployment_rate` is less than `.1`
+
+Only include the following columns in the results and in this order:
+
+-   `Major`,
+-   `ShareWomen`,
+-   `Unemployment_rate` Order the results in descending order by the
+    `ShareWomen` column.
+
+```{r}
+# SELECT Major, ShareWomen, Unemployment_rate 
+#   FROM recent_grads
+#  WHERE ShareWomen > 0.3 
+#    AND Unemployment_rate < .1
+#  ORDER BY ShareWomen DESC;
+```
+
+## Practice Writing a Query
+
+In this step, you'll practice going from question to answer using the
+SQL workflow. You'll focus on one of the questions we posed early in
+this lesson:
+
+Which engineering majors had the highest full time employment rates?
+
+In this step, you'll practice going from question to answer using the
+SQL workflow. You'll focus on one of the questions we posed early in
+this lesson:
+
+Which engineering majors had the highest full time employment rates?
+
+```{r}
+# SELECT Major_category, Major, Unemployment_rate 
+#     FROM recent_grads 
+#    WHERE Major_category='Engineering' 
+#       OR Major_category='Physical Sciences' 
+# ORDER BY Unemployment_rate;
+```
+
+## Next
+
+In this lesson, we became familiar with a dataset stored in a SQLite
+table by learning how to craft basic SQL queries. The kind of queries we
+learned here and that we'll keep studying for the next few courses are
+one of four types of SQL commands we can give:
+
+-   Data query language
+-   Data definition language
+-   Data control language
+-   Data manipulation language In this course and the next, we'll focus
+    on data query language (DQL). DQL is the part of SQL that allows
+    users to extract data from databases. Data engineers use the
+    remaining types of instructions to create and maintain databases.
+
+Here are a few things to note:
+
+-   We rarely linked to SQLite documentation, because it's a bit
+    challenging to understand when you're just beginning. Sites like W3
+    Schools and SQL ZOO are more friendly for looking up SQL commands.
+-   We learned about clauses, statements, keywords, and operators in
+    SQL. Here's a diagram describing the difference between each term:
+
+![](https://s3.amazonaws.com/dq-content/252/sql_components.svg)\
+
+<center>![](https://www.w3resource.com/w3r_images/select-syntax.gif)\
+</center>
+
+The ability to quickly iterate on queries as you think of new questions
+is the appeal of SQL. The SQL workflow lets data professionals focus on
+asking and answering questions, instead of lower-level programming
+concepts. There's a clear separation of concerns between the engine that
+stores, organizes, and retrieves the data and the language that lets
+people interface with the data without worrying about the underlying
+mechanics.
+
+As the scale of data has increased, engineers have maintained the SQL
+interface while changing the database engine. This allows people who
+need to ask and answer questions easily transfer their SQL experience,
+even as database technologies change. For example, the Presto project
+lets you query using SQL but use data from database systems like MySQL,
+from a distributed file system like HDFS, and more.
+
+In the next lesson, we'll learn how to compute summary statistics and
+perform reductions on the same data in SQL.
+
+# 3. Summary Statistics
+
+## Introduction
+
+```{r}
+# let's import the original dataset for the sake of understanding the structure of the data
+conn <- dbConnect(SQLite(), "jobs.db")
+query <- "SELECT * FROM recent_grads" # this pulls the whole data from the db file
+result <- dbSendQuery(conn, query)
+recent_grads <- dbFetch(result)
+dbClearResult(result)
+```
+
+In "Introduction to SQL," we wrote queries that filtered rows and
+columns in a database table. Each of the queries we ran returned
+multiple rows of values. In this lesson, we'll go over how to calculate
+the sum, average, minimum, or maximum of these results.
+
+We'll also learn how to calculate summary statistics on subsets of a
+database table by working with data on job outcomes, compiled by
+FiveThirtyEight.
+
+Let's start with some questions about how the data breaks down:
+
+-   How many majors had a higher representation among women? How many
+    had a higher representation among men? What proportion of majors had
+    the highest representation among women?
+-   Which category of majors had the lowest unemployment rates? Which
+    category of majors had the highest representation among women?
+-   Which majors had the largest spread (difference) between the 25th
+    and 75th percentile starting salaries? Let's move on to the next
+    screen to start learning!
+
+Here are the descriptions for the columns in the preview:
+
+-   `Rank` - The major's rank by median earnings
+-   `Major_code` - The major's code or ID
+-   `Major` - The name of the major
+-   `Major_category` - The broader category the major belongs to
+-   `Total` - The total number of people who studied the major
+-   `Sample_size` - The sample size (unweighted) of graduates with full
+    time jobs
+-   `Men` - The number of male graduates
+-   `Women` - The number of female graduates
+-   `ShareWomen` - Women as a proportion of the total number of
+    graduates (a number ranging from 0 to 1)
+-   `Employed` - The number of employed graduates
+
+## A Simple Question
+
+Before we begin working on our questions, let's start with this: What is
+the lowest proportion of women on the `recent_grads` table?
+
+One of way of thinking about this question is that we want to "determine
+the minimum value of `ShareWomen`" --- recall that `ShareWomen` gives us
+the proportion of women graduates. To address this question, we'll focus
+on the three majors with the three lowest proportion of graduates who
+are women, seen below. (Scroll to the `ShareWomen` column.)
+
+Looking at the sample above, we see that the three lowest ShareWomen
+values are roughly 0.09, 0.07 and 0, so the minimum is 0. Here's how we
+can use SQL to answer this question:
+
+```{r}
+query <- "SELECT MIN(ShareWomen) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+lowest_women <- dbFetch(result)
+print(lowest_women)
+dbClearResult(result)
+```
+
+We can see that there is at least one major that didn't include any
+women.
+
+It doesn't actually tell us what those majors are --- we only know them
+because we singled out the three majors with fewer women than men. In a
+typical table, there are too many rows to find an answer just by
+looking.
+
+We'll learn how to determine to which rows the lowest value correspond
+later in the course.
+
+Note that instead of just returning a single value, SQLite returned a
+table with a column (`MIN(ShareWomen)`) and the lowest value of
+`ShareWomen` as a row in that column (`0`).
+
+A key idea in SQL is that every result is a table. This is a common
+visual representation that makes SQL approachable for more users.
+However, this means that users must convert datasets and calculations
+that aren't well suited for this representation in a SQL environment.
+
+Let's practice!
+
+Write a query that returns the lowest unemployment rate. - For
+answer-checking purposes, make sure the aggregate function is all
+uppercase, and that you spell the column name exactly like this:
+`Unemployment_rate`.
+
+```{r}
+query <- "SELECT MIN(Unemployment_rate) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result) #this is a mandatory step for using dbSendQuery
+```
+
+## Aggregate Functions
+
+On the last screen, we used `MIN(ShareWomen)` to compute the minimum
+value in the `ShareWomen` column. We introduced the syntax
+`MIN(column_name)`. This is an example of the broader syntax of
+functions. A function takes in input and produces the output of the
+function.
+
+In `MIN(ShareWomen)`, we saw the following:
+
+-   The input `ShareWomen`
+-   The function `MIN`
+-   The output `0.0` Here's an animation depicting this operation:
+
+![](https://dq-content.s3.amazonaws.com/253/m253-3.gif)\
+
+We call this function an aggregate function. Aggregate functions apply
+over columns of values and return a single value. The `MIN` and `MAX`
+functions, for example, calculate and return the minimum and maximum
+values in a column.
+
+Some other commonly used aggregate functions include the following:
+
+-   `AVG` --- returns the mean of its input.
+-   `COUNT` --- counts the number of values in its input.
+-   `SUM` --- sums the values in its input.
+
+Note the use of capital letters for the functions' names. This isn't
+necessary to run the query, but it's a common convention that functions
+(just like other reserved words) should be uppercase. You should also
+use uppercase letters so the answer-checker can correctly validate your
+answer.
+
+1.  Write a query that computes the sum of the `Total` column. For
+    answer-checking purposes, make sure to write the aggregate function
+    in all uppercase letters, and spell the column name exactly like
+    this: `Total`.
+
+```{r}
+query <- "SELECT SUM(Total) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Order of Execution
+
+In the beginning of this lesson, we posed two questions:
+
+-   How many majors included mostly women?
+-   How many majors included mostly men? On this screen, we'll answer
+    those questions.
+
+In "Introduction to SQL," we learned how to return all majors with a
+majority of women:
+
+```{r}
+# SELECT Major
+#   FROM recent_grads
+#  WHERE ShareWomen > 0.5;
+```
+
+To answer the first question above, we'd like to count the majors. On
+the last screen, we learned that there is an aggregate function that
+counts the number of values in the input: COUNT.
+
+A query could answer the question:
+
+```{r}
+# SELECT COUNT(Major)
+#   FROM recent_grads
+#  WHERE ShareWomen > 0.5;
+```
+
+But does it really work? You may be wondering if COUNT(Major) counts the
+rows before or after the WHERE clause executes.
+
+The answer is that it runs after! So this query will find the answer.
+Here's the result:
+
+```{r}
+query <- "SELECT COUNT(Major) FROM recent_grads WHERE ShareWomen > 0.5"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+Let's quickly summarize what a query looks like using all the clauses
+we've learned so far:
+
+```{r}
+# SELECT *
+#   FROM some_table
+#  WHERE some_condition
+#  ORDER BY some_column
+#  LIMIT some_limit;
+```
+
+Here is the order in which the clauses run:
+
+1.  `FROM`
+2.  `WHERE`
+3.  `SELECT`
+4.  `ORDER BY`
+5.  `LIMIT` Since aggregate functions are part of `SELECT`, the
+    calculation happens after `WHERE` acts.
+
+Write a query that returns the number of majors that include mostly men.
+For answer-checking purposes, make sure you type the aggregate function
+using all uppercase letters, and make sure that you spell the column
+name exactly like this: `Major`.
+
+```{r}
+query <- "SELECT COUNT(Major) FROM recent_grads WHERE ShareWomen < 0.5"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Missing Values
+
+Sometimes, for various reasons, tables don't contain values in certain
+cells (a cell is an intersection of a row and a column in a table).
+
+When this happens, we make any of the following statements (or
+variations of them):
+
+-   The value is missing.
+-   It's a missing value.
+-   The value is NULL.
+-   NULL is a special entity in SQL that exists to capture the concept
+    of missing value. This is important when using aggregate functions
+    because most of them ignore missing values.
+
+For example, if we were to select `COUNT(Primes)` in the table below,
+the result would be 3 due to the missing value in the third row.
+
+| Primes |
+|--------|
+| 2      |
+| 3      |
+|        |
+| 7      |
+
+Here's an animation depicting this operation:
+![](https://dq-content.s3.amazonaws.com/253/m253-5.gif)\
+
+So we must know we don't have null values in a column before we can use
+it to count the numbers of rows.
+
+To avoid this, we can resort to the `*` and pass it into `COUNT` as if
+it were a column name. So, in the table above, we'd use `COUNT(*)`
+instead of `COUNT(Primes)`.
+
+In this screen's exercise we will ask you to use `COUNT` to find a
+column with at least a missing value. You can do this by running the
+query below, replacing `<column_name>` with the name of the columns in
+`recent_grads` until you find a suspicious result. Here's the query:
+
+```{r}
+query <- "SELECT COUNT(*), COUNT(Unemployment_rate) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Combining Multiple Aggregation Functions
+
+Instead of writing an individual query for specific question we want to
+answer, we can actually write queries that answer multiple questions at
+once. Let's consider the following questions:
+
+-   What's the lowest median salary?
+-   What's the highest median salary?
+-   What's the total number of students? We can select multiple columns
+    by including their names with commas, like this:
+
+```{r}
+# SELECT Major, Major_category
+#  FROM recent_grads;
+```
+
+We can use the same principle to combine multiple aggregation functions
+into a single query:
+
+```{r}
+query <- "SELECT MIN(Median), MAX(Median), SUM(Total) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+Write a query that calculates the average of the `Total` column, the
+minimum of the `Men` column, and the maximum of the `Women` column, in
+that order.
+
+```{r}
+query <- "SELECT AVG(Total), MIN(Men), MAX(Women) FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Customizing the Results
+
+All of the queries we've written so far have had somewhat unpleasant
+column names in the results, like AVG(Total) and MIN(Men).
+
+Many companies use SQL environments and tools that can run your query,
+turn the results into a plot of your choosing, and then create a PDF
+report containing multiple plots (and some additional explanation from
+the user).
+
+Since others may interpret the results of your SQL queries, it's helpful
+to specify custom names for the columns in our results.
+
+We can do that using AS:
+
+```{r}
+# SELECT SUM(Total) AS num_students
+#   FROM recent_grads;
+```
+
+This is known as an alias, and it is restricted to only our results
+table (the table in the database won't be renamed)
+
+If we use certain characters, like spaces, we need to surround the alias
+with quotes. We can specify an arbitrary phrase as a string using
+quotation marks:
+
+```{r}
+# SELECT SUM(Total) AS 'Total Students'
+#  FROM recent_grads;
+```
+
+We can drop AS entirely and just add the name next to the original
+column:
+
+```{r}
+# SElECT SUM(Total) 'Total Students'
+#   FROM recent_grads;
+```
+
+(We'll keep using it, though because it's a matter of style.) Lastly, we
+can reference renamed columns when writing longer queries to make our
+code more compact:
+
+```{r}
+# SELECT Major AS m, Major_category AS mc, Unemployment_rate AS ur
+#   FROM recent_grads
+#  WHERE (mc = 'Engineering') AND (ur > 0.04 and ur < 0.08)
+#  ORDER BY ur DESC
+```
+
+Later we'll learn how to use aliases for both database tables and
+results tables!
+
+Write a query that returns the following in this order: - The number of
+rows as Number of Majors - The maximum value of Unemployment_rate as
+Highest Unemployment Rate
+
+```{r}
+query <- "SELECT COUNT(Major) AS 'Number of Majors', MAX(Unemployment_rate) AS 'Highest Unemployment Rate' FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Counting Unique ValuesCounting Unique Values
+
+`Major_category` is a column with only a few unique values. What if we
+want to get a list with repetitions of the values in this column? Or
+what if we want to determine how many distinct values there are in this
+column?
+
+We can return all of the unique values in a column using the `DISTINCT`
+statement.
+
+```{r}
+query <- "SELECT DISTINCT Major_category
+  FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+As with the other SQL clauses we've learned, we can use the DISTINCT
+statement with multiple columns to return unique pairings of those
+columns:
+
+```{r}
+query <- "SELECT DISTINCT Major, Major_category
+  FROM recent_grads
+  LIMIT 5"
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+Lastly, we can count the number of unique values in a column by nesting
+the COUNT() function with the DISTINCT clause:
+
+```{r}
+query <- 'SELECT COUNT(DISTINCT Major_category) AS unique_major_categories
+  FROM recent_grads'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+Write a query that returns the number of unique values in the `Major`,
+`Major_category`, and `Major_code` columns. Use the following aliases in
+this order: For the unique value count of the `Major` column, use the
+alias `unique_majors`. For the unique value count of the
+`Major_category` column, use the alias `unique_major_categories`. For
+the unique value count of the `Major_code` column, use the alias
+`unique_major_codes`.
+
+```{r}
+query <- 'SELECT COUNT(DISTINCT Major) AS unique_majors,
+       COUNT(DISTINCT Major_category) AS unique_major_categories,
+       COUNT(DISTINCT Major_code) AS unique_major_codes
+  FROM recent_grads'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Data Types
+
+Let's run a query and look at the result.
+
+```{r}
+query <- 'SELECT Major, Total, Men, Women, Unemployment_rate
+  FROM recent_grads
+ ORDER BY Unemployment_rate DESC
+ LIMIT 3'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+Let's consider the different kinds of values we got:
+
+-   In the `Major` column, we see text.
+-   In the `Total`, `Men`, and `Women` columns, we see integers.
+-   In the `Unemployment_rate` column, we see decimal numbers.
+
+Each of the above is a data type. Each column has exactly one type of
+value; it can't be mixed.
+
+You can read more about the SQLite data types here. We'll explore them
+from the point of view of the database when we learn how to create
+tables.
+
+For now, we'll focus on some of the things we can do with different data
+types.
+
+## String Functions and Operations
+
+Previously, we learned about aggregate functions. Aggregate functions
+take a column as input and return one value for the column. Now, we'll
+learn about functions that, when we pass them a column as input, return
+(a transformation of the input) another column. The values of text
+columns are typically called strings.
+
+We'll start with the `LENGTH` function. Given a text column, the
+`LENGTH` function returns the number of characters in the input strings
+
+[]{[[https://dq-content.s3.amazonaws.com/253/m253-10.gif}\\\\](https://dq-content.s3.amazonaws.com/253/m253-10.gif%7D\){.uri}]([https://dq-content.s3.amazonaws.com/253/m253-10.gif%7D\\](https://dq-content.s3.amazonaws.com/253/m253-10.gif%7D)%7B.uri%7D){.uri}
+
+Let's build on the query we saw on the previous screen to see it action.
+
+```{r}
+query <- 'SELECT Major,
+       Total, Men, Women, Unemployment_rate,
+       LENGTH(Major) AS Length_of_name
+  FROM recent_grads
+ ORDER BY Unemployment_rate DESC
+ LIMIT 3'
+
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+We can also concatenate strings by using the \|\| operator. Here's an
+example:
+
+| **e-learning** |
+|----------------|
+| Dataquest      |
+
+We indicated the presence of strings by enclosing them in single quotes
+(`'`), however, double quotes (`"`) can be used. But it's good practice
+to use single quotes as they are more widely accepted in other
+databases.
+
+In the same way that we can compare columns with both constant numbers
+and other columns in `WHERE` clauses, we can also mix columns and
+constant strings when concatenating. For example:
+
+```{r}
+query <- 'SELECT "Cat:" || Major_category AS Test
+  FROM recent_grads
+ LIMIT 2'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+In the following exercise, you'll use the `LOWER` function to replace
+the `Major` column with one where all values appear in lowercase
+letters. We use this just like the `LENGTH` function.
+
+To save yourself some typing, copy and paste the query at the top of the
+screen.
+
+Write a query that does the following:
+
+-   Selects in order
+-   The values in the `Major` column in lowercase, preceded by the
+    string `'Major:'`. Use the alias `Major`.
+-   `Total`
+-   `Men`
+-   `Women`
+-   `Unemployment_rate`
+-   `LENGTH(Major)` as `Length_of_name`
+-   Orders in descending order by the unemployment rate
+
+```{r}
+query <- 'SELECT "Major:" || LOWER(Major) AS Major,
+       Total, Men, Women, Unemployment_rate,
+       LENGTH(Major) AS Length_of_name
+  FROM recent_grads
+ ORDER BY Unemployment_rate DESC
+ Limit 10'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+## Performing Arithmetic in SQL
+
+Let's revisit one of the questions from the beginning of the lesson:
+
+-   Which majors had the largest spread (difference) between the 25th
+    and 75th percentile starting salaries?
+
+In the same way that we can use string functions and operators, we can
+also perform arithmetic on the columns in a table. SQL supports the
+standard arithmetic operators: `*`, `+`, `-`, and `/`, and we can use
+them like any other operator:
+
+```{r}
+query <- 'SELECT P75th - P25th AS quartile_spread
+  FROM recent_grads
+ LIMIT 10'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+You can also add, subtract, multiply, or divide columns by individual
+values:
+
+```{r}
+query <- 'SELECT ShareWomen * 100 percent_female 
+  FROM recent_grads 
+ LIMIT 10'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+One thing to note is that multiplying or dividing columns with a
+floating point value (or a column with floating point values) will
+result in floating point values:
+
+-   Two floats --- returns a float.
+-   `SELECT 100.0 / 100.0` returns `1.0`.
+-   A float and an integer --- returns a float
+-   `SELECT 100 / 1.0` returns `100.0`.
+-   Two integers --- returns an integer
+-   `SELECT 100 / 10` returns `10`
+
+Write a query that computes the difference between the 25th and 75th
+percentiles of salaries for all majors. - Return the `Major` column
+first, using the default column name. - Return the `Major_category`
+column second, using the default column name. - Return the compute
+difference between the 25th and 75th percentiles third, using the alias
+`quartile_spread`. - Order the results from lowest to highest and only
+return the first 20 results.
+
+```{r}
+query <- 'SELECT Major, Major_category, (P75th - P25th) AS quartile_spread
+  FROM recent_grads
+ ORDER BY quartile_spread DESC
+ LIMIT 10'
+result <- dbSendQuery(conn, query)
+dbFetch(result)
+dbClearResult(result)
+```
+
+# 4. Group Summary Statistics
+
+## Introduction
+
+In the "Summary Statistics" lesson, we computed summary statistics
+across columns using SQL. Often, however, we will want even more
+information, which we can get by computing summary statistics per group
+to answer questions like the following:
+
+-   What is the total number of graduates by major category?
+-   What major category pays the most?
+-   How does the sample size vary by major category? In this lesson,
+    we'll answer questions like these by learning how to calculate
+    summary statistics for groups.
+
+We'll continue working with the recent_grads table of jobs.db. Recall
+that each row represents a single college major, and it contains
+information about post-graduation employment of students who studied the
+major.
+
+Here are the descriptions for the columns in the preview:
+
+-   `Rank` - The major's rank by median earnings
+-   `Major_code` - The major's code or ID
+-   `Major` - The name of the major
+-   `Major_category` - The broader category the major belongs to
+-   `Total` - The total number of people who studied the major
+-   `Sample_size` - The sample size (unweighted) of graduates with full
+    time jobs
+-   `Men` - The number of male graduates
+-   `Women` - The number of female graduates
+-   `ShareWomen` - Women as a proportion of the total number of
+    graduates (a number ranging from 0 to 1)
+-   `Employed` - The number of employed graduates
+
+## If/Then in SQL
+
+It is common to create new columns according to rules based on other
+columns. For example, to quickly identify the top 10 majors (per the
+`rank` column), we may want to create a column that indicates whether or
+not the value on `rank` for each row is greater than 10.
+
+![](https://dq-content.s3.amazonaws.com/254/2.1-rank.gif)\
+
+We can do this using the `CASE` clause in SQL. We'll program the
+following logic:
+
+-   If the row corresponds to a top 10 major, assign the value `Top 10`.
+-   If the row corresponds to a top 20 major that isn't a top 10 major,
+    assign the value `Top 20`.
+-   Otherwise let it be a missing value.
+
+```{r}
+conn <- dbConnect(SQLite(), "jobs.db")
+query <- "SELECT Major, Rank, 
+       CASE
+       WHEN rank <= 10 THEN 'Top 10'
+       WHEN rank <= 20 THEN 'Top 20'
+       ELSE NULL
+       END AS rank_category
+  FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 11)
+dbClearResult(result)
+```
+
+A more general syntax looks like this:
+
+```{r}
+# CASE
+# WHEN <condition_1> THEN <value_1>
+# WHEN <condition_2> THEN <value_2>
+# ELSE <value_3>
+# END AS <new_column_name>
+```
+
+Write a SQL query that displays, with the alias `Sample_category`, the
+column with values that are a result of the following rules:
+
+-   `Small` if `Sample_size` is smaller than 200.
+-   `Medium` if `Sample_size` is equal to or higher than 200, and
+    smaller than 1000.
+-   `Large` if `Sample_size` is equal to or higher than 1000.
+
+```{r}
+query <- "SELECT Major, Sample_size,
+CASE
+WHEN Sample_size < 200 Then 'Small'
+WHEN Sample_size < 1000 Then 'Medium'
+ELSE 'Large'
+END AS Sample_category
+FROM recent_grads"
+
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+
+```
+
+## Dissecting CASE
+
+Look again at the syntax we saw in the previous screen.
+
+```{r}
+# CASE
+# WHEN <condition_1> THEN <value_1>
+# WHEN <condition_2> THEN <value_2>
+# ELSE <value_3>
+# END AS <new_column_name>
+```
+
+Note the following:
+
+-   It starts with `CASE` to indicate that we'll be creating values by
+    cases.
+
+-   It ends with `END` to indicate where the `CASE` clause terminates.
+
+-   The reserved word `WHEN` signals each explicit case.
+
+-   The value for each case follows the reserved word `THEN`
+
+-   There is a fallback value indicated by the reserved word `ELSE`.
+    Here are some important observations:
+
+-   Anything you can use in `WHERE` for filtering, you can also use in
+    place of the conditions above.
+
+-   There can be one or more `WHEN` lines. We demonstrated this with
+    three, but it works with any number.
+
+-   The `ELSE` line is optional --- without it, rows that don't match
+    any `WHEN` will get a missing value (`NULL`). Let's practice some
+    more with a very similar exercise.
+
+Write a SQL query that displays, in this order, `Major`, `Sample_size`,
+and a column named `Sample_category` with values defined by the
+following rules:
+
+`Small` if `Sample_size` is smaller than 200. `Medium` if `Sample_size`
+is equal to or higher than 200, and smaller than 1000. `Large` if
+`Sample_size` is equal to or higher than 1000.
+
+```{r}
+query <- "SELECT Major, Sample_size,
+       CASE
+       WHEN Sample_size < 200 THEN 'Small'
+       WHEN Sample_size < 1000 THEN 'Medium'
+       ELSE 'Large'
+       END AS Sample_category
+  FROM recent_grads"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## Calculating Group-Level Summary Statistics
+
+Let's return to calculating summary statistics by group. By group we
+mean any of the unique values in a column. Typically group statistics
+only calculate for columns in which the values represent categories (as
+opposed to measurements, like age, currency, and so on).
+
+The `GROUP BY` SQL statement allows us to compute summary statistics by
+group. When we use this statement, SQL creates a group for each unique
+value in a column or set of columns (the same values we get when we use
+the `DISTINCT` statement), and then performs the calculations for them.
+
+To demonstrate, we can find the total number of people employed in each
+major category with the following query:
+
+```{r}
+query <- "SELECT Major_category,
+  SUM(Employed) 
+  FROM recent_grads 
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+This will give us the total number of employed graduates for each major
+category.
+
+In the next screen, we'll explore how this works. For now, let's jump
+right into practicing.
+
+One of the questions we asked at beginning of the lesson was What is the
+total number of graduates by major category? Let's answer it.
+
+Use capital letters when typing the aggregate functions so the
+answer-checker can validate your answer correctly.
+
+Write a SQL query that, for each major category, displays the following:
+
+-   The major category
+-   The total number of graduates for `Major_category` with the alias
+    `Total_graduates`
+
+```{r}
+query <- "SELECT Major_category, SUM(Total) AS Total_graduates
+  FROM recent_grads
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## GROUP BY Visual Breakdown
+
+The `GROUP BY` statement divides the `Major_category` column into groups
+(one group for each unique major category), then calculates the sum for
+each group. The following diagram shows how `GROUP BY` divides the data
+(the diagram uses a small sample from the `recent_grads` table):
+
+![](https://dq-content.s3.amazonaws.com/254/5.1-group.gif)\
+
+For each group, the `GROUP BY` statement queries each column and runs
+all of the aggregation functions we include in the query after the
+`SELECT` statement:
+
+![](https://dq-content.s3.amazonaws.com/254/5.2-sum.gif)\
+
+The SQL engine will use the last value for a selected column in the
+group. The SQL engine will also compute the value for a selected
+aggregation function across the group.
+
+The query in the diagram will give us the following result:
+
+Write a SQL query that, for each major category, displays the
+following: - The major category - The average share, or ratio, of
+students that are women with the alias `Avg_ratio_students_women`.
+
+```{r}
+query <- "SELECT Major_category,
+       AVG(ShareWomen) AS Avg_ratio_students_women
+  FROM recent_grads
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## Multiple Summary Statistics by Group
+
+In addition to computing multiple summary statistics for the whole
+table, as we did in the "Summary Statistics" lesson, we can also compute
+multiple summary statistics by groups.
+
+Working from the same example, here's a query that for each major
+category finds the following:
+
+-   The total number of employed graduates
+-   The average number of employed graduates
+-   The maximum number of employed graduates in a major
+-   The minimum number of employed graduates in a major
+
+```{r}
+query <- "SELECT Major_category,
+       SUM(Employed), AVG(Employed), MAX(Employed), MIN(Employed)
+  FROM recent_grads
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+We can also perform calculations using the resulting columns, much like
+we did before. Here's a query that computes the difference between the
+maximum and the minimum number of employed graduates:
+
+```{r}
+query <- "SELECT Major_category,
+       SUM(Employed), AVG(Employed), MAX(Employed) - MIN(Employed) as Range_employed
+  FROM recent_grads
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+Note that we used an alias for the result without any problems. You can
+use aliases the same way you did before.
+
+Now that we have a better understanding of the `GROUP BY` statement,
+let's practice using it by computing summary statistics by group for the
+`recent_grads` table. On the first screen of this lesson, you can find
+the list of the column names and what they represent.
+
+Write a query that, for each major category, displays the following in
+this order: - The major category - The total number of women with the
+alias `Total_women` - The average proportion, or ratio, of students that
+are women with the alias `Avg_ratio_students_women` - The result of
+multiplying the total number of graduates by the average proportion, or
+ratio, of students that are women with the alias
+`Estimated_female_graduates`.
+
+```{r}
+query <- "SELECT Major_category,
+       SUM(Women) AS Total_women,
+       AVG(ShareWomen) AS Avg_ratio_students_women,
+       SUM(Total)*AVG(ShareWomen) AS Estimated_female_graduates
+  FROM recent_grads
+ GROUP BY Major_category"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## Multiple Group Columns
+
+So far we've only grouped by one column (`Major_category`), but it's
+also possible to group by multiple columns.
+
+Let's demonstrate this with the following table called `fruit`. This
+table isn't in the database that we're using here, so you won't be able
+to experiment with it.
+
+| **ruit**    | **color** | **sourness** | **weight** | **price** |
+|-------------|-----------|--------------|------------|-----------|
+| Orange      | Orange    | Sour         | 131        | 4         |
+| Banana      | Yellow    | Sweet        | 150        | 4         |
+| Papaya      | Orange    | Sweet        | 450        | 2         |
+| Lime        | Green     | Sour         | 44         | 1         |
+| Strawberry  | Red       | Sweet        | 12         | 3         |
+| Grapefruit  | Orange    | Sour         | 236        | 1         |
+| Cherry      | Red       | Sour         | 12         | 3         |
+| Red apple   | Red       | Sweet        | 180        | 5         |
+| Green apple | Green     | Sour         | 170        | 2         |
+
+We see that we have the groups in `color` and in `sourness`
+
+We've ran queries like the one below, which yields the mean weight and
+price.
+
+```{r}
+# SELECT color,
+#        AVG(weight),
+#        AVG(price)
+#   FROM fruit
+#  GROUP BY color;
+```
+
+| **color** | **AVG(weight)** | **AVG(price)** |
+|-----------|-----------------|----------------|
+| Green     | 107.0           | 1.5            |
+| Orange    | 272.333333      | 2.333333       |
+| Red       | 68.0            | 3.666667       |
+| Yellow    | 150.0           | 4.0            |
+
+If we want the mean weight and price for the group of sweet red fruits,
+or more generally, the mean weight and price for all the combinations of
+groups of `color` and `sourness`, we can use `GROUP BY`. Here's an
+example:
+
+```{r}
+# SELECT color, sourness,
+#        AVG(weight), AVG(price), MIN(weight), MIN(price)
+#   FROM fruit
+#  GROUP BY color, sourness;
+```
+
+| **color** | **sourness** | **AVG(weight)** | **AVG(price)** | **MIN(weight)** | **MIN(price)** |
+|------------|------------|------------|------------|------------|------------|
+| Green     | Sour         | 107.0           | 1.5            | 44              | 1              |
+| Orange    | Sour         | 183.5           | 2.5            | 131             | 1              |
+| Orange    | Sweet        | 450.0           | 2.0            | 450             | 2              |
+| Red       | Sour         | 12.0            | 3.0            | 12              | 3              |
+| Red       | Sweet        | 96.0            | 4.0            | 12              | 3              |
+| Yellow    | Sweet        | 150.0           | 4.0            | 150             | 4              |
+
+We can easily confirm the minimum values by spot-checking.
+
+Earlier in this lesson, we created a column, `Sample_category`, with
+values determined by the following rules:
+
+-   `Small` if `Sample_size` is smaller than 200
+
+-   `Medium` if `Sample_size` is equal to or higher than 200 and smaller
+    than 1000
+
+-   `Large` if `Sample_size` is equal to or higher than 1000
+
+We duplicated the `recent_grads` table and added that column to a new
+table. It's called `new_grads`, and we'll use it for the remainder of
+this lesson.
+
+Write a query that, for each combination of `Major_category` and
+`Sample_category`, displays the following in this order:
+
+-   The major category
+-   The sample category
+-   The average proportion, or ratio, of students that are women with
+    the alias `Avg_ratio_students_women`
+-   The sum total of graduates with the alias `Total_graduates`
+
+```{r}
+# SELECT Major_category, Sample_category,
+#        AVG(ShareWomen) AS Avg_ratio_students_women,
+#        SUM(Total) AS Total_graduates
+#   FROM new_grads
+#  GROUP BY Major_category, Sample_category;
+```
+
+## Querying Virtual Columns With the HAVING Statement
+
+Sometimes we want to select a subset of rows after performing a
+`GROUP BY` query. On the last screen, for instance, we may have wanted
+to select only those rows where `Avg_ratio_students_women` is greater
+than `.8`.
+
+We can't use the `WHERE` clause to do this:
+
+```{r}
+# SELECT Major_category, Sample_category,
+#        AVG(ShareWomen) AS Avg_ratio_students_women,
+#        SUM(Total) AS Total_graduates
+#   FROM new_grads
+#  GROUP BY Major_category, Sample_category
+#  WHERE Avg_ratio_students_women > 0.8;
+```
+
+We got an error! We'll understand why `WHERE` doesn't work here in the
+next screen. For now, let's learn how we would be able to subset the
+data.
+
+When we want to filter on a column generated by a `GROUP BY` query, we
+can use the `HAVING` statement. Here's an example:
+
+```{r}
+# SELECT Major_category, Sample_category,
+#        AVG(ShareWomen) AS Avg_ratio_students_women,
+#        SUM(Total) AS Total_graduates
+#   FROM new_grads
+#  GROUP BY Major_category, Sample_category
+# HAVING Avg_ratio_students_women > 0.8;
+```
+
+Note that we used the same column name in the HAVING statement that we
+originally specified with the AS statement. The statement above will
+result in the following output:
+
+Note that the results only include categories where
+`Avg_ratio_students_women` is greater than `.8`. That's because the
+`HAVING` statement filters out the other rows.
+
+| **Major_category**       | **Sample_category** | **Avg_ratio_students_women** | **Total_graduates** |
+|--------------------------|---------------------|------------------------------|---------------------|
+| Education                | Large               | 0.923745479                  | 170862              |
+| Health                   | Large               | 0.896018988                  | 209394              |
+| Psychology & Social Work | Medium              | 0.81070414753552             | 53552               |
+
+
+Remember to use the `new_grads` table.
+
+Find all of the major categories where the share, or ratio, of graduates with low-wage jobs is greater than `.1`.
+- Use the `SELECT` statement to select `Major_category` and `AVG(Low_wage_jobs)` / `AVG(Total)` as `Ratio_low_wage`
+- Use the `GROUP BY` statement to group the query by the `Major_category` column.
+- Use the `HAVING` statement to restrict the selection to rows where `Ratio_low_wage` is greater than `.1`.
+```{r}
+# SELECT Major_category,
+#        AVG(Low_wage_jobs) / AVG(Total) AS Ratio_low_wage
+#   FROM new_grads
+#  GROUP BY Major_category
+# HAVING Ratio_low_wage > .1;
+```
+
+
+## Order of Execution
+
+In the "Summary Statistics" lesson, we learned that when executing a SQL query, the computer runs the clauses in this order:
+
+1. `FROM`
+2. `WHERE`
+3. `SELECT`
+4. `ORDER BY`
+5. `LIMIT`
+Now we know two more clauses: `GROUP BY` and `HAVING`. We can expand our mental model of the general structure of a query:
+
+```{r}
+# SELECT column(s)
+#   FROM some_table
+#  WHERE some_condition
+#  GROUP BY column(s)
+# HAVING some_condition
+#  ORDER BY column(s)
+#  LIMIT some_limit;
+```
+
+And the order in which SQL runs this is as follows:
+
+1. `FROM`
+2. `WHERE`
+3. `GROUP BY`
+4. `HAVING`
+5. `SELECT`
+6. `ORDER BY`
+7. `LIMIT`
+
+
+
+We still haven't looked at using `GROUP BY` and `ORDER BY` simultaneously — we'll see an example later.
+
+Note, however, that `ORDER BY` executes after `GROUP BY`. One of the main goals of ordering results is functional output, so it makes sense that it should be one of the last clauses to run.
+
+
+## Rounding Results With the ROUND Function
+
+On a previous screen, the percentages in our results were very long and hard to read (e.g., `0.16833085991095678`). We can use the SQL `ROUND` function in our query to round them. Here's an example of what this looks like:
+
+```{r}
+# SELECT Major_category,
+#        ROUND(ShareWomen, 2) AS Ratio_students_women 
+#   FROM new_grads;
+```
+
+By passing different values into the `ROUND` function, such as `ROUND(ShareWomen, 3)`, we can round to different decimal places.
+
+
+- Write a query with the following features that displays the first 10 results in this order:
+
+- `ShareWomen` rounded to 4 decimal places with the alias `Ratio_students_women`
+
+- `Major_category`
+
+
+## Nesting functions
+On an earlier screen, we ran the following query:
+
+
+```{r}
+# SELECT Major_category, Sample_category,
+#        AVG(ShareWomen) AS Avg_ratio_students_women,
+#        SUM(Total) AS Total_graduates
+#   FROM new_grads
+#  GROUP BY Major_category, Sample_category
+# HAVING Avg_ratio_students_women > 0.8;
+```
+
+This query returned very long fractional values for `Avg_ratio_students_women`. We can update our query with the `ROUND` function to round the results to three decimal places:
+
+
+
+```{r}
+# SELECT Major_category, Sample_category,
+#        ROUND(AVG(ShareWomen), 3) AS Avg_ratio_students_women,
+#        SUM(Total) AS Total_graduates
+#   FROM new_grads
+#  GROUP BY Major_category, Sample_category
+# HAVING Avg_ratio_students_women > 0.8;
+```
+
+
+Write a query that does the following:
+- Aggregates by the major's category
+- Displays the following in order:
+  - The major's category
+  - The ratio `AVG(College_jobs) / AVG(Total)` rounded to three decimal places with the alias `Ratio_degree_jobs`
+Only keeps the rows where `Ratio_degree_jobs` is less than `.3`
+
+
+
+```{r}
+# SELECT Major_category,
+#        ROUND(AVG(College_jobs) / AVG(Total), 3) AS Ratio_degree_jobs
+#   FROM new_grads
+#  GROUP BY Major_category
+# HAVING Ratio_degree_jobs < .3;
+```
+
+
+## Casting
+
+On the last few screens, we used SQL arithmetic to divide float (what we referred to as decimal numbers in an earlier lesson) columns. This resulted in float values that we could round using the `ROUND` function.
+
+If we try to divide two integer columns (`Women` and `Men`, for instance), SQLite (and most other SQL dialects) will round down and return integer values:
+
+
+```{r}
+# SELECT Major, Women, Men,
+#        Women/Men AS Ratio_women_to_men
+#   FROM new_grads
+#  ORDER BY Major
+#  LIMIT 10;
+```
+
+Notice that how every time the number of `Women` is smaller than `Men` the result is `0`, and when the number `Women` is larger than `Men`, the result is `1` or more. The query rounded the ratio.
+
+To get a float value, we can use the `CAST` function to transform the columns into a `Float` type:
+
+```{r}
+# SELECT Major, Women, Men,
+#        ROUND(CAST(Women AS Float)/CAST(Men AS Float), 2) AS Ratio_women_to_men
+#   FROM new_grads
+#  ORDER BY Major
+#  LIMIT 10;
+```
+
+
+This returns the results as float values. Notice that we also used the `ROUND` function to limit the output to 2 decimal places:
+
+
+Write a query that does the following:
+- Divides the sum of the `Women` column by the sum of the `Men` column, aliased as `Ratio_women_to_men` and as float values.
+- Contains only the `Major_category` and `Ratio_women_to_men` columns, in that order.
+- Groups the results by `Major_category` and orders by `Ratio_women_to_men`.
+- Don't use the `ROUND` function here.
+```{r}
+# SELECT Major_category,
+#        CAST(SUM(Women) as Float)/Cast(SUM(Men) as Float) AS Ratio_women_to_men
+#   FROM new_grads
+#  GROUP BY Major_category
+#  ORDER BY Ratio_women_to_men;
+```
+
+
+# 5. Subqueries
+## Writing More Complex Queries
+
+
+
+
+The other lessons in this course so far have prepared us to answer one question at a time. Often, however, we want to answer questions that involves multiple queries. For example, consider the following:
+
+- Which rows are above the average for the `ShareWomen` column?
+
+To determine which majors are above average for the `ShareWomen` column, we need to do the following:
+
+- Determine the average value for the ShareWomen column.
+- Select and filter the rows that are greater than the average value.
+Simply trying the query below doesn't work.
+
+
+```{r}
+# SELECT *
+#   FROM recent_grads
+#  WHERE ShareWomen > AVG(ShareWomen);
+```
+
+We can, however, first find `AVG(ShareWomen)`, copy the value manually and replace it in the query above.
+
+```{r}
+# SELECT AVG(ShareWomen)
+#   FROM recent_grads;
+```
+
+
+
+Write a query that does the following:
+- Displays, in order, the columns `Major` and `ShareWomen`.
+- Displays all rows with a share of women that is higher than average.
+
+
+```{r}
+# SELECT Major, ShareWomen
+#   FROM recent_grads
+#  WHERE ShareWomen > 0.5225502029537575;
+```
+
+
+
+## Subqueries
+
+
+Our method in the previous screen lacks flexibility and requires extra work. Fortunately, SQL allows us to answer questions with a single query.
+
+How do we make the computed average value, `0.5225502029537575`, dynamic? We can do this by using subqueries. A subquery is a query nested within another query. Here's a template for a SQL statement where the subquery resides in the `WHERE` clause:
+
+
+```{r}
+# SELECT Major, ShareWomen FROM recent_grads
+# WHERE ShareWomen > (subquery that returns the average value for ShareWomen)
+```
+
+The subquery runs first and returns the average value for the `ShareWomen` column (which happens to be `0.5225502029537575`). Based on the result of the subquery, SQL will replace the subquery with this value dynamically.
+
+SQL will ignore the column name (`AVG(ShareWomen)`) and use the actual row value. Here's a diagram that clarifies the flow:
+
+
+![](https://dq-content.s3.amazonaws.com/255/subquery_flow.svg)\
+
+The query that replaces the placeholder `subquery` needs to be a full query (like the ones we've seen so far).
+
+For this particular example, the inner query should only return a table with a single row and a column because of how it fits within the outer query (.`.. WHERE > ?`). If you try to return a table with multiple columns, you will get an error.
+
+Lastly, a subquery must always be inside parentheses `()`. We get an error if we don't include them in the query above:
+
+Write a query that does the following:
+- Displays, in order, the columns `Major` and `Unemployment_rate.`
+- Displays all rows with an unemployment rate below average.
+
+
+```{r}
+query <- "SELECT Major, Unemployment_rate
+  FROM recent_grads
+ WHERE Unemployment_rate < (SELECT AVG(Unemployment_rate)
+                              FROM recent_grads
+                           );"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+
+## Subquery in SELECT
+
+On the previous screen, we wrote SQL statements that used a subquery to express dynamic filter criteria in the `WHERE` clause. Specifically, we looked for rows that were above or below the average value in a specific column.
+
+What if we wanted to understand the proportion of majors that are above the average for a given column? We'd need to divide the number of rows that met the filter criteria by the total number of rows in the table.
+
+Let's focus on the query from the previous screen:
+
+
+```{r}
+# SELECT Major, ShareWomen
+#   FROM recent_grads
+#  WHERE ShareWomen > (SELECT AVG(ShareWomen)
+#                        FROM recent_grads
+#                     );
+```
+
+
+Using the `COUNT` aggregate function, we can return the number of rows in the results set:
+
+```{r}
+ query <- "SELECT COUNT(*)
+  FROM recent_grads
+ WHERE ShareWomen > (SELECT AVG(ShareWomen)
+                     FROM recent_grads
+                    );"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+To return the proportion, we need to divide this value by the total number of rows in `recent_grads`. We can count the number of rows in the table, save the result, and then divide by it. The challenge, however, is to do this dynamically!
+
+To calculate the number of total rows in `recent_grads` and use it in another SQL statement, we can use a subquery in the `SELECT` clause:
+
+
+
+
+```{r}
+ query <- "SELECT COUNT(*),
+       (SELECT COUNT(*)
+          FROM recent_grads
+       )
+  FROM recent_grads
+ WHERE ShareWomen > (SELECT AVG(ShareWomen)
+                       FROM recent_grads
+                    )"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+Write a SQL statement that computes the proportion (as a float value) of rows that contain above-average values for `ShareWomen`.
+
+The results should only return the proportion, aliased as `proportion_abv_avg`, like this:
+
+
+```{r}
+ query <- "SELECT CAST(COUNT(*) as FLOAT)/(SELECT COUNT(*)
+                                  FROM recent_grads
+                               ) AS proportion_abv_avg
+  FROM recent_grads
+ WHERE ShareWomen > (SELECT AVG(ShareWomen)
+                       FROM recent_grads
+                    );"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+## The IN Operator
+
+We've been using operators like` < `and `>`. In the SQLite documentation, we see all of the following operators.
+
+![](https://s3.amazonaws.com/dq-content/255/sqlite_operators.png)\
+
+Using the `IN` operator, we can specify a list of values that we want to match in the `WHERE` clause. The following query returns the rows where `Major_category` equals either `Business` or `Engineering`:
+
+
+```{r}
+query <- "SELECT Major, Major_category
+  FROM recent_grads
+ WHERE Major_category IN ('Business', 'Engineering');"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+Write a query that displays the following:
+
+- In order, `Major_category` and `Major`
+- All rows in any of the following categories:
+ - `Business`
+ - `Humanities & Liberal Arts`
+ - `Education`
+
+```{r}
+query <- "SELECT Major_category, Major
+  FROM recent_grads
+ WHERE Major_category IN ('Business', 'Humanities & Liberal Arts', 'Education');"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## Returning Multiple Results in Subqueries
+
+
+In the previous exercise, we displayed the majors in the categories `Business`, `Humanities & Liberal Arts`, and `Education`.
+
+These are the top three categories with respect to the total number of graduates, as we can see in the query below.
+
+```{r}
+query <- "SELECT Major_category, SUM(TOTAL)
+  FROM recent_grads
+ GROUP BY Major_category
+ ORDER BY SUM(TOTAL) DESC;"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+If we wanted to find the same list of majors as we saw in the previous screen, dynamically (i.e. without first determining the most popular categories and then hard-coding the values into the query), subqueries can help.
+
+Instead of returning just one value, we can make the query return a list of values (disguised as a single column).
+
+In the following exercise, you will display the same results as we saw in the previous screen, only this time you won't manually indicate the categories.
+
+You can use the following code in this screen's exercise.
+
+```{r}
+# SELECT Major_category, Major
+#   FROM recent_grads
+#  WHERE Major_category IN (SUBQUERY_GOES_HERE);
+```
+
+
+
+In the code displayed above, replace `SUBQUERY_GOES_HERE` to create a query that displays the `Major_category` and `Major` columns, for the rows where `Major_category` is one of the three highest group level sums for the `Total` column.
+
+
+```{r}
+query <- "SELECT Major_category, Major
+  FROM recent_grads
+ WHERE Major_category IN (SELECT Major_category
+                            FROM recent_grads
+                           GROUP BY Major_category
+                           ORDER BY SUM(TOTAL) DESC
+                           LIMIT 3
+                         )"
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+## Building Complex Subqueries
+
+
+On the previous few screens, we nested subqueries in the `WHERE` and the `SELECT` clauses that underwent evaluation before the outer query.
+
+We can actually nest subqueries within subqueries many times, but this complicates our SQL code and makes it harder to debug. In the next course, we'll explore other techniques for composing SQL statements that simplify nested logic.
+
+When you need to write a SQL statement that will end up using many subqueries, it can be overwhelming to know how to start.
+
+In general, you want to start with the inner queries first and work your way out. For example, let's consider the ratio of the `Sample_size` column in relation to the `Total` column. You can read the dataset documentation if you need a reminder of what these columns represent.
+
+Specifically, let's consider the following:
+
+- Computing this ratio for every major.
+- Understanding which majors are above the average for this ratio.
+- Understanding how many majors are above the average for this ratio.
+We'll start by writing a query that calculates the ratio for every major and then calculates the average of these ratios.
+
+Write a query that returns the average ratio between `Sample_size` and `Total` for all of the majors.
+
+```{r}
+query <- "SELECT AVG (CAST(Sample_size AS FLOAT)/Total) 
+   AS avg_ratio
+  FROM recent_grads"
+
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+##  Practice Integrating A Subquery With The Outer Query
+
+
+Now that we have a subquery that calculates the average ratio (of `Sample_size` to `Total`), we can return the rows that exceed this average.
+
+Write a query that does the following:
+- Selects the `Major`, `Major_category`, and the computed ratio columns
+- Filters for the rows where `ratio` is greater than `avg_ratio`
+
+```{r}
+query <- "SELECT Major, Major_category, 
+       CAST(Sample_size AS FLOAT)/Total AS ratio 
+  FROM recent_grads 
+ WHERE ratio > (SELECT AVG(CAST(Sample_size AS FLOAT)/Total) AS avg_ratio 
+                  FROM recent_grads
+               )"
+
+result <- dbSendQuery(conn, query)
+dbFetch(result, 10)
+dbClearResult(result)
+```
+
+
+
+
+
+
+
+
+
+
