@@ -1,0 +1,263 @@
+---
+title: "Web Scraping"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    pandoc_args: ["--lua-filter=color-text.lua"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the packages
+library(stringr)
+library(tidyverse)
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(httr)
+library(rvest)
+```
+
+
+
+
+Write the `scraper()` function.
+
+1. The function has the four parameters described in the learning section.
+2. Load the web page content using the `read_html()` function and the `url` parameter.
+3. Use an `if` statement to extract one or all nodes:
+
+- If `all_nodes` is `TRUE`, use the `html_nodes()` function with the `selector` parameter.
+- Otherwise, use the `html_node()` function with the `selector` parameter.
+4. Use an `if` statement to extract the following from nodes: text, table, attributes, or attribute data.
+
+- If output is `"text"`, use the `html_text()` function.
+- If output is `"table"`, use the `html_table()` function.
+- If output is `"attrs"`, use the `html_attrs()` function.
+- Otherwise, use the `html_attr()` function with the output parameter.
+5. Return the extracted data
+
+
+
+```{r}
+scraper <- function(url, selector, output = "text", all_nodes = TRUE) {
+    
+    # Loading the web page content
+    content <- read_html(url)
+
+    # Getting one or all nodes
+    if (all_nodes) {
+        nodes <- content %>% 
+            html_nodes(selector)
+    } else {
+        nodes <- content %>% 
+            html_node(selector)
+    }
+    
+    # Outputting text, table, attributes, or attribute
+    
+    if (output == "text") {
+        answer <- nodes %>% html_text()
+    } else if (output == "table") {
+        answer <- nodes %>% html_table()
+    } else if (output == "attrs") {
+        answer <- nodes %>% html_attrs()
+    } else {
+        answer <- nodes %>% html_attr(output)
+    }
+    
+   # Returning the output
+   answer 
+}
+
+scraper(url = "http://dataquestio.github.io/web-scraping-pages/2014_super_bowl.html", output = "text", 
+        selector = "table tr:nth-child(3) td")
+```
+
+
+## Extracting Historical Temperatures
+
+Web page description: [AccuWeather](https://www.accuweather.com/) provides data about past, present, and future weather worldwide. We're interested in the [Brussels (Belgium) temperature](https://www.accuweather.com/en/be/brussels/1000/daily-weather-forecast/412872_pc?day=48) at the beginning of 2020.
+
+Our goal: we want to extract the high and low temperatures recorded on the 2nd of January 2020. function we developed on the previous screen. This function gets loaded into memory, and we will use it throughout the rest of this lesson.
+
+1. Extract the high and low temperatures from this web page as text.
+
+To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/Brussels_Belgium_Weather_AccuWeather.html"`, which is a copy of the study page on our servers.
+2. Convert this text into `numeric` data type.
+
+3. For accuracy from our answer-checker, save these temperatures as `belgium_temperatures`.
+
+
+
+
+```{r}
+belgium_temperatures_text <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Brussels_Belgium_Weather_AccuWeather.html",
+                                     selector = ".half-day-card-header .temperature")
+belgium_temperatures <- readr::parse_number(belgium_temperatures_text)
+belgium_temperatures
+```
+
+
+## Extracting Earth Mean Radius
+
+Web page description: we need the Earth's mean radius to compute distances using the longitude and latitude coordinates in our dataset. We discovered that this information is available inside the left information box of the [Earth Wikipedia page](https://en.wikipedia.org/wiki/Earth).
+
+Our goal: we want to extract the Earth's mean radius on that page.
+
+
+
+1. Extract the `infobox` text from this [web page](https://en.wikipedia.org/wiki/Earth).
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/Earth-Wiki.html"`, which is a copy of the study page on our servers.
+2. Extract the Earth's mean radius from this text as numeric.
+
+3. For accuracy from our answer-checker, save these temperatures as `earth_mean_radius`.
+
+
+```{r}
+wiki_infobox <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Earth-Wiki.html", 
+                        selector = ".infobox")
+earth_mean_radius_matches <- stringr::str_match(wiki_infobox, "Mean radius(\\d+\\.\\d+)\\s*km")
+earth_mean_radius <- as.numeric(earth_mean_radius_matches[,2])
+earth_mean_radius
+```
+
+## Extracting Accepted Message from Stack Exchange Questions
+
+Web page description: Stack Exchange is several open question-and-answer communities covering various topics. For example, Stack Overflow is a Stack Exchange community that is well-known among developers for answering coding questions. These communities all rely on the same model. We ask a question, and people answer it. Then, we choose the best answer according to the solution that works, which we mark as accepted.
+
+Our goal: we want to automatically extract the accepted answer and the author of that answer.
+
+We will use the answers to [Web Scraping, Intellectual Property and the Ethics of Answering question](https://meta.stackexchange.com/questions/93698/web-scraping-intellectual-property-and-the-ethics-of-answering) for our experiments.
+
+Here are the elements that interest us.
+
+![](https://dq-content.s3.amazonaws.com/570/so_answer_author.png)\
+
+1. Extract the accepted answer from this web page as text.
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html"`, which is a copy of the study page on our servers.
+- We need to extract only one node here.
+- For accuracy from our answer-checker, save the result as `accepted_message`.
+
+2. Extract the accepted answer author name from the same web page as text.
+
+- To avoid external servers instability issues, use this link: `"http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html"`, which is a copy of the study page on our servers.
+- We need to extract only one element here.
+- For accuracy from our answer-checker, save the result as `accepted_message_author`.
+
+
+
+```{r}
+accepted_message <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html", 
+                               selector = ".accepted-answer .s-prose", 
+                               all_nodes = F)
+
+accepted_message_author <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/WebSraping-ethics-SE.html", 
+                                      selector = ".accepted-answer .user-details a", 
+                                      all_nodes = F)
+accepted_message_author
+```
+
+##  Extracting the World Population Historical Data
+
+Web page description: [Worldometer](https://www.worldometers.info/) freely provides world statistics about many fields of interest over time in a suitable format. We are interested in the [world population](https://www.worldometers.info/world-population/world-population-by-year/) collected year by year.
+
+Our goal: we want to extract the yearly change percentage of the world's population from 1950 to 2019 and then visualize it.
+
+Here is the expected visualization:
+![](https://dq-content.s3.amazonaws.com/570/population_yearly_change.svg)\
+
+1. Extract the table from this web page as a dataframe.
+
+- To avoid external servers instability issues, use this link `"http://dataquestio.github.io/web-scraping-pages/Worldometer-Population.html"` which is a copy of the study page on our servers.
+
+2. Apply the following operations to the dataframe:
+
+- Convert the `YearlyChange` column into numeric data type.
+- Filter the dataframe to include only the rows from `1950` to `2019`.
+- For accuracy from our answer-checker, save the result as `world_population_df_1950_2019`.
+3. Visualize the result using the provided code snippet.
+
+
+```{r}
+world_population_df <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/Worldometer-Population.html", 
+                               selector = "table", 
+                               output = "table", 
+                               all_nodes = F)
+
+world_population_df_1950_2019 <- world_population_df %>% 
+  mutate(YearlyChange = readr::parse_number(YearlyChange) ) %>%
+  filter(Year >= 1950 & Year < 2020)
+
+ggplot(data = world_population_df_1950_2019,
+       aes(x = Year, y = YearlyChange, group = 1)) + 
+  geom_line() + 
+  geom_point(size = 2) +
+  theme_bw() +
+  theme() +  ylab("Yearly Change")
+```
+
+
+## Extracting Image URLs
+
+Web page description: Billboard Hot 100 displays the current Hot 100 songs and other information. Suppose we want to build an image dataset for a machine learning project. In this case, we need to find (many) images. We will extract them from websites.
+
+Our goal: we want to extract the image links from the Hot 100 recorded on January 4, 2020.
+
+The expected result is the links behind the following images:
+
+
+![](https://dq-content.s3.amazonaws.com/570/hot100_images.png)\
+
+The tag that contains these images contains a style attribute that embeds CSS to load the image from the `background-image` instruction.
+
+
+![](https://dq-content.s3.amazonaws.com/570/hot100_images_style.png)\
+
+In the Editor, we provided a regular expression(`url_pattern`) that you can use to extract URLs from characters.
+
+1. From the image tag, extract `style` attribute values from this web page which is a copy of the study page on our servers. This is to avoid instability issues with external servers.
+
+2. Select only the first five `style` attribute values.
+
+3. From each `style` attribute value, extract the image URL.
+
+- For accuracy from our answer-checker, save this output as `hot_5_img_url`.
+
+```{r}
+url_pattern <- "(?i)http[s]?://(?:[a-z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-f][0-9a-f]))+\\.jpg"
+
+# Type your answer below
+hot_100_styledata <- scraper(url = "http://dataquestio.github.io/web-scraping-pages/The%20Hot%20100%20Chart%20_%20Billboard.html", 
+                             selector = ".chart-element__image", 
+                             output = "style")
+
+hot_100_styledata_top5 <- head(hot_100_styledata, 5)
+
+hot_5_img_url <- stringr::str_extract(hot_100_styledata_top5, url_pattern)
+
+hot_5_img_url
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
