@@ -1,0 +1,191 @@
+---
+title: "API"
+author: "Ricardo"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tibble)
+library(readr)
+library(ggplot2)
+library(dplyr)
+library(httr)
+```
+
+### Get Request
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Returning the API Response
+  response
+}
+
+wb_indicator_response <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check code run
+check_API_response <- function(questionstr) {
+  if (exists(questionstr)) {
+    if (class(eval(parse(text = questionstr))) == 'response') {
+      if ( !http_error(eval(parse(text = questionstr))) ) {
+        return(TRUE)
+      } else {
+        status <- http_status(eval(parse(text = questionstr)))
+        return(c(FALSE, paste("Something went wrong in the request.", status$message)))
+      }
+    } else {
+      return(c(FALSE, "Something went wrong in the request. The answer must an API response. Make sure you use the GET() function."))
+    }
+  } else {
+    return(c(FALSE, paste(questionstr, "not found!") ))
+  }
+}
+
+print(check_API_response("wb_indicator_response"))
+```
+```{r}
+wb_api_json_get_df <- function(endpoint) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe[[2]]
+}
+
+wb_indicator_json_df <- wb_api_json_get_df("v2/indicator?format=json")
+
+# Check vars
+
+c("wb_indicator_json_df")
+
+# our dataframe represents only the first page of 493 pages with 50 indicators per page.
+
+```
+### Query Parameters and convert into dataframes
+```{r}
+wb_api_json_get_df <- function(endpoint, queries = list()) {
+  
+  # Preparing the URL 
+  url <- modify_url("http://api.worldbank.org", path = endpoint)
+  
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+    
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+  
+  # Extracting content
+  json_text <- content(response, "text")
+
+  # Converting content into Dataframe
+  dataframe <- jsonlite::fromJSON(json_text)
+    
+  # Return the dataframe  
+  dataframe[[2]] ## double bracket indexes the elements inside the second list 
+}
+
+wb_indicator_json_df_3 <- wb_api_json_get_df("v2/indicator", 
+                                             queries = list(format="json", page=1, per_page = 100))
+```
+
+
+### API Authentication
+```{r}
+queries = list(api_key = "1f36137fbbe1602f779300dad26e4c1b7fbab631")
+gov_api_json <- function(endpoint, queries = list()) {
+
+  # Preparing the URL 
+  url <- modify_url("https://api.ers.usda.gov", path = endpoint)
+
+  # API requests
+  response <- GET(url, query = queries)
+
+  # Tracking errors
+  if ( http_error(response) ){
+    print(status_code(response))
+    stop("Something went wrong.", call. = FALSE)
+  }
+
+  if (http_type(response) != "application/json") {
+    stop("API did not return json", call. = FALSE)
+  }
+
+  # Extracting content
+  json_text <- content(response, "text")
+
+    # Return the json_text  
+  jsonlite::fromJSON(json_text)$data
+
+
+}
+
+agriculture_categories <- gov_api_json("data/arms/category", queries = list(api_key = "FJBOTokvsP5MV9EAmzaVAhAcuAKg8AtshXbQYxx8"))
+
+
+```
+
+
+### POST Request
+
+```{r}
+POST("http://httpbin.org/post", body = list(comment = "Hello world", name = "authordq"))
+```
+
+```{r}
+httpbin_response  <-  POST("http://httpbin.org/post", body = list(message = "this is a test", name = "authordq"))
+check_error  <-  http_error(httpbin_response)
+
+print(httpbin_response)
+```
+
+
+
+
